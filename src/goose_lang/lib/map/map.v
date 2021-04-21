@@ -1,6 +1,7 @@
 From iris.proofmode Require Import coq_tactics reduction.
 From Perennial.goose_lang Require Import notation proofmode.
 From Perennial.goose_lang.lib Require Import typed_mem.
+From Perennial.goose_lang.lib Require Import into_val.
 From Perennial.goose_lang.lib Require Import control.
 From Perennial.goose_lang.lib Require Export map.impl.
 Import uPred.
@@ -11,6 +12,9 @@ Set Default Proof Using "Type".
 Section heap.
 Context `{ffi_sem: ext_semantics} `{!ffi_interp ffi} `{!heapG Σ}.
 Context {ext_ty: ext_types ext}.
+Context `{!FromVal D}.
+Context `{!IntoVal D}.
+Context `{COUNT: Countable D}.
 Implicit Types v : val.
 Implicit Types vs : list val.
 Implicit Types z : Z.
@@ -26,29 +30,34 @@ model m is m = map_val mv.
 The models are canonical due to extensionality of gmaps, but the concrete
 representation tracks all insertions (including duplicates). *)
 
-Fixpoint map_val (v: val) : option (gmap u64 val * val) :=
+Fixpoint map_val (v: val) : option (gmap D val * val) :=
   match v with
   | MapConsV k v m =>
     match map_val m with
-    | Some (m, def) => Some (<[ k := v ]> m, def)
+    | Some (m, def) =>
+      match from_val k with
+      | Some d => Some (<[ d := v ]> m, def)
+      | None => None
+      end
     | None => None
     end
   | MapNilV def => Some (∅, def)
   | _ => None
   end.
 
-Definition val_of_map (m_def: gmap u64 val * val) : val :=
+Definition val_of_map (m_def: gmap D val * val) : val :=
   let (m, def) := m_def in
-  fold_right (λ '(k, v) mv, MapConsV k v mv)
+  fold_right (λ '(k, v) mv, MapConsV (to_val k) v mv)
              (MapNilV def)
              (map_to_list m).
 
+(*
 Theorem map_val_id : forall v m_def,
     map_val v = Some m_def ->
     val_of_map m_def = v.
 Proof.
-  induction v; intros [m def]; try solve [ inversion 1 ]; simpl; intros H.
-  - inversion H; subst; clear H.
+  induction v; intros [m def]; try solve [ inversion 1 ]; simpl; intros Heq.
+  - inversion Heq; subst; clear Heq.
     rewrite map_to_list_empty; simpl; auto.
   - destruct v; try congruence.
     destruct v1; try congruence.
@@ -60,6 +69,7 @@ Proof.
     inversion H; subst; clear H.
     (* oops, the normal val induction principle is too weak to prove this *)
 Abort.
+*)
 
 Definition map_get (m_def: gmap u64 val * val) (k: u64) : (val*bool) :=
   let (m, def) := m_def in
@@ -118,18 +128,23 @@ Qed.
 Lemma map_val_split mv m :
   map_val mv = Some m ->
   {∃ def, mv = MapNilV def ∧ m = (∅, def)} +
-  {∃ k v mv' m', mv = MapConsV k v mv' ∧ map_val mv' = Some m' ∧ m = (<[k:=v]> (fst m'), snd m')}.
+  {∃ k v mv' m', mv = MapConsV (to_val k) v mv' ∧ map_val mv' = Some m' ∧ m = (<[k:=v]> (fst m'), snd m')}.
 Proof.
   intros H.
   destruct mv; inversion H; subst; [ left | right ].
   - exists mv; auto.
   - destruct mv; try solve [ inversion H1 ].
     destruct mv1; try solve [ inversion H1 ].
+    (*
     destruct mv1_1; try solve [ inversion H1 ].
     destruct l; try solve [ inversion H1 ].
+     *)
     destruct_with_eqn (map_val mv2); try solve [ inversion H1 ].
-    destruct p; inversion H1; subst; clear H1.
+    destruct p.
+    destruct (from_val mv1_1) eqn:Hfrom; try solve [ inversion H1 ].
+    inversion H1; subst; clear H1.
     eexists _, _, _, _; intuition eauto.
+    repeat f_equal.
 Qed.
 
 Definition is_map (mref:loc) (m: gmap u64 val * val): iProp Σ :=

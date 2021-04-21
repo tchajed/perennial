@@ -2,6 +2,11 @@ From Perennial.goose_lang Require Import notation typing.
 From Perennial.goose_lang.lib Require Import typed_mem slice.slice struct.struct.
 Set Default Proof Using "Type".
 
+Class FromVal {ext: ext_op} V :=
+  { from_val: val -> option V;
+    FromVal_inj : ∀ x y, from_val x = from_val y -> is_Some (from_val x) -> x = y
+  }.
+
 Class IntoVal {ext: ext_op} V :=
   { to_val: V -> val;
     IntoVal_def: V;
@@ -128,5 +133,108 @@ Section instances.
 
   Global Instance bool_IntoVal_boolT : IntoValForType bool_IntoVal boolT.
   Proof. constructor; auto. Qed.
+
+End instances.
+
+(** instances for FromVal *)
+Section instances.
+  Context {ext: ext_op} {ext_ty: ext_types ext}.
+  Global Instance u64_FromVal : FromVal u64.
+  Proof.
+    refine {| from_val := λ (v: val),
+                          match v with
+                          | LitV (LitInt k) => Some k
+                          | _ => None
+                          end;
+           |}.
+    intros [] [] Heq []; try congruence;
+      repeat (match goal with
+           | [ l : base_lit |- _ ] => destruct l
+           end); congruence.
+  Defined.
+
+  (*
+  Global Instance u64_IntoVal_uint64T : IntoValForType u64_IntoVal uint64T.
+  Proof.
+    constructor; auto.
+  Qed.
+   *)
+
+  Global Instance u8_FromVal : FromVal u8.
+  Proof.
+    refine {| from_val := λ (v: val),
+                          match v with
+                          | LitV (LitByte k) => Some k
+                          | _ => None
+                          end;
+           |}.
+    intros [] [] Heq []; try congruence;
+      repeat (match goal with
+           | [ l : base_lit |- _ ] => destruct l
+           end); congruence.
+  Defined.
+
+  (*
+  Global Instance u8_IntoVal_byteT : IntoValForType u8_IntoVal byteT.
+  Proof.
+    constructor; eauto.
+  Qed.
+
+  Global Instance loc_IntoVal : IntoVal loc.
+  Proof.
+    refine {| to_val := λ (l: loc), #l;
+              IntoVal_def := null; |}; congruence.
+  Defined.
+
+  Global Instance loc_IntoVal_struct_ptr t : IntoValForType loc_IntoVal (struct.ptrT t).
+  Proof.
+    constructor; auto.
+  Qed.
+
+  Global Instance loc_IntoVal_ref t : IntoValForType loc_IntoVal (refT t).
+  Proof.
+    constructor; auto.
+  Qed.
+
+  Global Instance slice_IntoVal : IntoVal Slice.t.
+    refine
+    {| to_val := slice_val;
+       IntoVal_def := Slice.nil;
+    |}.
+    intros [] [].
+    inversion 1; auto.
+  Defined.
+
+  Global Instance slice_IntoVal_ref t : IntoValForType slice_IntoVal (slice.T t).
+  Proof.
+    constructor; auto.
+    intros.
+    apply slice_val_ty.
+  Qed.
+
+
+  Global Instance bool_IntoVal : IntoVal bool.
+  Proof.
+    refine {| into_val.to_val := λ (x: bool), #x;
+              IntoVal_def := false; |}; congruence.
+  Defined.
+
+  Global Instance bool_IntoVal_boolT : IntoValForType bool_IntoVal boolT.
+  Proof. constructor; auto. Qed.
+   *)
+
+  Global Instance string_FromVal : FromVal string.
+  Proof.
+    refine {| from_val := λ (v: val),
+                          match v with
+                          | LitV (LitString k) => Some k
+                          | _ => None
+                          end;
+           |}.
+    intros [] [] Heq []; try congruence;
+      repeat (match goal with
+           | [ l : base_lit |- _ ] => destruct l
+           end); congruence.
+  Defined.
 
 End instances.
