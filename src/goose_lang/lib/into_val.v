@@ -2,16 +2,19 @@ From Perennial.goose_lang Require Import notation typing.
 From Perennial.goose_lang.lib Require Import typed_mem slice.slice struct.struct.
 Set Default Proof Using "Type".
 
-Class FromVal {ext: ext_op} V :=
-  { from_val: val -> option V;
-    FromVal_inj : ∀ x y, from_val x = from_val y -> is_Some (from_val x) -> x = y
-  }.
-
 Class IntoVal {ext: ext_op} V :=
   { to_val: V -> val;
     IntoVal_def: V;
     IntoVal_inj :> Inj eq eq to_val;
   }.
+
+Class IntoValRetract {ext: ext_op} V {INTO: @IntoVal ext V} :=
+  { from_val: val -> option V;
+    from_val_to_val1 : ∀ v, from_val (to_val v) = Some v;
+    from_val_to_val2 : ∀ x v, from_val x = Some v -> x = to_val v;
+    FromVal_inj : ∀ x y, from_val x = from_val y -> is_Some (from_val x) -> x = y
+  }.
+
 
 (* TODO: make V explicit and H implicit, so `{!IntoValForType V t} does the right thing *)
 Class IntoValForType {ext V} (H: @IntoVal ext V) {ext_ty: ext_types ext} (t:ty) :=
@@ -134,12 +137,21 @@ Section instances.
   Global Instance bool_IntoVal_boolT : IntoValForType bool_IntoVal boolT.
   Proof. constructor; auto. Qed.
 
+  Global Instance string_IntoVal : IntoVal string.
+  Proof.
+    refine {| into_val.to_val := λ (x: string), LitV $ LitString x;
+              IntoVal_def := ""; |}; congruence.
+  Defined.
+
+  Global Instance string_IntoVal_stringT : IntoValForType string_IntoVal stringT.
+  Proof. constructor; auto. Qed.
+
 End instances.
 
 (** instances for FromVal *)
 Section instances.
   Context {ext: ext_op} {ext_ty: ext_types ext}.
-  Global Instance u64_FromVal : FromVal u64.
+  Global Instance u64_FromVal : IntoValRetract u64.
   Proof.
     refine {| from_val := λ (v: val),
                           match v with
@@ -147,7 +159,12 @@ Section instances.
                           | _ => None
                           end;
            |}.
-    intros [] [] Heq []; try congruence;
+    - rewrite //=.
+    - intros [] [] => //=.
+      repeat (match goal with
+           | [ l : base_lit |- _ ] => destruct l
+           end); congruence.
+    - intros [] [] Heq []; try congruence;
       repeat (match goal with
            | [ l : base_lit |- _ ] => destruct l
            end); congruence.
@@ -160,7 +177,7 @@ Section instances.
   Qed.
    *)
 
-  Global Instance u8_FromVal : FromVal u8.
+  Global Instance u8_FromVal : IntoValRetract u8.
   Proof.
     refine {| from_val := λ (v: val),
                           match v with
@@ -168,7 +185,12 @@ Section instances.
                           | _ => None
                           end;
            |}.
-    intros [] [] Heq []; try congruence;
+    - rewrite //=.
+    - intros [] [] => //=.
+      repeat (match goal with
+           | [ l : base_lit |- _ ] => destruct l
+           end); congruence.
+    - intros [] [] Heq []; try congruence;
       repeat (match goal with
            | [ l : base_lit |- _ ] => destruct l
            end); congruence.
@@ -223,7 +245,7 @@ Section instances.
   Proof. constructor; auto. Qed.
    *)
 
-  Global Instance string_FromVal : FromVal string.
+  Global Instance string_FromVal : IntoValRetract string.
   Proof.
     refine {| from_val := λ (v: val),
                           match v with
@@ -231,7 +253,12 @@ Section instances.
                           | _ => None
                           end;
            |}.
-    intros [] [] Heq []; try congruence;
+    - rewrite //=.
+    - intros [] ? => //=.
+      repeat (match goal with
+           | [ l : base_lit |- _ ] => destruct l
+           end); congruence.
+    - intros [] [] Heq []; try congruence;
       repeat (match goal with
            | [ l : base_lit |- _ ] => destruct l
            end); congruence.
