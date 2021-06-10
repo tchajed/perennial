@@ -1399,6 +1399,19 @@ Proof.
   iIntros "!> !> * %". by iApply "H".
 Qed.
 
+
+Lemma global_state_interp_le ns ns' g κs E:
+  ns ≤ ns' →
+  global_state_interp g ns κs ={E}=∗ global_state_interp g ns' κs.
+Proof.
+  iIntros (Hle) "Hg".
+  iInduction Hle as [|ns'] "IH".
+  { eauto. }
+  iMod ("IH" with "[$]") as "Hg".
+  iMod (fupd_mask_subseteq ∅) as "H"; first set_solver+.
+  iMod (global_state_interp_mono with "Hg"). iMod "H". eauto.
+Qed.
+
 Lemma wpc_lift_pure_step_no_fork `{!Inhabited (state Λ)} `{!Inhabited (global_state Λ)} s k E1 E1' Φ Φc e1 :
   (∀ σ1 g1, if s is NotStuck then reducible e1 σ1 g1 else to_val e1 = None) →
   (∀ κ σ1 g1 e2 σ2 g2 efs, prim_step e1 σ1 g1 κ e2 σ2 g2 efs → κ = [] ∧ σ2 = σ1 ∧ g2 = g1 ∧ efs = []) →
