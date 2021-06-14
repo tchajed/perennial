@@ -70,7 +70,8 @@ Lemma wp_ncatomic s E1 E2 e Φ `{!Atomic StronglyAtomic e} :
 Proof.
   iIntros "H". rewrite wp_eq /wp_def !wpc_unfold /wpc_pre.
   rewrite ncfupd_eq /ncfupd_def. iIntros (mj) "!>".
-  iSplit; last by eauto.
+  iSplit; last first.
+  { iIntros. iApply step_fupd_extra.step_fupdN_inner_later; first done. iNext; iFrame. }
   destruct (to_val e) as [v|] eqn:He.
   { iIntros (q) "HNC". iMod ("H" with "[$]") as "(H&HNC)".
     iMod ("H" $! mj) as "[H _]".
@@ -89,7 +90,8 @@ Proof.
     iMod ("H" with "[$]") as "(H&HNC)".
     iMod ("H" with "[$]") as "(H&HNC)".
     iModIntro. iFrame. rewrite wpc0_unfold /wpc_pre.
-    rewrite to_of_val /=. iModIntro. iSplit; last by eauto.
+    rewrite to_of_val /=. iModIntro. iSplit; last first.
+    { iIntros. iApply step_fupd_extra.step_fupdN_inner_later; first done. iNext; iFrame. }
     iIntros (?) "$". done.
 Qed.
 Lemma wp_atomic s E1 E2 e Φ `{!Atomic StronglyAtomic e} :
@@ -123,7 +125,8 @@ Proof.
     iMod "HP" as ">HP". iMod ("H" with "HP"). done. }
   rewrite wp_eq /wp_def !wpc_unfold /wpc_pre /=.
   iIntros (-> ?) "H". iIntros (mj) "!>".
-  iSplit; last by eauto.
+  iSplit; last first.
+  { iIntros. iApply step_fupd_extra.step_fupdN_inner_later; first done. iNext; iFrame. }
   iIntros (q σ1 g1 ns κ κs nt) "Hσ Hg HNC".
   destruct (decide (n ≤ num_laters_per_step ns)) as [Hn|Hn]; first last.
   { iDestruct "H" as "[Hn _]". iMod ("Hn" with "Hσ Hg") as %?. lia. }

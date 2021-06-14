@@ -96,8 +96,7 @@ Proof. rewrite wpr_eq. apply (fixpoint_unfold (wpr_pre s k)). Qed.
 (* There's a stronger version of this *)
 Lemma wpr_strong_mono s k Hc t E e rec Φ Ψ Φinv Ψinv Φr Ψr :
   wpr s k Hc t E e rec Φ Φinv Φr -∗
-      (∀ v, Φ v ==∗ Ψ v) ∧ <bdisc> ((∀ Hc t, Φinv Hc t -∗ Ψinv Hc t) ∧
-                                    (∀ Hc t v, Φr Hc t v ==∗ Ψr Hc t v)) -∗
+      (∀ v, Φ v ==∗ Ψ v) ∧ ((∀ Hc t, Φinv Hc t -∗ Ψinv Hc t) ∧ (∀ Hc t v, Φr Hc t v ==∗ Ψr Hc t v)) -∗
   wpr s k Hc t E e rec Ψ Ψinv Ψr.
 Proof.
   iIntros "H HΦ". iLöb as "IH" forall (e t Hc E Φ Ψ Φinv Ψinv Φr Ψr).
@@ -106,17 +105,16 @@ Proof.
   iSplit.
   { iDestruct "HΦ" as "(H&_)". iIntros. iMod ("H" with "[$]"); eauto. }
   iDestruct "HΦ" as "(_&HΦ)".
-  rewrite own_discrete_idemp.
-  iIntros "!> H".
+  iIntros "H".
   iModIntro. iIntros (???????) "Hσ Hg". iMod ("H" with "[//] Hσ Hg") as "H".
   iModIntro. iNext. iIntros (Hc' ?) "HNC". iMod ("H" $! Hc' with "[$]") as (? Heqpf') "(Heq&?&?&H&HNC)".
   iModIntro. iExists _, Heqpf'. iFrame.
   iSplit.
-  - iDestruct "H" as "(H&_)". rewrite own_discrete_elim. iDestruct "HΦ" as "(HΦ&_)". by iApply "HΦ".
+  - iDestruct "H" as "(H&_)". iDestruct "HΦ" as "(HΦ&_)". by iApply "HΦ".
   - iDestruct "H" as "(_&H)".
     iApply ("IH" with "[$]").
     iSplit; last by auto.
-    { iIntros. rewrite own_discrete_elim. iDestruct ("HΦ") as "(_&H)"; by iMod ("H" with "[$]"). }
+    { iIntros. iDestruct ("HΦ") as "(_&H)"; by iMod ("H" with "[$]"). }
 Qed.
 
 (* To prove a recovery wp for e with rec, it suffices to prove a crash wp for e,
@@ -139,8 +137,8 @@ Proof.
   iIntros  "He #Hidemp".
   rewrite wpr_unfold. rewrite /wpr_pre.
   iApply (wpc_strong_mono' with "He"); [ auto | auto | auto | ].
-  iSplit; first auto. iIntros "!> Hcx".
-  iApply @fupd_level_mask_intro_discard.
+  iSplit; first auto. iIntros "Hcx".
+  iApply @fupd_mask_intro_discard.
   { set_solver +. }
   iIntros. iMod ("Hidemp" with "[ ] [$] [$] [$]") as "H".
   { eauto. }
@@ -172,7 +170,7 @@ Proof.
   { rewrite -?wpc_eq. iApply (wpc_strong_mono with "Hwp"); auto.
     iSplit.
     - iIntros. eauto.
-    - iIntros "!> H". iModIntro.
+    - iIntros "H !>".
       iIntros (σ g σ' Hcrash ns κs n) "Hσ Hg".
       destruct (Hequiv Hc t) as (Heqinv&Heqcrash&Heqstate&Heqglobal&Heqfork&?).
       iSpecialize ("H" with "[//] [Hσ] [Hg]").
@@ -258,7 +256,7 @@ Proof.
   iApply wpc0_wpc.
   iApply (wpc_strong_mono with "Hwpr"); [auto|auto|auto |].
   iSplit; first eauto.
-  iIntros "!> H !>". iIntros (σ g σ' Hcrash ns κs n) "Hσ Hg".
+  iIntros "H !>". iIntros (σ g σ' Hcrash ns κs n) "Hσ Hg".
   iMod ("H" with "[//] [$] [$]") as "H".
   do 2 iModIntro. iIntros (??) "HNC".
   iMod ("H" with "[$]") as (He1 He2) "(Heq&Hσ&Hg&H&HNC)".

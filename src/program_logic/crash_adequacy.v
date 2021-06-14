@@ -203,9 +203,10 @@ Proof.
       iPoseProof (wpc_safe with "Hσ Hg He'") as "H".
       rewrite ncfupd_eq.
       by iMod ("H" with "[$]") as "($&_)". }
-  iExists _, _. iSplitL ""; first done. iFrame "Hσ Hg".
+  iExists _, _. iSplitL ""; first done.
+  iMod (wpc0_crash with "[Hwp Hg]") as "H".
+  (* iFrame "Hσ Hg". *)
   iMod (NC_upd_C with "HNC") as "#HC".
-  iMod (wpc0_crash with "Hwp") as "H".
   iMod (own_disc_fupd_elim with "H") as "H".
   iSpecialize ("H" with "[$]").
   iMod (fupd_split_level_fupd with "H") as "H".
