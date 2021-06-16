@@ -299,6 +299,15 @@ Proof.
   by apply sep_mono; first apply later_intro.
 Qed.
 
+Lemma step_fupd2N_later k P:
+  ▷^k P -∗ ||▷=>^k P.
+Proof.
+  iInduction k as [| k] "IH".
+  - eauto.
+  - iIntros. rewrite Nat_iter_S.
+    iModIntro. iModIntro. iModIntro. by iApply "IH".
+Qed.
+
 Lemma step_fupd2N_inner_later' E1a E1b E2a E2b k (P: iProp Σ):
   (▷^k ||={E1a|E1b, E2a|E2b}=> P)%I -∗ ||={E1a|E1b,∅|∅}=> ||▷=>^k ||={∅|∅,E2a|E2b}=> P.
 Proof.
@@ -322,5 +331,46 @@ Proof.
   iApply step_fupd2N_inner_later'.
   iNext. iMod (fupd2_mask_subseteq E2a E2b) as "?"; eauto.
 Qed.
+
+Lemma step_fupd2N_inner_fupd2 E1a E1b E2a E2b k P:
+  (||={E1a|E1b,∅|∅}=> ||▷=>^k ||={∅|∅,E2a|E2b}=> ||={E2a|E2b,E2a|E2b}=> P) -∗
+  ||={E1a|E1b,∅|∅}=> ||▷=>^k ||={∅|∅,E2a|E2b}=> P.
+Proof.
+  iIntros "H". iMod "H". iApply (step_fupd2N_wand with "H").
+  iModIntro. iIntros "H". by iMod "H".
+Qed.
+
+Lemma step_fupd2N_inner_fupd E1a E1b E2a E2b k P:
+  (||={E1a|E1b,∅|∅}=> ||▷=>^k ||={∅|∅,E2a|E2b}=> |={E2a}=> P) -∗
+  ||={E1a|E1b,∅|∅}=> ||▷=>^k ||={∅|∅,E2a|E2b}=> P.
+Proof.
+  iIntros "H". iMod "H". iApply (step_fupd2N_wand with "H").
+  iModIntro. iIntros "H". do 2 iMod "H". auto.
+Qed.
+
+Lemma step_fupd2N_le (n1 n2 : nat) P :
+  n1 ≤ n2 → (||▷=>^n1 P) -∗ ||▷=>^n2 P.
+Proof.
+  induction 1 => //=.
+  iIntros. iApply step_fupd2_intro; auto. iNext. by iApply IHle.
+Qed.
+
+Lemma step_fupd2N_inner_wand E1a E1b E2a E2b k1 k2 P Q:
+  E2a ⊆ E1a →
+  E2b ⊆ E1b →
+  k2 ≤ k1 →
+  (||={E2a|E2b,∅|∅}=> ||▷=>^k2 ||={∅|∅,E2a|E2b}=> P) -∗
+  (P -∗ Q) -∗
+  ||={E1a|E1b,∅|∅}=> ||▷=>^k1 ||={∅|∅,E1a|E1b}=> Q.
+Proof.
+  iIntros (???) "HP HPQ".
+  iMod (fupd2_mask_subseteq E2a E2b) as "Hclo"; auto.
+  iMod "HP". iModIntro.
+  iApply (step_fupd2N_le k2 _); auto.
+  iApply (step_fupd2N_wand with "HP").
+  iIntros "HP". iMod "HP". iMod "Hclo" as "_".
+  iModIntro. by iApply "HPQ".
+Qed.
+
 End step_fupd2.
 
