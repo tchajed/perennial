@@ -71,30 +71,30 @@ Lemma wp_ncatomic s E1 E2 e Φ `{!Atomic StronglyAtomic e} :
   (|NC={E1,E2}=> WP e @ s; E2 {{ v, |NC={E2,E1}=> Φ v }}) ⊢ WP e @ s; E1 {{ Φ }}.
 Proof.
   iIntros "H". rewrite wp_eq /wp_def !wpc_unfold /wpc_pre.
-  rewrite ncfupd_eq /ncfupd_def. iIntros (mj) "!>".
+  rewrite ncfupd_eq /ncfupd_def. iIntros (mj).
   iSplit; last first.
   { iIntros. iApply step_fupd_extra.step_fupd2N_inner_later; [done|done|]. iNext; iFrame. }
   destruct (to_val e) as [v|] eqn:He.
-  { iIntros (q) "HNC". iMod ("H" with "[$]") as "(H&HNC)".
-    iMod ("H" $! mj) as "[H _]".
-    iMod ("H" with "[$]") as "(H&HNC)". iMod ("H" with "[$]") as "(H&HNC)". by iFrame.
+  { iIntros (q ???) "Hg HNC". iMod ("H" with "[$]") as "(H&HNC)".
+    iDestruct ("H" $! mj) as "[H _]".
+    iMod ("H" with "[$] [$]") as "(H&Hg&HNC)". iMod ("H" with "[$]") as "(H&HNC)". by iFrame.
   }
   iIntros (q σ1 g1 ns κ κs nt) "Hσ Hg HNC".
   iMod ("H" with "[$]") as "(H&HNC)".
-  iMod ("H" $! mj) as "[H _]".
+  iDestruct ("H" $! mj) as "[H _]".
   iMod ("H" $! _ σ1 with "Hσ Hg [$]") as "H". iModIntro.
   iApply (step_fupd_extra.step_fupd2N_wand with "H").
   iIntros "[% H]". iSplit; first done.
   iIntros (e2 σ2 g2 efs Hstep).
-  iMod ("H" with "[//]") as "($ & $ & H & $ & HNC)".
+  iMod ("H" with "[//]") as "($ & Hg & H & $ & HNC)".
   - destruct (atomic _ _ _ _ _ _ _ Hstep) as [v <-%of_to_val].
     iDestruct (wpc0_value_inv' with "H") as "H".
-    iMod ("H" with "[$]") as "(H&HNC)".
+    iMod ("H" with "[$] [$]") as "(H&Hg&HNC)".
     iMod ("H" with "[$]") as "(H&HNC)".
     iModIntro. iFrame. rewrite wpc0_unfold /wpc_pre.
-    rewrite to_of_val /=. iModIntro. iSplit; last first.
+    rewrite to_of_val /=. iSplit; last first.
     { iIntros. iApply step_fupd_extra.step_fupd2N_inner_later; [done|done|]. iNext; iFrame. }
-    iIntros (?) "$". done.
+    iIntros (????) "$ $". done.
 Qed.
 Lemma wp_atomic s E1 E2 e Φ `{!Atomic StronglyAtomic e} :
   (|={E1,E2}=> WP e @ s; E2 {{ v, |={E2,E1}=> Φ v }}) ⊢ WP e @ s; E1 {{ Φ }}.
@@ -126,14 +126,14 @@ Proof.
     iIntros (v) "H".
     iMod "HP" as ">HP". iMod ("H" with "HP"). done. }
   rewrite wp_eq /wp_def !wpc_unfold /wpc_pre /=.
-  iIntros (-> ?) "H". iIntros (mj) "!>".
+  iIntros (-> ?) "H". iIntros (mj).
   iSplit; last first.
   { iIntros. iApply step_fupd_extra.step_fupd2N_inner_later; [done|done|]. iNext; iFrame. }
   iIntros (q σ1 g1 ns κ κs nt) "Hσ Hg HNC".
   destruct (decide (n ≤ num_laters_per_step ns)) as [Hn|Hn]; first last.
   { iDestruct "H" as "[Hn _]". iMod ("Hn" with "Hσ Hg") as %?. lia. }
   iDestruct "H" as "[_ [>HP Hwp]]".
-  iMod ("Hwp" $! mj) as "[Hwp _]".
+  iDestruct ("Hwp" $! mj) as "[Hwp _]".
   iMod ("Hwp" with "Hσ Hg [$]") as "H".
   iMod "HP". iModIntro.
   revert n Hn. generalize (num_laters_per_step ns)=>n0 n Hn.
