@@ -33,6 +33,7 @@ Proof.
   by do 15 f_equiv.
 Qed.*)
 
+(*
 Lemma wp_value_fupd' s E Φ v : WP of_val v @ s; E {{ Φ }} ⊣⊢ |NC={E}=> Φ v.
 Proof.
   rewrite wp_eq /wp_def. iSplit.
@@ -44,6 +45,7 @@ Qed.
 
 Lemma wp_value_fupd'_1 s E Φ v : WP of_val v @ s; E {{ Φ }} ⊢ |NC={E}=> Φ v.
 Proof. rewrite wp_value_fupd' //. Qed.
+*)
 
 Lemma wp_strong_mono s1 s2 E1 E2 e Φ Ψ :
   s1 ⊑ s2 → E1 ⊆ E2 →
@@ -71,7 +73,7 @@ Proof.
   iIntros "H". rewrite wp_eq /wp_def !wpc_unfold /wpc_pre.
   rewrite ncfupd_eq /ncfupd_def. iIntros (mj) "!>".
   iSplit; last first.
-  { iIntros. iApply step_fupd_extra.step_fupdN_inner_later; first done. iNext; iFrame. }
+  { iIntros. iApply step_fupd_extra.step_fupd2N_inner_later; [done|done|]. iNext; iFrame. }
   destruct (to_val e) as [v|] eqn:He.
   { iIntros (q) "HNC". iMod ("H" with "[$]") as "(H&HNC)".
     iMod ("H" $! mj) as "[H _]".
@@ -81,7 +83,7 @@ Proof.
   iMod ("H" with "[$]") as "(H&HNC)".
   iMod ("H" $! mj) as "[H _]".
   iMod ("H" $! _ σ1 with "Hσ Hg [$]") as "H". iModIntro.
-  iApply (step_fupdN_wand with "H").
+  iApply (step_fupd_extra.step_fupd2N_wand with "H").
   iIntros "[% H]". iSplit; first done.
   iIntros (e2 σ2 g2 efs Hstep).
   iMod ("H" with "[//]") as "($ & $ & H & $ & HNC)".
@@ -91,7 +93,7 @@ Proof.
     iMod ("H" with "[$]") as "(H&HNC)".
     iModIntro. iFrame. rewrite wpc0_unfold /wpc_pre.
     rewrite to_of_val /=. iModIntro. iSplit; last first.
-    { iIntros. iApply step_fupd_extra.step_fupdN_inner_later; first done. iNext; iFrame. }
+    { iIntros. iApply step_fupd_extra.step_fupd2N_inner_later; [done|done|]. iNext; iFrame. }
     iIntros (?) "$". done.
 Qed.
 Lemma wp_atomic s E1 E2 e Φ `{!Atomic StronglyAtomic e} :
@@ -112,7 +114,7 @@ Qed.
 (* FIXME(RJ) we should probably have such a lemma for WPC and apply that here *)
 Lemma wp_step_fupdN_strong n s E1 E2 e P Φ :
   TCEq (to_val e) None → E2 ⊆ E1 →
-  (∀ σ g ns κs nt, state_interp σ nt -∗ global_state_interp g ns κs
+  (∀ σ g ns D κs nt, state_interp σ nt -∗ global_state_interp g ns D κs
        ={E1,∅}=∗ ⌜n ≤ S (num_laters_per_step ns)⌝) ∧
   ((|={E1,E2}=> |={∅}▷=>^n |={E2,E1}=> P) ∗
     WP e @ s; E2 {{ v, P ={E1}=∗ Φ v }}) -∗
@@ -126,7 +128,7 @@ Proof.
   rewrite wp_eq /wp_def !wpc_unfold /wpc_pre /=.
   iIntros (-> ?) "H". iIntros (mj) "!>".
   iSplit; last first.
-  { iIntros. iApply step_fupd_extra.step_fupdN_inner_later; first done. iNext; iFrame. }
+  { iIntros. iApply step_fupd_extra.step_fupd2N_inner_later; [done|done|]. iNext; iFrame. }
   iIntros (q σ1 g1 ns κ κs nt) "Hσ Hg HNC".
   destruct (decide (n ≤ num_laters_per_step ns)) as [Hn|Hn]; first last.
   { iDestruct "H" as "[Hn _]". iMod ("Hn" with "Hσ Hg") as %?. lia. }
@@ -136,16 +138,17 @@ Proof.
   iMod "HP". iModIntro.
   revert n Hn. generalize (num_laters_per_step ns)=>n0 n Hn.
   iInduction n as [|n] "IH" forall (n0 Hn).
-  - iApply (step_fupdN_wand with "H").
+  - iApply (step_fupd_extra.step_fupd2N_wand with "H").
     iIntros "!> [$ H]". iIntros.
     iMod "HP". simpl. iMod ("H" with "[//]") as "($ & $ & Hwp & $)". iMod "HP".
-    iModIntro. iApply (wpc0_strong_mono with "Hwp"); auto; [by apply omega_le_refl|].
+    iModIntro. iApply (wpc0_strong_mono with "Hwp"); auto.
     iSplit; last by auto.
     iIntros (v) "HΦ". iMod ("HΦ" with "HP"). done.
   - destruct n0 as [|n0]; [lia|]=>/=.
     iMod "H".
     iModIntro. iNext. iMod "HP". iMod "H".
-    iApply ("IH" with "[] HP H"); auto with lia.
+    iSpecialize ("IH" with "[] HP H"); first auto with lia.
+    iMod "IH". iModIntro. eauto.
 Qed.
 
 Lemma wp_bind K `{!LanguageCtx K} s E e Φ :
@@ -193,10 +196,19 @@ Global Instance wp_flip_mono' s E e :
   Proper (pointwise_relation _ (flip (⊢)) ==> (flip (⊢))) (wp (PROP:=iProp Σ) s E e).
 Proof. by intros Φ Φ' ?; apply wp_mono. Qed.
 
+(*
 Lemma wp_value_fupd s E Φ e v : IntoVal e v → WP e @ s; E {{ Φ }} ⊣⊢ |NC={E}=> Φ v.
 Proof. intros <-. by apply wp_value_fupd'. Qed.
+*)
+Lemma wp_value_fupd s E Φ e v : IntoVal e v → (|NC={E}=> Φ v) ⊢ WP e @ s; E {{ Φ }}.
+Proof.
+  intros <-. iIntros "HΦ".
+  rewrite wp_eq /wp_def.
+  iApply ncfupd_wpc. iSplit; first done.
+  iMod "HΦ". iApply wpc_value'. eauto.
+Qed.
 Lemma wp_value' s E Φ v : Φ v ⊢ WP (of_val v) @ s; E {{ Φ }}.
-Proof. rewrite wp_value_fupd'. auto. Qed.
+Proof. iIntros "H". iApply wp_value_fupd; auto. done. Qed.
 Lemma wp_value s E Φ e v : IntoVal e v → Φ v ⊢ WP e @ s; E {{ Φ }}.
 Proof. intros <-. apply wp_value'. Qed.
 
@@ -218,7 +230,7 @@ Qed.
    a premise. *)
 Lemma wp_step_fupdN n s E1 E2 e P Φ :
   TCEq (to_val e) None → E2 ⊆ E1 →
-  (∀ σ g ns κs nt, state_interp σ nt -∗ global_state_interp g ns κs
+  (∀ σ g ns D κs nt, state_interp σ nt -∗ global_state_interp g ns D κs
        ={E1,∅}=∗ ⌜n ≤ S (num_laters_per_step ns)⌝) ∧
   ((|={E1∖E2,∅}=> |={∅}▷=>^n |={∅,E1∖E2}=> P) ∗
     WP e @ s; E2 {{ v, P ={E1}=∗ Φ v }}) -∗
@@ -239,7 +251,7 @@ Lemma wp_step_fupd s E1 E2 e P Φ :
 Proof.
   iIntros (??) "HR H".
   iApply (wp_step_fupdN_strong 1 _ E1 E2 with "[-]"); [done|..]. iSplit.
-  - iIntros (?????) "_". iMod (fupd_mask_subseteq ∅) as "_"; [set_solver+|].
+  - iIntros (??????) "_". iMod (fupd_mask_subseteq ∅) as "_"; [set_solver+|].
     auto with lia.
   - iFrame "H". iMod "HR" as "$". auto.
 Qed.
