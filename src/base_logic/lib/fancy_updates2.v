@@ -266,6 +266,13 @@ Proof.
     fupd2_frame_r wand_elim_r fupd2_trans.
 Qed.
 
+Global Instance elim_modal_fupd_fupd2 p E1 E2 E3 Eb Eb' P Q :
+  ElimModal True p false (|={E1,E2}=> P) P (||={E1|Eb,E3|Eb'}=> Q) (||={E2|Eb,E3|Eb'}=> Q).
+Proof.
+  rewrite /ElimModal=>?. rewrite (fupd_fupd2) intuitionistically_if_elim /=.
+  iIntros "(>H&H2)". iApply ("H2" with "[$]").
+Qed.
+
 Global Instance elim_acc_fupd2 {X} E1a E1b E2a E2b Ea Eb α β mγ Q :
   ElimAcc (X:=X) True (uPred_fupd2 E1a E1b E2a E2b) (uPred_fupd2 E2a E2b E1a E1b) α β mγ
           (||={E1a|E1b,Ea|Eb}=> Q)

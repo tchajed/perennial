@@ -1,5 +1,5 @@
 From iris.proofmode Require Import base tactics classes.
-From Perennial.base_logic Require Export invariants.
+From Perennial.base_logic Require Export invariants fancy_updates2.
 Set Default Proof Using "Type".
 Import uPred.
 
@@ -15,6 +15,12 @@ Notation "|={ E }_ k =>^ n P" :=
       (at level 99, E at level 50, k, n at level 9, P at level 200,
        format "|={ E }_ k =>^ n  P").
 
+Notation "||▷=> Q" := (||={∅|∅, ∅|∅}=> ▷ ||={∅|∅, ∅|∅}=> Q)%I
+  (at level 99, Q at level 200,
+   format "||▷=> Q") : bi_scope.
+Notation "||▷=>^ n Q" := (Nat.iter n (λ P, ||▷=> P)%I Q)
+  (at level 99, n at level 9, Q at level 200,
+   format "||▷=>^ n  Q") : bi_scope.
 
 Section step_fupdN.
 
@@ -273,3 +279,48 @@ Proof using HAff.
 Qed.
 
 End step_fupdN.
+
+Section step_fupd2.
+Context `{!invGS Σ}.
+Lemma step_fupd2N_ne n:
+  NonExpansive (λ (P: iProp Σ), ||▷=>^n P)%I.
+Proof.
+  induction n => //=.
+  - apply _.
+  - intros ? P Q ->. eauto.
+Qed.
+
+Lemma step_fupd2N_wand n P Q :
+  (||▷=>^n P) -∗ (P -∗ Q) -∗ (||▷=>^n Q).
+Proof.
+  apply wand_intro_l. induction n as [|n IH]=> /=.
+  { by rewrite wand_elim_l. }
+  rewrite -IH -fupd2_frame_l later_sep -fupd2_frame_l.
+  by apply sep_mono; first apply later_intro.
+Qed.
+
+Lemma step_fupd2N_inner_later' E1a E1b E2a E2b k (P: iProp Σ):
+  (▷^k ||={E1a|E1b, E2a|E2b}=> P)%I -∗ ||={E1a|E1b,∅|∅}=> ||▷=>^k ||={∅|∅,E2a|E2b}=> P.
+Proof.
+  iInduction k as [| k] "IH".
+  - rewrite //=. iIntros "HP".
+    iMod "HP".
+    iApply fupd2_mask_intro_subseteq; eauto; try set_solver.
+  - iIntros. iMod (fupd2_mask_subseteq ∅ ∅) as "Hclo".
+    { set_solver. }
+    { set_solver. }
+    rewrite Nat_iter_S.
+    iModIntro. iModIntro. iNext. iMod "Hclo". by iApply "IH".
+Qed.
+
+Lemma step_fupd2N_inner_later E1a E1b E2a E2b k (P: iProp Σ):
+  E2a ⊆ E1a →
+  E2b ⊆ E1b →
+  ▷^k P -∗ ||={E1a|E1b,∅|∅}=> ||▷=>^k ||={∅|∅,E2a|E2b}=> P.
+Proof.
+  iIntros (Hle1 Hle2) "H".
+  iApply step_fupd2N_inner_later'.
+  iNext. iMod (fupd2_mask_subseteq E2a E2b) as "?"; eauto.
+Qed.
+End step_fupd2.
+
