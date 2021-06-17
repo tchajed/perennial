@@ -11,10 +11,10 @@ Class later_tokG {Λ Σ} (IRISG : irisGS Λ Σ) := {
   later_tok : iProp Σ;
   later_tok_timeless : Timeless later_tok;
   later_tok_decr :
-    ⊢ (∀ g ns κ, global_state_interp g ns κ ∗ later_tok ==∗
-                                   ∃ ns', ⌜ S ns' ≤ ns ⌝%nat ∗ global_state_interp g ns' κ)%I;
+    ⊢ (∀ g ns D κ, global_state_interp g ns D κ ∗ later_tok ==∗
+                                   ∃ ns', ⌜ S ns' ≤ ns ⌝%nat ∗ global_state_interp g ns' D κ)%I;
   later_tok_incr :
-    ⊢ (∀ g ns κ, global_state_interp g ns κ ==∗ global_state_interp g (S ns) κ ∗ later_tok)%I;
+    ⊢ (∀ g ns D κ, global_state_interp g ns D κ ==∗ global_state_interp g (S ns) D κ ∗ later_tok)%I;
   num_laters_per_step_lt : ∀ n1 n2, n1 < n2 → num_laters_per_step n1 < num_laters_per_step n2
 }.
 
@@ -55,22 +55,21 @@ Proof.
   iIntros (Hnval) "Htok Hwp".
   rewrite ?wpc_unfold /wpc_pre.
   rewrite Hnval.
-  iIntros (mj). iModIntro.
+  iIntros (mj).
   iSplit.
   - iIntros (q σ1 g1 ns κ κs nt) "Hσ Hg HNC".
     iMod (later_tok_decr with "[$]") as (ns' Heq) "Hg".
-    iApply (fupd_mask_weaken ∅); first by set_solver+.
-    iIntros "H". iModIntro. simpl. iModIntro. iNext. iMod "H" as "_".
-    iMod ("Hwp" $! _) as "(Hwp&_)".
+    iMod (fupd2_mask_subseteq ∅ ∅) as "H"; [ set_solver+ | set_solver+ |].
+    iModIntro. simpl. iModIntro. iNext. iMod "H" as "_".
+    iDestruct ("Hwp" $! _) as "(Hwp&_)".
     iSpecialize ("Hwp" $! _ _ _ _ _ _ _ with "Hσ Hg HNC").
     iMod "Hwp".
-    iApply (step_fupd_extra.step_fupdN_le (S (num_laters_per_step ns')) (num_laters_per_step ns)
+    iApply (step_fupd_extra.step_fupd2N_le (S (num_laters_per_step ns')) (num_laters_per_step ns)
               with "[Hwp]").
-    { reflexivity. }
     { assert (Hlt: ns' < ns) by lia.
       apply num_laters_per_step_lt in Hlt. lia.
     }
-    iApply (step_fupdN_wand with "Hwp").
+    iApply (step_fupd_extra.step_fupd2N_wand with "Hwp").
     iNext. iIntros "($&H)".
     iIntros. iMod ("H" with "[//]") as "(Hσ&Hg&Hwp&$)".
     iMod (later_tok_incr with "[$]") as "(Hg&Htok')".
@@ -79,24 +78,21 @@ Proof.
     { lia. }
     iFrame.
     iApply (wpc0_strong_mono with "Hwp"); try reflexivity.
-    { left. }
     iModIntro. iSplit.
     * iIntros (?) "H". iModIntro. iApply "H"; eauto.
     * iIntros "H". iModIntro. iApply "H"; eauto.
   - iIntros (g ns κs) "Hg HC".
     iMod (later_tok_decr with "[$]") as (ns' Heq) "Hg".
-    iApply (fupd_mask_weaken ∅); first by set_solver+.
-    iIntros "H".
-    iApply (step_fupd_extra.step_fupdN_le (S (num_laters_per_step ns')) (num_laters_per_step ns)).
-    { reflexivity. }
+    iMod (fupd2_mask_subseteq ∅ ∅) as "H"; [ set_solver+ | set_solver+ |].
+    iApply (step_fupd_extra.step_fupd2N_le (S (num_laters_per_step ns')) (num_laters_per_step ns)).
     { assert (Hlt: ns' < ns) by lia.
       apply num_laters_per_step_lt in Hlt. lia.
     }
     rewrite Nat_iter_S. iModIntro. iModIntro. iNext.
-    iMod "H". iMod ("Hwp" $! 0) as "(_&Hwp)".
+    iMod "H". iDestruct ("Hwp" $! _) as "(_&Hwp)".
     iMod ("Hwp" with "[$] [$]") as "Hwp".
     iModIntro.
-    iApply (step_fupdN_wand with "Hwp"). iIntros "Hwp".
+    iApply (step_fupd_extra.step_fupd2N_wand with "Hwp"). iIntros "Hwp".
     iMod "Hwp" as "(Hg&HΦc)".
     iMod (later_tok_incr with "[$]") as "(Hg&Htok')".
     iMod (global_state_interp_le _ ns _ _ with "Hg") as "Hg".

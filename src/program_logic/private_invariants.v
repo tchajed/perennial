@@ -8,28 +8,30 @@ Set Default Proof Using "Type".
 Unset Implicit Arguments.
 Import uPred.
 
+(* I think this can be done using dyn_reservation_map in global_state_interp *)
 Class pri_invG {Λ Σ} (IRISG : irisGS Λ Σ) := {
-  pri_inv_tok : positive → iProp Σ;
+  pri_inv_tok : coPset → iProp Σ;
   pri_inv_timeless : ∀ i, Timeless (pri_inv_tok i);
-  pri_inv_alloc :
+  pri_inv_tok_infinite : ∀ E, pri_inv_tok E -∗ ⌜ set_infinite E ⌝;
+  pri_inv_tok_alloc :
     ⊢ (∀ g ns D κ, global_state_interp g ns D κ ==∗
-                                   ∃ i, ⌜ i ∉ D ⌝ ∗ pri_inv_tok i ∗ global_state_interp g ns D κ)%I;
+                   ∃ E, ⌜ E ## gset_to_coPset D ⌝ ∗ pri_inv_tok E ∗ global_state_interp g ns D κ)%I;
   pri_inv_disj :
-    ⊢ (∀ g ns D κ i, global_state_interp g ns D κ ∗ pri_inv_tok i -∗ ⌜ i ∉ D ⌝)
+    ⊢ (∀ g ns D κ E, global_state_interp g ns D κ ∗ pri_inv_tok E -∗ ⌜ E ## gset_to_coPset D ⌝)
 }.
 
 Section def.
 Context `{IRISG: !irisGS Λ Σ}.
 Context `{!pri_invG IRISG}.
-Definition pri_inv_def (i: positive) P : iProp Σ :=
-  ∃ i', ⌜i' ∈ MaybeEn2 (gset_to_coPset {[i]})⌝ ∧ ownI O i' (bi_sch_var_fixed O) (list_to_vec [P]).
+Definition pri_inv_def E P : iProp Σ :=
+  ∃ i, ⌜i ∈ MaybeEn2 E⌝ ∧ ownI O i (bi_sch_var_fixed O) (list_to_vec [P]).
 Definition pri_inv_aux : seal (@pri_inv_def). Proof. by eexists. Qed.
 Definition pri_inv := pri_inv_aux.(unseal).
 Definition pri_inv_eq : @pri_inv = @pri_inv_def := pri_inv_aux.(seal_eq).
 Typeclasses Opaque pri_inv.
 
 Definition pri_inv_full_def P : iProp Σ :=
-    ∃ i, pri_inv_tok i ∗ pri_inv i P.
+    ∃ E, pri_inv_tok E ∗ pri_inv E P.
 Definition pri_inv_full_aux : seal (@pri_inv_full_def). Proof. by eexists. Qed.
 Definition pri_inv_full := pri_inv_full_aux.(unseal).
 Definition pri_inv_full_eq : @pri_inv_full = @pri_inv_full_def := pri_inv_full_aux.(seal_eq).
@@ -45,26 +47,41 @@ Section pri_inv.
 Context `{IRISG: !irisGS Λ Σ}.
 Context `{!pri_invG IRISG}.
   Implicit Types i : positive.
-  Implicit Types mj: option nat.
   Implicit Types E : coPset.
   Implicit Types P Q R : iProp Σ.
   Implicit Types Ps Qs Rs : list (iProp Σ).
 
-  Lemma pri_inv_acc E1 E2 i P :
-    i ∈ E2 → pri_inv i P -∗ ||={E1|E2,E1|E2∖{[i]}}=> ▷ P ∗ (▷ P -∗ ||={E1|E2∖{[i]},E1|E2}=> True).
+  Lemma pri_inv_alloc E E1 E2 P : set_infinite E → ▷ P -∗ ||={E1|E2, E1|E2}=> pri_inv E P.
+  Proof.
+    rewrite uPred_fupd2_eq /uPred_fupd2_def.
+    iIntros (Hinf) "HP [Hw $]".
+    iMod (wsat_all_acc 1 with "[$]") as "(Hw&Hclo)".
+    iMod (ownI_alloc (.∈ MaybeEn2 E) (bi_sch_var_fixed O) O (list_to_vec [P]) (list_to_vec [])
+            with "[$HP $Hw]")
+      as (i' ?) "[? [? ?]]"; auto using fresh_inv_name.
+    {
+      intros E'.
+      exists (coPpick (MaybeEn2 E ∖ gset_to_coPset E')).
+      rewrite -elem_of_gset_to_coPset (comm and) -elem_of_difference.
+      apply coPpick_elem_of=> Hfin.
+      apply (difference_finite_inv _ _) in Hfin; auto using gset_to_coPset_finite.
+      apply MaybeEn2_infinite in Hfin; auto.
+      intros ?. eapply set_not_infinite_finite; eauto.
+    }
+    iDestruct ("Hclo" with "[$]") as "$".
+    iIntros "!> !>". rewrite pri_inv_eq /pri_inv_def. iExists _. iFrame; eauto.
+  Qed.
+
+  Lemma pri_inv_acc E1 E2 E P :
+    E ⊆ E2 → pri_inv E P -∗ ||={E1|E2,E1|E2∖E}=> ▷ P ∗ (▷ P -∗ ||={E1|E2∖E,E1|E2}=> True).
   Proof.
     rewrite uPred_fupd2_eq /uPred_fupd2_def pri_inv_eq.
-    iIntros (Hin%elem_of_subseteq_singleton) "HiP".
+    iIntros (Hsub) "HiP".
     iDestruct "HiP" as (i' Hin2%elem_of_subseteq_singleton) "#HiP".
     rewrite (ownE_op (AlwaysEn ∪ _)) //; last first.
     { apply disjoint_union_l; split; auto. }
-    rewrite {1 4}(union_difference_L {[i]} E2) // ownE_op_MaybeEn2; last set_solver.
-    rewrite {1 2}(union_difference_L {[ i' ]} (MaybeEn2 _)); last first.
-    { 
-      assert (gset_to_coPset {[ i ]} = {[ i ]}) as <-; auto.
-      { clear. rewrite -leibniz_equiv_iff. specialize (elem_of_gset_to_coPset {[i]}).
-        set_unfold. eauto. }
-    }
+    rewrite {1 4}(union_difference_L E E2) // ownE_op_MaybeEn2; last set_solver.
+    rewrite {1 2}(union_difference_L {[ i' ]} (MaybeEn2 _)) //.
     rewrite ownE_op //.
     rewrite ownE_op //; last by set_solver.
     iIntros "(Hw & (HAE & HE1) & (HE2a&HE2b) & HE2')".
@@ -85,7 +102,7 @@ Context `{!pri_invG IRISG}.
     iDestruct ("Hclo" with "[$]") as "$"; eauto.
   Qed.
 
-  Global Instance pri_inv_persistent i P : Persistent (pri_inv i P).
+  Global Instance pri_inv_persistent E P : Persistent (pri_inv E P).
   Proof. rewrite pri_inv_eq. apply _. Qed.
 
 End pri_inv.
