@@ -15,7 +15,8 @@ Class later_tokG {Λ Σ} (IRISG : irisGS Λ Σ) := {
                                    ∃ ns', ⌜ S ns' ≤ ns ⌝%nat ∗ global_state_interp g ns' D κ)%I;
   later_tok_incr :
     ⊢ (∀ g ns D κ, global_state_interp g ns D κ ==∗ global_state_interp g (S ns) D κ ∗ later_tok)%I;
-  num_laters_per_step_lt : ∀ n1 n2, n1 < n2 → num_laters_per_step n1 < num_laters_per_step n2
+  num_laters_per_step_exp:
+              ∀ n1 n2, n1 < n2 → 1 + num_laters_per_step n1 + num_laters_per_step n1 ≤ num_laters_per_step n2
 }.
 
 
@@ -24,13 +25,18 @@ Arguments later_tok {_ _ _ _}.
 Section res.
 
 Context `{IRISG: !irisGS Λ Σ}.
-Context `{!later_tokG IRISG}.
+Context `{LT: !later_tokG IRISG}.
 Implicit Types s : stuckness.
 Implicit Types P : iProp Σ.
 Implicit Types Φ : val Λ → iProp Σ.
 Implicit Types Φc : iProp Σ.
 Implicit Types v : val Λ.
 Implicit Types e : expr Λ.
+
+Lemma num_laters_per_step_lt : ∀ n1 n2, n1 < n2 → num_laters_per_step n1 < num_laters_per_step n2.
+Proof using LT.
+  intros ?? ?%num_laters_per_step_exp. lia.
+Qed.
 
 (*
 Definition later_tok : iProp Σ :=

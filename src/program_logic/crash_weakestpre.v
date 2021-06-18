@@ -23,7 +23,7 @@ Class irisGS (Λ : language) (Σ : gFunctors) := IrisG {
   hold in between each step of reduction. Here [global_state Λ] is the global
   state, the [nat] is the number of steps already performed by the system, and
   [list Λobservation] are the remaining observations. *)
-  global_state_interp : global_state Λ → nat → gset positive → list (observation Λ) → iProp Σ;
+  global_state_interp : global_state Λ → nat → coPset → list (observation Λ) → iProp Σ;
 
   (** A fixed postcondition for any forked-off thread. For most languages, e.g.
   heap_lang, this will simply be [True]. However, it is useful if one wants to
@@ -410,10 +410,10 @@ Notation "|C={ E1 }_ k => P" := (cfupd k E1 P)
 
 Global Hint Extern 1 (environments.envs_entails _ (|C={_}_ _ => _)) => iModIntro : core.
 
-Definition wpc_pre `{!irisGS Λ Σ} (s : stuckness) (k : nat) (mj: gset positive)
+Definition wpc_pre `{!irisGS Λ Σ} (s : stuckness) (k : nat) (mj: coPset)
     (wpc : coPset -d> expr Λ -d> (val Λ -d> iPropO Σ) -d> iPropO Σ -d> iPropO Σ) :
     coPset -d> expr Λ -d> (val Λ -d> iPropO Σ) -d> iPropO Σ -d> iPropO Σ := λ E1 e1 Φ Φc,
-  let E2 :=  ⊤ ∖ (gset_to_coPset mj) in
+  let E2 :=  ⊤ ∖ mj in
   ((match to_val e1 with
     | Some v =>
       ∀ q g1 ns κs,
@@ -1045,9 +1045,7 @@ Lemma wpc0_value_inv' s k mj E1 q Φ Φc v g κs ns :
   wpc0 s k mj E1 (of_val v) Φ Φc -∗
   global_state_interp g ns mj κs -∗
   NC q -∗
-  ||={E1|⊤∖(gset_to_coPset mj), E1|⊤ ∖(gset_to_coPset mj)}=> Φ v ∗ 
-                                                            global_state_interp g ns mj κs ∗
-                                                            NC q.
+  ||={E1|⊤∖mj, E1|⊤∖mj}=> Φ v ∗ global_state_interp g ns mj κs ∗ NC q.
 Proof.
   rewrite wpc0_unfold /wpc_pre to_of_val.
   iIntros "H". iDestruct "H" as "(H&_)"; auto.
@@ -1057,9 +1055,7 @@ Lemma wpc_value_inv' s k E1 q g Φ Φc v mj κs ns :
   WPC of_val v @ s; k ; E1 {{ Φ }} {{ Φc }} -∗
   global_state_interp g ns mj κs -∗
   NC q -∗
-  ||={E1|⊤∖(gset_to_coPset mj), E1|⊤ ∖(gset_to_coPset mj)}=> Φ v ∗ 
-                                                            global_state_interp g ns mj κs ∗
-                                                            NC q.
+  ||={E1|⊤∖mj, E1|⊤∖mj}=> Φ v ∗ global_state_interp g ns mj κs ∗ NC q.
 Proof.
   rewrite wpc_eq. iIntros "H ?". iSpecialize ("H" $! mj).
   iPoseProof (wpc0_value_inv' with "[$] [$]") as "H". eauto.
@@ -1069,9 +1065,7 @@ Lemma wpc0_value_inv_option s k mj E1 q Φ Φc e g κs ns :
   wpc0 s k mj E1 e Φ Φc -∗
   global_state_interp g ns mj κs -∗
   NC q -∗
-  ||={E1|⊤∖(gset_to_coPset mj), E1|⊤ ∖(gset_to_coPset mj)}=> from_option Φ True (to_val e) ∗
-                                                            global_state_interp g ns mj κs ∗
-                                                            NC q.
+  ||={E1|⊤∖mj, E1|⊤∖mj}=> from_option Φ True (to_val e) ∗ global_state_interp g ns mj κs ∗ NC q.
 Proof.
   iIntros. destruct (to_val e) as [v|] eqn:He; last by iFrame.
   apply of_to_val in He as <-. by iMod (wpc0_value_inv' with "[$] [$] [$]") as "($&$)".
@@ -1081,9 +1075,7 @@ Lemma wpc_value_inv_option s k mj E1 q Φ Φc e g κs ns :
   WPC e @ s; k; E1 {{ Φ }} {{ Φc }} -∗
   global_state_interp g ns mj κs -∗
   NC q -∗
-  ||={E1|⊤∖(gset_to_coPset mj), E1|⊤ ∖(gset_to_coPset mj)}=> from_option Φ True (to_val e) ∗
-                                                            global_state_interp g ns mj κs ∗
-                                                            NC q.
+  ||={E1|⊤∖mj, E1|⊤∖mj}=> from_option Φ True (to_val e) ∗ global_state_interp g ns mj κs ∗ NC q.
 Proof.
   iIntros. destruct (to_val e) as [v|] eqn:He; last by iFrame.
   apply of_to_val in He as <-. by iMod (wpc_value_inv' with "[$] [$] [$]") as "($&$)".
@@ -1137,13 +1129,13 @@ Qed.
 Lemma wpc0_crash s k mj E1 e Φ Φc:
   wpc0 s k mj E1 e Φ Φc -∗
   ((∀ g1 ns κs, global_state_interp g1 ns mj κs -∗ C -∗
-    ||={E1|⊤ ∖ (gset_to_coPset mj),∅|∅}=> ||▷=>^(num_laters_per_step ns) ||={∅|∅,E1|⊤ ∖ (gset_to_coPset mj)}=> global_state_interp g1 ns mj κs ∗ Φc))%I.
+    ||={E1|⊤∖mj,∅|∅}=> ||▷=>^(num_laters_per_step ns) ||={∅|∅,E1|⊤∖mj}=> global_state_interp g1 ns mj κs ∗ Φc))%I.
 Proof. rewrite wpc0_unfold /wpc_pre. iIntros "(_&$)". Qed.
 
 Lemma wpc_crash s k E1 e Φ Φc:
   WPC e @ s; k; E1 {{ Φ }} {{ Φc }} -∗
   ((∀ g1 ns D κs, global_state_interp g1 ns D κs -∗ C -∗
-    ||={E1|⊤ ∖ (gset_to_coPset D),∅|∅}=> ||▷=>^(num_laters_per_step ns) ||={∅|∅,E1|⊤ ∖ (gset_to_coPset D)}=> global_state_interp g1 ns D κs ∗ Φc))%I.
+    ||={E1|⊤∖D,∅|∅}=> ||▷=>^(num_laters_per_step ns) ||={∅|∅,E1|⊤∖D}=> global_state_interp g1 ns D κs ∗ Φc))%I.
 Proof.
   rewrite wpc_unfold /wpc_pre.
   iIntros "H". iIntros (???). iDestruct ("H" $! D) as "(_&Hc)". eauto.

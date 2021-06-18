@@ -11,13 +11,18 @@ Import uPred.
 (* I think this can be done using dyn_reservation_map in global_state_interp *)
 Class pri_invG {Λ Σ} (IRISG : irisGS Λ Σ) := {
   pri_inv_tok : coPset → iProp Σ;
-  pri_inv_timeless : ∀ i, Timeless (pri_inv_tok i);
+  pri_inv_tok_timeless : ∀ i, Timeless (pri_inv_tok i);
   pri_inv_tok_infinite : ∀ E, pri_inv_tok E -∗ ⌜ set_infinite E ⌝;
   pri_inv_tok_alloc :
     ⊢ (∀ g ns D κ, global_state_interp g ns D κ ==∗
-                   ∃ E, ⌜ E ## gset_to_coPset D ⌝ ∗ pri_inv_tok E ∗ global_state_interp g ns D κ)%I;
-  pri_inv_disj :
-    ⊢ (∀ g ns D κ E, global_state_interp g ns D κ ∗ pri_inv_tok E -∗ ⌜ E ## gset_to_coPset D ⌝)
+                   ∃ E, ⌜ E ## D ⌝ ∗ pri_inv_tok E ∗ global_state_interp g ns D κ)%I;
+  pri_inv_tok_disable :
+    ⊢ (∀ E g ns D κ, pri_inv_tok E ∗ global_state_interp g ns D κ ==∗ global_state_interp g ns (E ∪ D) κ)%I;
+  pri_inv_tok_enable :
+    ⊢ (∀ E g ns D κ, ⌜ E ## D ⌝ ∧ global_state_interp g ns (E ∪ D) κ ==∗
+                     pri_inv_tok E ∗ global_state_interp g ns D κ)%I;
+  pri_inv_tok_disj :
+    ⊢ (∀ g ns D κ E, global_state_interp g ns D κ ∗ pri_inv_tok E -∗ ⌜ E ## D ⌝)
 }.
 
 Section def.

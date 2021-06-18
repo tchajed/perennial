@@ -372,5 +372,26 @@ Proof.
   iModIntro. by iApply "HPQ".
 Qed.
 
+Lemma step_fupd2N_inner_le k1 k2 E1a E1b E2a E2b P:
+  k2 ≤ k1 →
+  (||={E1a|E1b,∅|∅}=> ||▷=>^k2 ||={∅|∅,E2a|E2b}=> P) -∗
+  ||={E1a|E1b,∅|∅}=> ||▷=>^k1 ||={∅|∅,E2a|E2b}=> P.
+Proof.
+  iIntros (?) "HP".
+  iMod "HP". iModIntro. iApply step_fupd2N_le; try eassumption. auto.
+Qed.
+
+Lemma step_fupd2N_inner_plus E1a E1b E2a E2b k1 k2 P :
+ (||={E1a|E1b,∅|∅}=> ||▷=>^k1 ||={∅|∅, E1a|E1b}=> ||={E1a|E1b,∅|∅}=> ||▷=>^k2 ||={∅|∅,E2a|E2b}=> P)
+  ⊢||={E1a|E1b,∅|∅}=> ||▷=>^(k1 + k2) ||={∅|∅,E2a|E2b}=> P.
+Proof.
+  rewrite Nat_iter_add.
+  iIntros "H". iMod "H". iModIntro.
+  iApply (step_fupd2N_wand with "H"). iIntros "H".
+  destruct k2.
+  * simpl. do 3 iMod "H". eauto.
+  * rewrite Nat_iter_S. iMod "H". iMod "H". eauto.
+Qed.
+
 End step_fupd2.
 
