@@ -16,7 +16,7 @@ Class later_tokG {Λ Σ} (IRISG : irisGS Λ Σ) := {
   later_tok_incr :
     ⊢ (∀ g ns D κ, global_state_interp g ns D κ ==∗ global_state_interp g (S ns) D κ ∗ later_tok)%I;
   num_laters_per_step_exp:
-              ∀ n1 n2, n1 < n2 → 1 + num_laters_per_step n1 + num_laters_per_step n1 ≤ num_laters_per_step n2
+              ∀ n1 n2, n1 < n2 → 2 + num_laters_per_step n1 + num_laters_per_step n1 ≤ num_laters_per_step n2
 }.
 
 
