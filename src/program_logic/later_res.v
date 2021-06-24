@@ -11,10 +11,10 @@ Class later_tokG {Λ Σ} (IRISG : irisGS Λ Σ) := {
   later_tok : iProp Σ;
   later_tok_timeless : Timeless later_tok;
   later_tok_decr :
-    ⊢ (∀ g ns D κ, global_state_interp g ns D κ ∗ later_tok ==∗
-                                   ∃ ns', ⌜ S ns' ≤ ns ⌝%nat ∗ global_state_interp g ns' D κ)%I;
+    ⊢ (∀ g ns mj D κ, global_state_interp g ns mj D κ ∗ later_tok ==∗
+                                   ∃ ns', ⌜ S ns' ≤ ns ⌝%nat ∗ global_state_interp g ns' mj D κ)%I;
   later_tok_incr :
-    ⊢ (∀ g ns D κ, global_state_interp g ns D κ ==∗ global_state_interp g (S ns) D κ ∗ later_tok)%I;
+    ⊢ (∀ g ns mj D κ, global_state_interp g ns mj D κ ==∗ global_state_interp g (S ns) mj D κ ∗ later_tok)%I;
   num_laters_per_step_exp:
               ∀ n1 n2, n1 < n2 → 2 + num_laters_per_step n1 + num_laters_per_step n1 ≤ num_laters_per_step n2
 }.
@@ -63,7 +63,7 @@ Proof.
   rewrite Hnval.
   iIntros (mj).
   iSplit.
-  - iIntros (q σ1 g1 ns κ κs nt) "Hσ Hg HNC".
+  - iIntros (q σ1 g1 ns D κ κs nt) "Hσ Hg HNC".
     iMod (later_tok_decr with "[$]") as (ns' Heq) "Hg".
     iMod (fupd2_mask_subseteq ∅ ∅) as "H"; [ set_solver+ | set_solver+ |].
     iModIntro. simpl. iModIntro. iNext. iMod "H" as "_".
@@ -87,7 +87,7 @@ Proof.
     iModIntro. iSplit.
     * iIntros (?) "H". iModIntro. iApply "H"; eauto.
     * iIntros "H". iModIntro. iApply "H"; eauto.
-  - iIntros (g ns κs) "Hg HC".
+  - iIntros (g ns D κs) "Hg HC".
     iMod (later_tok_decr with "[$]") as (ns' Heq) "Hg".
     iMod (fupd2_mask_subseteq ∅ ∅) as "H"; [ set_solver+ | set_solver+ |].
     iApply (step_fupd_extra.step_fupd2N_le (S (num_laters_per_step ns')) (num_laters_per_step ns)).

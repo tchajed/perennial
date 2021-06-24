@@ -75,11 +75,11 @@ Proof.
   iSplit; last first.
   { iIntros. iApply step_fupd_extra.step_fupd2N_inner_later; [done|done|]. iNext; iFrame. }
   destruct (to_val e) as [v|] eqn:He.
-  { iIntros (q ???) "Hg HNC". iMod ("H" with "[$]") as "(H&HNC)".
+  { iIntros (q ????) "Hg HNC". iMod ("H" with "[$]") as "(H&HNC)".
     iDestruct ("H" $! mj) as "[H _]".
     iMod ("H" with "[$] [$]") as "(H&Hg&HNC)". iMod ("H" with "[$]") as "(H&HNC)". by iFrame.
   }
-  iIntros (q σ1 g1 ns κ κs nt) "Hσ Hg HNC".
+  iIntros (q σ1 g1 ns D κ κs nt) "Hσ Hg HNC".
   iMod ("H" with "[$]") as "(H&HNC)".
   iDestruct ("H" $! mj) as "[H _]".
   iMod ("H" $! _ σ1 with "Hσ Hg [$]") as "H". iModIntro.
@@ -94,7 +94,7 @@ Proof.
     iModIntro. iFrame. rewrite wpc0_unfold /wpc_pre.
     rewrite to_of_val /=. iSplit; last first.
     { iIntros. iApply step_fupd_extra.step_fupd2N_inner_later; [done|done|]. iNext; iFrame. }
-    iIntros (????) "$ $". done.
+    iIntros (?????) "$ $". done.
 Qed.
 Lemma wp_atomic s E1 E2 e Φ `{!Atomic StronglyAtomic e} :
   (|={E1,E2}=> WP e @ s; E2 {{ v, |={E2,E1}=> Φ v }}) ⊢ WP e @ s; E1 {{ Φ }}.
@@ -114,7 +114,7 @@ Qed.
 (* FIXME(RJ) we should probably have such a lemma for WPC and apply that here *)
 Lemma wp_step_fupdN_strong n s E1 E2 e P Φ :
   TCEq (to_val e) None → E2 ⊆ E1 →
-  (∀ σ g ns D κs nt, state_interp σ nt -∗ global_state_interp g ns D κs
+  (∀ σ g ns mj D κs nt, state_interp σ nt -∗ global_state_interp g ns mj D κs
        ={E1,∅}=∗ ⌜n ≤ S (num_laters_per_step ns)⌝) ∧
   ((|={E1,E2}=> |={∅}▷=>^n |={E2,E1}=> P) ∗
     WP e @ s; E2 {{ v, P ={E1}=∗ Φ v }}) -∗
@@ -129,7 +129,7 @@ Proof.
   iIntros (-> ?) "H". iIntros (mj).
   iSplit; last first.
   { iIntros. iApply step_fupd_extra.step_fupd2N_inner_later; [done|done|]. iNext; iFrame. }
-  iIntros (q σ1 g1 ns κ κs nt) "Hσ Hg HNC".
+  iIntros (q σ1 g1 ns D κ κs nt) "Hσ Hg HNC".
   destruct (decide (n ≤ num_laters_per_step ns)) as [Hn|Hn]; first last.
   { iDestruct "H" as "[Hn _]". iMod ("Hn" with "Hσ Hg") as %?. lia. }
   iDestruct "H" as "[_ [>HP Hwp]]".
@@ -230,7 +230,7 @@ Qed.
    a premise. *)
 Lemma wp_step_fupdN n s E1 E2 e P Φ :
   TCEq (to_val e) None → E2 ⊆ E1 →
-  (∀ σ g ns D κs nt, state_interp σ nt -∗ global_state_interp g ns D κs
+  (∀ σ g ns mj D κs nt, state_interp σ nt -∗ global_state_interp g ns mj D κs
        ={E1,∅}=∗ ⌜n ≤ S (num_laters_per_step ns)⌝) ∧
   ((|={E1∖E2,∅}=> |={∅}▷=>^n |={∅,E1∖E2}=> P) ∗
     WP e @ s; E2 {{ v, P ={E1}=∗ Φ v }}) -∗
@@ -251,7 +251,7 @@ Lemma wp_step_fupd s E1 E2 e P Φ :
 Proof.
   iIntros (??) "HR H".
   iApply (wp_step_fupdN_strong 1 _ E1 E2 with "[-]"); [done|..]. iSplit.
-  - iIntros (??????) "_". iMod (fupd_mask_subseteq ∅) as "_"; [set_solver+|].
+  - iIntros (???????) "_". iMod (fupd_mask_subseteq ∅) as "_"; [set_solver+|].
     auto with lia.
   - iFrame "H". iMod "HR" as "$". auto.
 Qed.

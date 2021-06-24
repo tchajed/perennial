@@ -2,6 +2,7 @@ From iris.algebra Require Import gmap auth agree gset coPset excl csum.
 From Perennial.base_logic.lib Require Export fancy_updates.
 From stdpp Require Export namespaces.
 From Perennial.base_logic.lib Require Import wsat invariants ae_invariants saved_prop.
+From Perennial.Helpers Require Import Qextra.
 From iris.algebra Require Import gmap.
 From iris.proofmode Require Import tactics.
 From Perennial.program_logic Require Export step_fupd_extra crash_weakestpre ae_invariants_mutable later_res private_invariants.
@@ -9,11 +10,11 @@ Set Default Proof Using "Type".
 Import uPred.
 
 Inductive staged_inv_status :=
-| inuse
+| inuse : Qp → Qp → staged_inv_status
 | idle.
 
 Global Instance staged_inv_status_inhabited : Inhabited staged_inv_status.
-Proof. repeat econstructor. Qed.
+Proof. econstructor. apply idle. Qed.
 
 Canonical Structure staged_inv_statusO := leibnizO staged_inv_status.
 
@@ -39,11 +40,11 @@ Definition staged_done `{stagedG Σ} (γ: gname) : iProp Σ :=
   own γ (Cinr (to_agree ())).
 
 (* This is the modality guarding the crash condition in a wpc *)
-Definition wpc_crash_modality `{!irisGS Λ Σ, !crashG Σ} E1 Φc :=
+Definition wpc_crash_modality `{!irisGS Λ Σ, !crashG Σ} E1 mj Φc :=
   ((∀ g1 ns D κs,
        let E2 :=  ⊤ ∖ D in
-       global_state_interp g1 ns D κs -∗ C -∗
-     ||={E1|E2,∅|∅}=> ||▷=>^(num_laters_per_step ns) ||={∅|∅,E1|E2}=> global_state_interp g1 ns D κs ∗ Φc))%I.
+       global_state_interp g1 ns mj D κs -∗ C -∗
+     ||={E1|E2,∅|∅}=> ||▷=>^(num_laters_per_step ns) ||={∅|∅,E1|E2}=> global_state_interp g1 ns mj D κs ∗ Φc))%I.
 
 Section def.
 Context `{IRISG: !irisGS Λ Σ}.
@@ -51,14 +52,14 @@ Context `{!pri_invG IRISG}.
 Context `{!later_tokG IRISG}.
 Context `{!stagedG Σ}.
 
-Definition staged_inv_inner E1 E2 (γsaved γfinished γstatus: gname) (P: iProp Σ) : iProp Σ :=
+Definition staged_inv_inner E1 E2 mj (γsaved γfinished γstatus: gname) (P: iProp Σ) : iProp Σ :=
   ((∃ γprop_stored γprop_remainder (stat: staged_inv_status) Ps Pr,
              own γsaved (● Excl' (γprop_stored, γprop_remainder)) ∗
              saved_prop_own γprop_stored Ps ∗
              saved_prop_own γprop_remainder Pr ∗
              own γstatus (● Excl' stat) ∗
              ((match stat with
-              | inuse => (Ps ∗ pri_inv_tok E2 ∗ □ (Ps -∗ wpc_crash_modality E1 (Pr ∗ P)))
+              | inuse mj1' mj2' => (⌜ (/2) ≤ mj1' ∧ (/2 + mj2')%Qp = mj1' ∧ mj1' ≤ mj ⌝%Qp ∗ Ps ∗ pri_inv_tok mj2' E2 ∗ □ (Ps -∗ wpc_crash_modality E1 mj1' (Pr ∗ P)))
               | idle => (Ps ∗ □ (Ps -∗ C ==∗ P ∗ Pr))
               end)
               ∨
@@ -66,7 +67,7 @@ Definition staged_inv_inner E1 E2 (γsaved γfinished γstatus: gname) (P: iProp
 
 
 Definition staged_inv E1 E2 (γsaved γfinished γstatus: gname) (P: iProp Σ) : iProp Σ :=
-  (pri_inv E2 (staged_inv_inner E1 E2 γsaved γfinished γstatus P)).
+  (∃ mj, pri_inv E2 (staged_inv_inner E1 E2 mj γsaved γfinished γstatus P)).
 
 Definition staged_value' E1 (Ps Pr: iProp Σ) P stat : iProp Σ :=
   (∃ E2 γsaved γfinished γstatus γprop γprop',
@@ -76,8 +77,8 @@ Definition staged_value' E1 (Ps Pr: iProp Σ) P stat : iProp Σ :=
           saved_prop_own γprop' Pr ∗
           later_tok ∗
           match stat with
-          | idle => pri_inv_tok E2
-          | inuse => True%I
+          | idle => pri_inv_tok (/2)%Qp E2
+          | inuse mj1 mj2 => True%I
           end ∗
           staged_inv E1 E2 γsaved γfinished γstatus P)%I.
 
@@ -191,10 +192,9 @@ Proof.
 Qed.
 *)
 
-Lemma wpc0_pri_inv_tok_res s k D E1 e Φ Φc :
-  (∀ E', (⌜ E' ## D ⌝ ∧ pri_inv_tok E') -∗
-          ||={E1|⊤∖D, E1|⊤∖D}=> wpc0 s k D E1 e Φ Φc) -∗
-  wpc0 s k D E1 e Φ Φc.
+Lemma wpc0_pri_inv_tok_res s k mj E1 e Φ Φc :
+  (∀ D E', pri_inv_tok 1%Qp E' ∗ ⌜ E' ## D ⌝ -∗ ||={E1|⊤∖D, E1|⊤∖D}=> wpc0 s k mj E1 e Φ Φc) -∗
+  wpc0 s k mj E1 e Φ Φc.
 Proof.
   iIntros "H".
   iEval (rewrite wpc0_unfold).
@@ -202,7 +202,7 @@ Proof.
   iSplit.
   {
     destruct (to_val e) eqn:Heq_val.
-    - iIntros (q g1 ns κs) "Hg HNC".
+    - iIntros (q g1 ns D κs) "Hg HNC".
       iMod (pri_inv_tok_alloc with "[$]") as (Einv Hdisj) "(Hitok&Hg)".
       iSpecialize ("H" with "[$Hitok //]").
       rewrite wpc0_unfold/ wpc_pre. rewrite Heq_val.
@@ -220,8 +220,9 @@ Proof.
   iMod "H" as "(_&H)". by iMod ("H" with "[$] [$]") as "$".
 Qed.
 
-Lemma wpc0_pri_inv_tok_disj s k D E1 E e Φ Φc :
-  pri_inv_tok E -∗
+(*
+Lemma wpc0_pri_inv_tok_disj s k mj E1 E e Φ Φc :
+  pri_inv_tok q E -∗
   (⌜ E ## D ⌝ -∗ pri_inv_tok E -∗ wpc0 s k D E1 e Φ Φc) -∗
   wpc0 s k D E1 e Φ Φc.
 Proof.
@@ -248,6 +249,7 @@ Proof.
   rewrite wpc0_unfold/ wpc_pre.
   iDestruct "H" as "(_&H)". by iMod ("H" with "[$] [$]") as "$".
 Qed.
+*)
 
 Existing Instances pri_inv_tok_timeless later_tok_timeless.
 
@@ -260,9 +262,9 @@ Lemma wpc_staged_inv_init s k E e Φ Φc P Pc:
   ⊢ WPC e @ s; k; E {{ Φ }} {{ Φc ∗ Pc }}.
 Proof.
   iIntros "(Htok1&Htok2&HP&#Hwand&Hwp)".
-  rewrite wpc_eq /wpc_def. iIntros (D).
+  rewrite wpc_eq /wpc_def. iIntros (mj).
   iApply wpc0_pri_inv_tok_res.
-  iIntros (Einv) "(%Hdisj&Hitok)".
+  iIntros (D Einv) "(Hitok&%Hdisj)".
 
   (* Create the invariant *)
 
@@ -275,24 +277,30 @@ Proof.
   { apply auth_both_valid_2; [econstructor | reflexivity]. }
 
   iDestruct (pri_inv_tok_infinite with "Hitok") as %Hinf.
-  iMod (pri_inv_alloc Einv _ _ (staged_inv_inner E Einv γ γ' γstatus Pc) with "[HP H1 Hstat1]") as
+  iMod (pri_inv_alloc Einv _ _ (staged_inv_inner E Einv mj γ γ' γstatus Pc) with "[HP H1 Hstat1]") as
       "#Hpri_inv"; auto.
   { iNext. rewrite /staged_inv_inner. iExists _, _, idle, P, True%I. iFrame "∗ #".
     iLeft. iFrame. iModIntro. iIntros "HP HC". iModIntro. iDestruct ("Hwand" with "[$]") as "$"; eauto.
   }
 
+  iEval (rewrite -Qp_inv_half_half) in "Hitok".
+  iDestruct (pri_inv_tok_split with "Hitok") as "(Hitok1&Hitok2)".
+
   (* The inductive proof *)
-  iSpecialize ("Hwp" with "[Htok1 Hitok H2 Hstat2]").
-  { iExists _, _, _, _, _, _. iFrame "∗ #". }
-  iSpecialize ("Hwp" $! D).
+  iSpecialize ("Hwp" with "[Htok1 Hitok1 H2 Hstat2]").
+  { iExists _, _, _, _, _, _. iFrame "∗". iFrame "Hsaved Hsaved'".
+    iExists _. iFrame "Hpri_inv". }
+  iSpecialize ("Hwp" $! mj).
 
   iModIntro.
+  clear D Hdisj.
   iLöb as "IH" forall (e).
   rewrite ?wpc0_unfold. rewrite /wpc_pre.
   iSplit; last first.
   {
     iDestruct "Hwp" as "(_&Hwp)".
-    iIntros (g ns κs) "Hg #HC".
+    iIntros (g ns D κs) "Hg #HC".
+    iDestruct (pri_inv_tok_disj_inv_half with "[$]") as %Hdisj.
     iMod (pri_inv_acc with "Hpri_inv") as "(Hinner&Hclo)".
     { set_solver. }
     iDestruct "Hinner" as (?????) "(Hown1&#Hsaved1&#Hsaved2&Hstat&Hinner)".
@@ -305,17 +313,21 @@ Proof.
     iMod (later_tok_decr with "[$]") as (ns' Hle) "Hg".
     iApply (step_fupd2N_inner_le).
     { apply (num_laters_per_step_exp ns'). lia. }
-    simpl.
+    iEval (simpl).
     iMod (fupd2_mask_subseteq ∅ ∅) as "Hclo'"; try set_solver+.
     do 2 (iModIntro; iModIntro; iNext).
     iMod "Hclo'".
-    destruct stat.
+    destruct stat as [q1 q2|].
     {
-      iDestruct "Hs" as "(HPs&Hitok&#Hwand')".
+      iDestruct "Hs" as (Hle') "(HPs&Hitok&#Hwand')".
       iDestruct ("Hwand'" with "[$]") as "HPcr".
       rewrite /wpc_crash_modality.
       iApply step_fupd2N_inner_plus.
-      iMod (pri_inv_tok_disable with "[$]") as "Hg".
+      iDestruct (pri_inv_tok_global_le_acc _ _ _ q1 with "[] Hg") as "(Hg&Hg_clo)".
+      { iPureIntro. naive_solver. }
+      iDestruct (pri_inv_tok_join with "[$] [$]") as "Hitok".
+      iMod (pri_inv_tok_disable with "[$Hg Hitok]") as "Hg".
+      { destruct Hle' as (?&<-&_). rewrite Qp_add_comm. iFrame. }
       replace (⊤ ∖ D ∖ Einv) with (⊤ ∖ (Einv ∪ D)) by set_solver.
       iSpecialize ("HPcr" with "[$] [$]").
       iApply (step_fupd2N_inner_wand with "HPcr"); auto.
@@ -323,8 +335,11 @@ Proof.
       replace (⊤ ∖ (Einv ∪ D)) with (⊤ ∖ D ∖ Einv) by set_solver.
       iMod (pri_inv_tok_enable with "[$Hg //]") as "(Hitok&Hg)".
       iMod (pending_upd_done with "H") as "H".
-      iMod ("Hclo" with "[HPr Hitok Hown1 H Hstat]").
-      { iNext. iExists _, _, inuse, _, _. iFrame "∗ #". iRight. iFrame. }
+      destruct Hle' as (?&<-&_).
+      iDestruct (pri_inv_tok_split with "[$]") as "(Hitok1&Hitok2)".
+      iDestruct ("Hg_clo" with "[$]") as "Hg".
+      iMod ("Hclo" with "[HPr Hitok2 Hown1 H Hstat]").
+      { iNext. iExists _, _, (inuse _ _), _, _. iFrame "∗ #". iRight. iFrame. }
       iSpecialize ("Hwp" with "[$] [$]").
       iApply step_fupd2N_inner_fupd.
       iApply (step_fupd2N_inner_wand with "Hwp"); auto. iIntros "(Hg&$)". iFrame.
@@ -354,9 +369,10 @@ Proof.
   iModIntro. simpl. iMod "Hwp". iModIntro.
   iNext. iMod "Hwp". iModIntro. iApply (step_fupd2N_wand with "Hwp").
   iIntros "($&Hwp)".
-  iIntros. iMod ("Hwp" with "[//]") as "($&$&Hwpc&$&$)". iModIntro. iApply ("IH" with "[$] [$]").
+  iIntros. iMod ("Hwp" with "[//]") as "($&$&Hwpc&$&$)". iModIntro. iApply ("IH" with "[$] [$] [$]").
   eauto.
 Qed.
+
 
 Lemma wpc_staged_inv s k E1 E1' e Φ Φc Qs P :
   to_val e = None →
@@ -368,12 +384,10 @@ Lemma wpc_staged_inv s k E1 E1' e Φ Φc Qs P :
   ⊢ WPC e @ s; (S k); E1 {{ Φ }} {{ Φc }}.
 Proof.
   iIntros (Hnval Hsub) "(Hstaged&Hwp)".
-  iDestruct "Hstaged" as (??????) "(Hown&Hownstat&#Hsaved1&#Hsaved2&Hltok&Hitok&#Hinv)".
+  iDestruct "Hstaged" as (??????) "(Hown&Hownstat&#Hsaved1&#Hsaved2&Hltok&Hitok&Hinv)".
+  iDestruct "Hinv" as (mj_init) "Hinv".
   rewrite /staged_inv.
-  rewrite wpc_eq /wpc_def. iIntros (D).
-
-  iApply (wpc0_pri_inv_tok_disj with "[$]").
-  iIntros "%Hdisj Hitok".
+  rewrite wpc_eq /wpc_def. iIntros (mj).
 
   iLöb as "IH" forall (γprop γprop' Qs) "Hsaved1 Hsaved2".
 
@@ -382,12 +396,13 @@ Proof.
   rewrite /wpc_pre. iSplit; last first.
   {
     iDestruct "Hwp" as "(Hwp&_)".
-    iIntros (g1 ns κs) "Hg #HC".
+    iIntros (g1 ns D' κs) "Hg #HC".
     iApply step_fupd2N_inner_later'.
     iNext; iModIntro; iFrame.
   }
   rewrite Hnval.
-  iIntros (q σ1 g1 ns κ κs nt) "Hσ Hg HNC".
+  iIntros (q σ1 g1 ns D κ κs nt) "Hσ Hg HNC".
+  iDestruct (pri_inv_tok_disj_inv_half with "[$]") as %Hdisj.
   iMod (pri_inv_acc with "[$]") as "(Hinner&Hclo)".
   { set_solver. }
   iDestruct "Hinner" as (?????) "(>Hown'&#Hsaved1'&#Hsaved2'&>Hstatus'&Hinner)".
@@ -410,6 +425,10 @@ Proof.
   iRewrite -"Hequiv1" in "HPs".
   iDestruct "Hwp" as "(_&Hwp)".
   iSpecialize ("Hwp" with "[$]").
+
+  iDestruct (pri_inv_tok_global_valid with "Hg") as %(Hmin&Hvalid).
+  destruct (Qp_plus_inv_2_gt_1_split mj) as (mj_keep&mj_inv&Heq_mj&Hinvalid); first auto.
+
   iMod (pri_inv_tok_disable with "[$]") as "Hg".
   iSpecialize ("Hwp" $! _).
   iEval (rewrite wpc0_unfold) in "Hwp".

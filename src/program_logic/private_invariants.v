@@ -1,28 +1,40 @@
 From stdpp Require Export namespaces.
 From iris.proofmode Require Import tactics.
-From iris.algebra Require Import gmap.
+From iris.algebra Require Import gmap frac.
 From Perennial.base_logic.lib Require Export fancy_updates fupd_level.
 From Perennial.base_logic.lib Require Import wsat.
 From Perennial.program_logic Require Import crash_weakestpre.
+From Perennial.Helpers Require Import Qextra.
 Set Default Proof Using "Type".
 Unset Implicit Arguments.
 Import uPred.
 
 (* I think this can be done using dyn_reservation_map in global_state_interp *)
 Class pri_invG {Λ Σ} (IRISG : irisGS Λ Σ) := {
-  pri_inv_tok : coPset → iProp Σ;
-  pri_inv_tok_timeless : ∀ i, Timeless (pri_inv_tok i);
-  pri_inv_tok_infinite : ∀ E, pri_inv_tok E -∗ ⌜ set_infinite E ⌝;
+  pri_inv_tok : fracR → coPset → iProp Σ;
+  pri_inv_tok_timeless : ∀ q E, Timeless (pri_inv_tok q E);
+  pri_inv_tok_infinite : ∀ q E, pri_inv_tok q E -∗ ⌜ set_infinite E ⌝;
+  pri_inv_tok_split : ∀ q1 q2 E, pri_inv_tok (q1 + q2)%Qp E -∗ (pri_inv_tok q1 E ∗ pri_inv_tok q2 E);
+  pri_inv_tok_join : ∀ q1 q2 E, pri_inv_tok q1 E -∗ pri_inv_tok q2 E -∗ pri_inv_tok (q1 + q2)%Qp E;
+  pri_inv_tok_valid : ∀ q E, pri_inv_tok q E -∗ ⌜ q ≤ 1 ⌝%Qp;
+  pri_inv_tok_global_valid : ∀ g ns q D κ, global_state_interp g ns q D κ -∗ ⌜ /2 < q ∧ q ≤ 1⌝%Qp;
+  pri_inv_tok_global_split :
+     ∀ g ns q1 q2 D κ, ⌜ /2 ≤ q2 ⌝%Qp -∗ global_state_interp g ns (q1 + q2)%Qp D κ -∗
+                         global_state_interp g ns q2 D κ ∗ pri_inv_tok q1 D;
+  pri_inv_tok_global_join :
+     ∀ g ns q1 q2 D κ, global_state_interp g ns q2 D κ ∗ pri_inv_tok q1 D -∗
+                       global_state_interp g ns (q1 + q2)%Qp D κ;
   pri_inv_tok_alloc :
-    ⊢ (∀ g ns D κ, global_state_interp g ns D κ ==∗
-                   ∃ E, ⌜ E ## D ⌝ ∗ pri_inv_tok E ∗ global_state_interp g ns D κ)%I;
+    ⊢ (∀ g ns q D κ, global_state_interp g ns q D κ ==∗
+                   ∃ E, ⌜ E ## D ⌝ ∗ pri_inv_tok 1%Qp E ∗ global_state_interp g ns q D κ)%I;
   pri_inv_tok_disable :
-    ⊢ (∀ E g ns D κ, pri_inv_tok E ∗ global_state_interp g ns D κ ==∗ global_state_interp g ns (E ∪ D) κ)%I;
+    ⊢ (∀ E g ns q D κ, pri_inv_tok q E ∗ global_state_interp g ns q D κ ==∗
+                       global_state_interp g ns q (E ∪ D) κ)%I;
   pri_inv_tok_enable :
-    ⊢ (∀ E g ns D κ, ⌜ E ## D ⌝ ∧ global_state_interp g ns (E ∪ D) κ ==∗
-                     pri_inv_tok E ∗ global_state_interp g ns D κ)%I;
+    ⊢ (∀ E g ns q D κ, ⌜ E ## D ⌝ ∧ global_state_interp g ns q (E ∪ D) κ ==∗
+                     pri_inv_tok q E ∗ global_state_interp g ns q D κ)%I;
   pri_inv_tok_disj :
-    ⊢ (∀ g ns D κ E, global_state_interp g ns D κ ∗ pri_inv_tok E -∗ ⌜ E ## D ⌝)
+    ⊢ (∀ g ns q1 q2 D κ E, global_state_interp g ns q1 D κ ∗ pri_inv_tok q2 E -∗ ⌜ E ## D ∨ ✓(q1 + q2)%Qp ⌝)
 }.
 
 Section def.
@@ -35,6 +47,7 @@ Definition pri_inv := pri_inv_aux.(unseal).
 Definition pri_inv_eq : @pri_inv = @pri_inv_def := pri_inv_aux.(seal_eq).
 Typeclasses Opaque pri_inv.
 
+(*
 Definition pri_inv_full_def P : iProp Σ :=
     ∃ E, pri_inv_tok E ∗ pri_inv E P.
 Definition pri_inv_full_aux : seal (@pri_inv_full_def). Proof. by eexists. Qed.
@@ -42,6 +55,7 @@ Definition pri_inv_full := pri_inv_full_aux.(unseal).
 Definition pri_inv_full_eq : @pri_inv_full = @pri_inv_full_def := pri_inv_full_aux.(seal_eq).
 Instance: Params (@pri_inv_full) 3 := {}.
 Typeclasses Opaque pri_inv_full.
+*)
 End def.
 
 Local Hint Extern 0 (AlwaysEn ## MaybeEn1 _) => apply coPset_inl_inr_disj : core.
@@ -50,11 +64,40 @@ Local Hint Extern 0 (MaybeEn1 _ ## MaybeEn2 _) => apply MaybeEn12_disj : core.
 
 Section pri_inv.
 Context `{IRISG: !irisGS Λ Σ}.
-Context `{!pri_invG IRISG}.
+Context `{PRI: !pri_invG IRISG}.
   Implicit Types i : positive.
   Implicit Types E : coPset.
   Implicit Types P Q R : iProp Σ.
   Implicit Types Ps Qs Rs : list (iProp Σ).
+
+  Lemma pri_inv_tok_global_le_acc :
+     ∀ g ns q1 q2 D κ, ⌜ /2 ≤ q2 ∧ q2 ≤ q1 ⌝%Qp -∗ global_state_interp g ns q1 D κ -∗
+                         global_state_interp g ns q2 D κ ∗
+                         (∀ g' ns' κ', global_state_interp g' ns' q2 D κ' -∗ global_state_interp g' ns' q1 D κ').
+  Proof using PRI.
+    iIntros (g ns q1 q2 D κ [Hle1 Hle2]) "Hg".
+    apply Qp_le_lteq in Hle2.
+    destruct Hle2 as [Hlt|Heq]; last first.
+    { subst. iFrame. eauto. }
+    apply Qp_split_lt in Hlt as (q'&Hplus).
+    rewrite Qp_add_comm in Hplus.
+    rewrite -Hplus.
+    iDestruct (pri_inv_tok_global_split with "[] Hg") as "(Hg&Hitok)"; eauto.
+    iFrame. iIntros. iApply pri_inv_tok_global_join. by iFrame.
+  Qed.
+
+  Lemma pri_inv_tok_disj_inv_half g ns q D κ E:
+    global_state_interp g ns q D κ ∗ pri_inv_tok (/ 2)%Qp E -∗ ⌜ E ## D ⌝.
+  Proof.
+    iIntros "(Hg&Hitok)".
+    iDestruct (pri_inv_tok_disj with "[$]") as %Hcases.
+    iDestruct (pri_inv_tok_global_valid with "[$]") as %(Hmin&_).
+    iPureIntro. destruct Hcases as [Hdisj|Hval]; auto.
+    revert Hval. rewrite frac_valid => Hval.
+    assert (1 < q + / 2)%Qp.
+    { rewrite -Qp_inv_half_half. apply Qp_add_lt_mono_r; auto. }
+    exfalso. apply Qp_le_ngt in Hval; eauto.
+  Qed.
 
   Lemma pri_inv_alloc E E1 E2 P : set_infinite E → ▷ P -∗ ||={E1|E2, E1|E2}=> pri_inv E P.
   Proof.
