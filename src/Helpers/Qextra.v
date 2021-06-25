@@ -4,6 +4,13 @@ Require Import Psatz.
 Require Import QArith.
 Local Open Scope Q_scope.
 
+Lemma Qp_min_glb1_lt (q q1 q2 : Qp) :
+  (q < q1 → q < q2 → q < q1 `min` q2)%Qp. 
+Proof.
+  intros Hlt1 Hlt2.
+  destruct (Qp_min_spec_le q1 q2) as [(?&->)|(?&->)]; auto.
+Qed.
+
 Lemma Qp_split_lt (q1 q2: Qp) :
   (q1<q2)%Qp ->
   ∃ q', (q1 + q' = q2)%Qp.

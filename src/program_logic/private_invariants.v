@@ -19,7 +19,7 @@ Class pri_invG {Λ Σ} (IRISG : irisGS Λ Σ) := {
   pri_inv_tok_valid : ∀ q E, pri_inv_tok q E -∗ ⌜ q ≤ 1 ⌝%Qp;
   pri_inv_tok_global_valid : ∀ g ns q D κ, global_state_interp g ns q D κ -∗ ⌜ /2 < q ∧ q ≤ 1⌝%Qp;
   pri_inv_tok_global_split :
-     ∀ g ns q1 q2 D κ, ⌜ /2 ≤ q2 ⌝%Qp -∗ global_state_interp g ns (q1 + q2)%Qp D κ -∗
+     ∀ g ns q1 q2 D κ, ⌜ /2 < q2 ⌝%Qp -∗ global_state_interp g ns (q1 + q2)%Qp D κ -∗
                          global_state_interp g ns q2 D κ ∗ pri_inv_tok q1 D;
   pri_inv_tok_global_join :
      ∀ g ns q1 q2 D κ, global_state_interp g ns q2 D κ ∗ pri_inv_tok q1 D -∗
@@ -71,7 +71,7 @@ Context `{PRI: !pri_invG IRISG}.
   Implicit Types Ps Qs Rs : list (iProp Σ).
 
   Lemma pri_inv_tok_global_le_acc :
-     ∀ g ns q1 q2 D κ, ⌜ /2 ≤ q2 ∧ q2 ≤ q1 ⌝%Qp -∗ global_state_interp g ns q1 D κ -∗
+     ∀ g ns q1 q2 D κ, ⌜ /2 < q2 ∧ q2 ≤ q1 ⌝%Qp -∗ global_state_interp g ns q1 D κ -∗
                          global_state_interp g ns q2 D κ ∗
                          (∀ g' ns' κ', global_state_interp g' ns' q2 D κ' -∗ global_state_interp g' ns' q1 D κ').
   Proof using PRI.
@@ -84,6 +84,17 @@ Context `{PRI: !pri_invG IRISG}.
     rewrite -Hplus.
     iDestruct (pri_inv_tok_global_split with "[] Hg") as "(Hg&Hitok)"; eauto.
     iFrame. iIntros. iApply pri_inv_tok_global_join. by iFrame.
+  Qed.
+
+  Lemma pri_inv_tok_le_acc (q1 q2 : Qp) E :
+    (q1 ≤ q2)%Qp →
+    pri_inv_tok q2 E -∗ pri_inv_tok q1 E ∗ (pri_inv_tok q1 E -∗ pri_inv_tok q2 E).
+  Proof.
+    intros [Hlt|Heq]%Qp_le_lteq.
+    - iIntros "Hp". apply Qp_split_lt in Hlt as (q'&Hplus).
+      rewrite -Hplus. iDestruct (pri_inv_tok_split with "Hp") as "(Hp1&Hp2)".
+      iFrame. iIntros. iApply (pri_inv_tok_join with "[$] [$]").
+    - subst. iIntros "$". auto.
   Qed.
 
   Lemma pri_inv_tok_disj_inv_half g ns q D κ E:
