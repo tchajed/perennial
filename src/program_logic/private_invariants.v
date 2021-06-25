@@ -3,7 +3,7 @@ From iris.proofmode Require Import tactics.
 From iris.algebra Require Import gmap frac.
 From Perennial.base_logic.lib Require Export fancy_updates fupd_level.
 From Perennial.base_logic.lib Require Import wsat.
-From Perennial.program_logic Require Import crash_weakestpre.
+From Perennial.program_logic Require Import crash_weakestpre step_fupd_extra.
 From Perennial.Helpers Require Import Qextra.
 Set Default Proof Using "Type".
 Unset Implicit Arguments.
@@ -70,6 +70,7 @@ Context `{PRI: !pri_invG IRISG}.
   Implicit Types P Q R : iProp Σ.
   Implicit Types Ps Qs Rs : list (iProp Σ).
 
+
   Lemma pri_inv_tok_global_le_acc :
      ∀ g ns q1 q2 D κ, ⌜ /2 < q2 ∧ q2 ≤ q1 ⌝%Qp -∗ global_state_interp g ns q1 D κ -∗
                          global_state_interp g ns q2 D κ ∗
@@ -84,6 +85,45 @@ Context `{PRI: !pri_invG IRISG}.
     rewrite -Hplus.
     iDestruct (pri_inv_tok_global_split with "[] Hg") as "(Hg&Hitok)"; eauto.
     iFrame. iIntros. iApply pri_inv_tok_global_join. by iFrame.
+  Qed.
+
+  Lemma wpc0_mj_le s k mj1 mj2 e Φ Φc:
+    (/2 < mj1 ≤ mj2)%Qp →
+    wpc0 s k mj1 ⊤ e Φ Φc -∗
+    wpc0 s k mj2 ⊤ e Φ Φc.
+  Proof using PRI.
+    iIntros (Hle) "Hwpc".
+    iLöb as "IH" forall (e Φ Φc).
+    rewrite !wpc0_unfold /wpc_pre.
+    iSplit; last first.
+    { iDestruct "Hwpc" as "(_&Hwpc)".
+      iIntros (????) "Hg HC".
+      iDestruct (pri_inv_tok_global_le_acc with "[//] [$]") as "(Hg&Hclo)".
+      iSpecialize ("Hwpc" with "[$] [$]").
+      iApply (step_fupd2N_inner_wand with "Hwpc"); auto.
+      iIntros "(Hg&$)". iApply "Hclo". iFrame.
+    }
+    iDestruct "Hwpc" as "(Hwpc&_)".
+    destruct (to_val e) eqn:Heq_val.
+    - iIntros.
+      iDestruct (pri_inv_tok_global_le_acc with "[//] [$]") as "(Hg&Hclo)".
+      iMod ("Hwpc" with "[$] [$]") as "($&Hg&$)".
+      iModIntro. iApply "Hclo". iFrame.
+    - iIntros.
+      iDestruct (pri_inv_tok_global_le_acc with "[//] [$]") as "(Hg&Hclo)".
+      iSpecialize ("Hwpc" with "[$] [$] [$]"). iMod "Hwpc".
+      simpl.
+      iModIntro. iMod "Hwpc". iModIntro. iNext. iMod "Hwpc". iModIntro.
+      iApply (step_fupd2N_wand with "Hwpc").
+      iIntros "($&Hwpc)".
+      iIntros. iMod ("Hwpc" with "[//]") as "($&Hg&Hwpc&Hefs&$)".
+      iModIntro.
+      iSplitL "Hg Hclo".
+      { iApply "Hclo"; auto. }
+      iSplitL "Hwpc".
+      { iApply "IH"; auto. }
+      iApply (big_sepL_impl with "Hefs"). iIntros "!#" (?? _).
+      iIntros "H". eauto. iApply ("IH" with "H"); auto.
   Qed.
 
   Lemma pri_inv_tok_le_acc (q1 q2 : Qp) E :
