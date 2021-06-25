@@ -549,63 +549,109 @@ Proof.
     iMod ("Hwp" with "[$] [$] [$]") as "Hwp".
     iModIntro. iApply (step_fupd2N_wand with "Hwp").
     iIntros "($&Hwp)".
-    iIntros. iMod ("Hwp" with "[//]") as "($&Hg&H&Hefs&$)".
+    iIntros. iMod ("Hwp" with "[//]") as "($&Hg&H&Hefs&HNC)".
     destruct (to_val e2) eqn:Heq_val.
     {
-      admit.
+      iEval (rewrite wpc0_unfold /wpc_pre) in "H".
+      iDestruct "H" as "(H&_)".
+      rewrite Heq_val.
+      iMod ("H" with "[$] [$]") as "H".
+      iDestruct "H" as "(Hv&Hg&HNC)".
+      iDestruct "Hv" as (Qnew) "(HQnew&#Hwand_new&Hpost)".
+      iMod (saved_prop_alloc Qnew) as (γprop_stored') "#Hsaved1''".
+      iMod (saved_prop_alloc True%I) as (γprop_remainder') "#Hsaved2''".
+      iMod (own_update_2 _ _ _ (● Excl' (γprop_stored', γprop_remainder') ⋅
+                                ◯ Excl' (γprop_stored', γprop_remainder'))
+              with "Hown' Hown") as "[Hown' Hown]".
+      { by apply auth_update, option_local_update, exclusive_local_update. }
+      iMod (own_update_2 _ _ _ (● Excl' idle ⋅ ◯ Excl' idle)
+              with "Hstatus' Hownstat") as "[Hstatus' Hownstat]".
+      { by apply auth_update, option_local_update, exclusive_local_update. }
+      iMod (pri_inv_tok_enable with "[$Hg //]") as "(Hitok&Hg)".
+      iDestruct ("Hitok_inv_clo" with "[$]") as "Hitok".
+      iDestruct (pri_inv_tok_split with "[$Hitok]") as "(Hitok_u&Hitok_ishare)".
+      iMod ("Hclo" with "[Hown' Hstatus' HQnew Hitok_ishare]").
+      { iNext.
+        iExists _, _, _, _, _. iFrame "∗ #".
+        iLeft. iFrame "∗".
+        iModIntro. iIntros. iMod ("Hwand_new" with "[$] [$]") as "$"; eauto.
+      }
+      iMod (later_tok_incr with "[$]") as "(Hg&Hltok)".
+      iDestruct ("Hg_inv_clo" with "Hg") as "Hg".
+      iMod (global_state_interp_le with "Hg") as "$"; first lia.
+      iModIntro. iFrame.
+      iSplitR "Hefs".
+      - iEval (rewrite wpc0_unfold /wpc_pre).
+        rewrite Heq_val.
+        iSpecialize ("Hpost" with "[-]").
+        {
+          iExists _, _, _, _, _, _. iFrame "∗".
+          iFrame "Hsaved1''".
+          iFrame "Hsaved2''".
+          iExists _, _. iFrame "#". iPureIntro.
+          eapply (Qp_lt_le_trans _ mj_wp); naive_solver.
+        }
+        iSplit.
+        * iIntros. iModIntro. iFrame. iDestruct "Hpost" as "(_&$)".
+        * iIntros. iApply step_fupd2N_inner_later; auto. iModIntro. iFrame. iDestruct "Hpost" as "($&_)".
+      - iApply (big_sepL_mono with "Hefs").
+        iIntros. iApply (wpc0_mj_le); last by iFrame.
+        split; auto. naive_solver.
     }
-  iMod (saved_prop_alloc
-          (wpc0 NotStuck k mj_wp E1 e2
-            (λ v : val Λ, ∃ Qnew : iPropI Σ, Qnew ∗ □ (Qnew -∗ C ==∗ P) ∗ (staged_value E1' Qnew P -∗ Φc ∧ Φ v))
-            (Φc ∗ P))%I) as (γprop_stored') "#Hsaved1''".
-  iMod (saved_prop_alloc Φc) as (γprop_remainder') "#Hsaved2''".
-  iMod (own_update_2 _ _ _ (● Excl' (γprop_stored', γprop_remainder') ⋅
-                            ◯ Excl' (γprop_stored', γprop_remainder'))
-          with "Hown' Hown") as "[Hown' Hown]".
-  { by apply auth_update, option_local_update, exclusive_local_update. }
-  iMod (own_update_2 _ _ _ (● Excl' (inuse mj_wp mj_ushare) ⋅ ◯ Excl' (inuse mj_wp mj_ushare))
-          with "Hstatus' Hownstat") as "[Hstatus' Hownstat]".
-  { by apply auth_update, option_local_update, exclusive_local_update. }
-  iMod (pri_inv_tok_enable with "[$Hg //]") as "(Hitok&Hg)".
-  iDestruct ("Hitok_inv_clo" with "[$]") as "Hitok".
-  iDestruct (pri_inv_tok_split with "[$Hitok]") as "(Hitok&Hitok_ishare)".
-  iEval (rewrite -Heq_mj) in "Hitok".
-  iDestruct (pri_inv_tok_split with "[$Hitok]") as "(Hitok_ukeep&Hitok_ushare)".
-  iMod ("Hclo" with "[Hown' Hstatus' H Hitok_ishare Hitok_ushare]").
-  { iNext.
-    iExists _, _, _, _, _. iFrame "∗ #".
-    iLeft.
+    iFrame "HNC".
+    iMod (saved_prop_alloc
+            (wpc0 NotStuck k mj_wp E1 e2
+              (λ v : val Λ, ∃ Qnew : iPropI Σ, Qnew ∗ □ (Qnew -∗ C ==∗ P) ∗ (staged_value E1' Qnew P -∗ Φc ∧ Φ v))
+              (Φc ∗ P))%I) as (γprop_stored') "#Hsaved1''".
+    iMod (saved_prop_alloc Φc) as (γprop_remainder') "#Hsaved2''".
+    iMod (own_update_2 _ _ _ (● Excl' (γprop_stored', γprop_remainder') ⋅
+                              ◯ Excl' (γprop_stored', γprop_remainder'))
+            with "Hown' Hown") as "[Hown' Hown]".
+    { by apply auth_update, option_local_update, exclusive_local_update. }
+    iMod (own_update_2 _ _ _ (● Excl' (inuse mj_wp mj_ushare) ⋅ ◯ Excl' (inuse mj_wp mj_ushare))
+            with "Hstatus' Hownstat") as "[Hstatus' Hownstat]".
+    { by apply auth_update, option_local_update, exclusive_local_update. }
+    iMod (pri_inv_tok_enable with "[$Hg //]") as "(Hitok&Hg)".
+    iDestruct ("Hitok_inv_clo" with "[$]") as "Hitok".
+    iDestruct (pri_inv_tok_split with "[$Hitok]") as "(Hitok&Hitok_ishare)".
+    iEval (rewrite -Heq_mj) in "Hitok".
+    iDestruct (pri_inv_tok_split with "[$Hitok]") as "(Hitok_ukeep&Hitok_ushare)".
+    iMod ("Hclo" with "[Hown' Hstatus' H Hitok_ishare Hitok_ushare]").
+    { iNext.
+      iExists _, _, _, _, _. iFrame "∗ #".
+      iLeft.
+      iSplit.
+      { iPureIntro. split_and!; auto; try naive_solver. }
+      iFrame.
+      iModIntro. iIntros "Hwpc".
+      iEval (rewrite wpc0_unfold) in "Hwpc". iDestruct "Hwpc" as "(_&Hwpc)".
+      rewrite /wpc_crash_modality.
+      iIntros (????) "Hg HC".
+      iSpecialize ("Hwpc" with "[$] [$]").
+      iApply (step_fupd2N_inner_wand with "Hwpc"); auto.
+    }
+    iDestruct ("Hg_inv_clo" with "Hg") as "Hg".
+    iMod (later_tok_incr with "[$]") as "(Hg&Hltok)".
+    iMod (global_state_interp_le with "Hg") as "$"; first lia.
+    iModIntro. iSplitR "Hefs"; last first.
+    { iApply (big_sepL_mono with "Hefs").
+      iIntros. iApply (wpc0_mj_le); last by iFrame.
+      split; auto. naive_solver.
+    }
+    iApply "IH".
+    iExists _, _, mj_ishare, _, _, _, _, _. iExists _. iFrame "∗".
+    iSplit; first eauto.
+    iFrame "Hsaved1'' Hsaved2''".
+    iSplit; first eauto.
+    iSplit; first eauto.
     iSplit.
-    { iPureIntro. split_and!; auto; try naive_solver. }
-    iFrame.
-    iModIntro. iIntros "Hwpc".
-    iEval (rewrite wpc0_unfold) in "Hwpc". iDestruct "Hwpc" as "(_&Hwpc)".
-    rewrite /wpc_crash_modality.
-    iIntros (????) "Hg HC".
-    iSpecialize ("Hwpc" with "[$] [$]").
-    iApply (step_fupd2N_inner_wand with "Hwpc"); auto.
+    { iPureIntro. rewrite /mj_wp. naive_solver. }
+    iSplit; first eauto.
+    iSplit; first eauto.
+    iSplit; first eauto.
+    iExact "Hinv".
   }
-  iDestruct ("Hg_inv_clo" with "Hg") as "Hg".
-  iMod (later_tok_incr with "[$]") as "(Hg&Hltok)".
-  iMod (global_state_interp_le with "Hg") as "$"; first lia.
-  iModIntro. iSplitR "Hefs"; last first.
-  { iApply (big_sepL_mono with "Hefs").
-    iIntros. iApply (wpc0_mj_le); last by iFrame.
-    split; auto. naive_solver.
-  }
-  iApply "IH".
-  iExists _, _, mj_ishare, _, _, _, _, _. iExists _. iFrame "∗".
-  iSplit; first eauto.
-  iFrame "Hsaved1'' Hsaved2''".
-  iSplit; first eauto.
-  iSplit; first eauto.
-  iSplit.
-  { iPureIntro. rewrite /mj_wp. naive_solver. }
-  iSplit; first eauto.
-  iSplit; first eauto.
-  iSplit; first eauto.
-  iExact "Hinv".
-Admitted.
+Qed.
 
 Lemma wpc_staged_inv k E1 E1' e Φ Φc Qs P :
   to_val e = None →
@@ -699,14 +745,60 @@ Proof.
   simpl. iMod "Hwp". iModIntro. iNext. iMod "Hwp". iModIntro.
   iApply (step_fupd2N_wand with "Hwp"). iIntros "(%Hred&Hwp)".
   iSplit. { eauto. }
-  iIntros (e2 σ2 g2 efs Hstep). iMod ("Hwp" with "[//]") as "($&Hg&H&Hefs&$)".
+  iIntros (e2 σ2 g2 efs Hstep). iMod ("Hwp" with "[//]") as "($&Hg&H&Hefs&HNC)".
   iMod (later_tok_incr with "[$]") as "(Hg&Hltok)".
 
   destruct (to_val e2) eqn:Heq_val.
   {
-    admit.
+    iEval (rewrite wpc0_unfold /wpc_pre) in "H".
+    iDestruct "H" as "(H&_)".
+    rewrite Heq_val.
+    iMod ("H" with "[$] [$]") as "H".
+    iDestruct "H" as "(Hv&Hg&HNC)".
+    iDestruct "Hv" as (Qnew) "(HQnew&#Hwand_new&Hpost)".
+    iMod (saved_prop_alloc Qnew) as (γprop_stored') "#Hsaved1''".
+    iMod (saved_prop_alloc True%I) as (γprop_remainder') "#Hsaved2''".
+    iMod (own_update_2 _ _ _ (● Excl' (γprop_stored', γprop_remainder') ⋅
+                              ◯ Excl' (γprop_stored', γprop_remainder'))
+            with "Hown' Hown") as "[Hown' Hown]".
+    { by apply auth_update, option_local_update, exclusive_local_update. }
+    iMod (own_update_2 _ _ _ (● Excl' idle ⋅ ◯ Excl' idle)
+            with "Hstatus' Hownstat") as "[Hstatus' Hownstat]".
+    { by apply auth_update, option_local_update, exclusive_local_update. }
+    iMod (pri_inv_tok_enable with "[$Hg //]") as "(Hitok&Hg)".
+    iDestruct ("Hitok_inv_clo" with "[$]") as "Hitok".
+    iDestruct (pri_inv_tok_split with "[$Hitok]") as "(Hitok_u&Hitok_ishare)".
+    iMod ("Hclo" with "[Hown' Hstatus' HQnew Hitok_ishare]").
+    { iNext.
+      iExists _, _, _, _, _. iFrame "∗ #".
+      iLeft. iFrame "∗".
+      iModIntro. iIntros. iMod ("Hwand_new" with "[$] [$]") as "$"; eauto.
+    }
+    iDestruct ("Hg_inv_clo" with "Hg") as "Hg".
+    iMod (global_state_interp_le with "Hg") as "$"; first lia.
+    iModIntro. iFrame.
+    iSplitR "Hefs".
+    - iEval (rewrite wpc0_unfold /wpc_pre).
+      rewrite Heq_val.
+      iSpecialize ("Hpost" with "[-]").
+      {
+        iExists _, _, _, _, _, _. iFrame "∗".
+        iFrame "Hsaved1''".
+        iFrame "Hsaved2''".
+        iExists _, _. iFrame "#". iPureIntro. auto.
+      }
+      iSplit.
+      * iIntros. iModIntro. iFrame. iDestruct "Hpost" as "(_&$)".
+      * iIntros. iApply step_fupd2N_inner_later; auto. iModIntro. iFrame. iDestruct "Hpost" as "($&_)".
+    - iApply (big_sepL_mono with "Hefs").
+      iIntros. iApply (wpc0_mj_le); last by iFrame.
+      split; auto.
+      etransitivity; first eapply Qp_le_min_l.
+      etransitivity; first eapply Qp_le_min_l.
+      eapply Qp_le_min_r.
   }
 
+  iFrame "HNC".
   iMod (saved_prop_alloc
           (wpc0 NotStuck k mj_wp E1 e2
             (λ v : val Λ, ∃ Qnew : iPropI Σ, Qnew ∗ □ (Qnew -∗ C ==∗ P) ∗ (staged_value E1' Qnew P -∗ Φc ∧ Φ v))
@@ -776,6 +868,6 @@ Proof.
     iExact "Hinv".
   }
   iApply (wpc_staged_inv_aux with "[$]").
-Abort.
+Qed.
 
 End inv.
