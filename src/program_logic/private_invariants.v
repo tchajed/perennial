@@ -47,6 +47,16 @@ Definition pri_inv := pri_inv_aux.(unseal).
 Definition pri_inv_eq : @pri_inv = @pri_inv_def := pri_inv_aux.(seal_eq).
 Typeclasses Opaque pri_inv.
 
+Global Instance pri_inv_contractive E : Contractive (pri_inv E).
+Proof.
+  rewrite pri_inv_eq /pri_inv_def => n ?? Hequiv.
+  do 4 (f_contractive || f_equiv).
+  simpl. destruct n => //=.
+  rewrite //= in Hequiv.
+  apply vector.vcons_ne; auto.
+  econstructor.
+Qed.
+
 (*
 Definition pri_inv_full_def P : iProp Σ :=
     ∃ E, pri_inv_tok E ∗ pri_inv E P.
