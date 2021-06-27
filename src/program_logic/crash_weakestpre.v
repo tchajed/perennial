@@ -37,6 +37,9 @@ Class irisGS (Λ : language) (Σ : gFunctors) := IrisG {
   one later for each physical step. *)
   num_laters_per_step : nat → nat;
 
+
+  step_count_next : nat → nat;
+
   (** When performing pure steps, the state interpretation needs to be
   adapted for the change in the [ns] parameter.
 
@@ -49,7 +52,9 @@ Class irisGS (Λ : language) (Σ : gFunctors) := IrisG {
   complicate the formalization in Iris, we prefer simplifying the
   client. *)
   global_state_interp_mono g ns q D κs:
-    global_state_interp g ns q D κs ={∅}=∗ global_state_interp g (S ns) q D κs
+    global_state_interp g ns q D κs ={∅}=∗ global_state_interp g (S ns) q D κs;
+
+  step_count_next_incr n : n ≤ step_count_next n
 }.
 Global Opaque iris_invG.
 
@@ -59,7 +64,8 @@ Definition irisG_equiv {Λ Σ} (I1 I2: irisGS Λ Σ) :=
   (∀ σ n, @state_interp _ _ I1 σ n ≡ @state_interp _ _ I2 σ n) ∧
   (∀ g n q D κs, @global_state_interp _ _ I1 g n q D κs ≡ @global_state_interp _ _ I2 g n q D κs) ∧
   (∀ v, @fork_post _ _ I1 v ≡ @fork_post _ _ I2 v) ∧
-  (∀ n, @num_laters_per_step _ _ I1 n ≡ @num_laters_per_step _ _ I2 n).
+  (∀ n, @num_laters_per_step _ _ I1 n ≡ @num_laters_per_step _ _ I2 n) ∧
+  (∀ n, @step_count_next _ _ I1 n = @step_count_next _ _ I2 n).
 
 (* Define a weakestpre with an explicit crash invariant (i.e. there is a postcondition and a crash condition *)
 
@@ -425,7 +431,7 @@ Definition wpc_pre `{!irisGS Λ Σ} (s : stuckness) (k : nat) (mj: fracR)
         (⌜if s is NotStuck then reducible e1 σ1 g1 else True⌝ ∗
         ∀ e2 σ2 g2 efs, ⌜prim_step e1 σ1 g1 κ e2 σ2 g2 efs⌝ -∗ ||={∅|∅,E1|⊤∖D}=>
           (state_interp σ2 (length efs + nt) ∗
-          global_state_interp g2 (S ns) mj D κs ∗
+          global_state_interp g2 (step_count_next ns) mj D κs ∗
           wpc E1 e2 Φ Φc ∗
           ([∗ list] i ↦ ef ∈ efs, wpc ⊤ ef fork_post True) ∗
           NC q))
@@ -1365,7 +1371,7 @@ Lemma wpc_lift_step_fupd s k E Φ Φc e1 :
    ((⌜if s is NotStuck then reducible e1 σ1 g1 else True⌝ ∗
     ∀ e2 σ2 g2 efs, ⌜prim_step e1 σ1 g1 κ e2 σ2 g2 efs⌝ -∗ |={∅,E}=>
       (state_interp σ2 (length efs + nt) ∗
-       global_state_interp g2 (S ns) mj D κs ∗
+       global_state_interp g2 (step_count_next ns) mj D κs ∗
        WPC e2 @ s; k; E {{ Φ }} {{ Φc }} ∗
        [∗ list] ef ∈ efs, WPC ef @ s; k; ⊤ {{ fork_post }} {{ True }}))))
   ∧ |C={E}_k=> Φc)%I
@@ -1398,7 +1404,7 @@ Lemma wpc_lift_step s k E1 Φ Φc e1 :
     (⌜if s is NotStuck then reducible e1 σ1 g1 else True⌝ ∗
      ∀ e2 σ2 g2 efs, ⌜prim_step e1 σ1 g1 κ e2 σ2 g2 efs⌝ -∗ |={∅,E1}=>
       state_interp σ2 (length efs + nt) ∗
-      global_state_interp g2 (S ns) mj D κs ∗
+      global_state_interp g2 (step_count_next ns) mj D κs ∗
       WPC e2 @ s; k; E1 {{ Φ }} {{ Φc }} ∗
       [∗ list] ef ∈ efs, WPC ef @ s; k; ⊤ {{ fork_post }} {{ True }}))
   ∧ Φc
@@ -1441,7 +1447,9 @@ Proof.
   { iPureIntro. destruct s; done. }
   iNext. iIntros (e2 σ2 g2 efs ?).
   destruct (Hstep κ σ1 g1 e2 σ2 g2 efs) as (-> & <- & <- & ->); auto.
-  iMod (global_state_interp_mono with "Hg") as "$". iFrame "Hσ".
+  iMod (global_state_interp_le _ (step_count_next ns) with "Hg") as "$".
+  { apply step_count_next_incr. }
+  iFrame "Hσ".
   iMod "Hclose" as "_". iMod "H". iModIntro.
   iDestruct ("H" with "[//]") as "H". simpl. iFrame.
 Qed.
@@ -1994,7 +2002,7 @@ Lemma wpc_lift_head_step_fupd s k E Φ Φc e1 :
     (⌜head_reducible e1 σ1 g1⌝ ∗
     ∀ e2 σ2 g2 efs, ⌜head_step e1 σ1 g1 κ e2 σ2 g2 efs⌝ -∗ |={∅,E}=>
       (state_interp σ2 (length efs + nt) ∗
-       global_state_interp g2 (S ns) mj D κs ∗
+       global_state_interp g2 (step_count_next ns) mj D κs ∗
        WPC e2 @ s; k; E {{ Φ }} {{ Φc }} ∗
        [∗ list] ef ∈ efs, WPC ef @ s; k; ⊤ {{ fork_post }} {{ True }})))
   ∧ |C={E}_k=> Φc)%I
@@ -2014,7 +2022,7 @@ Lemma wpc_lift_head_step s k E1 Φ Φc e1 :
     (⌜head_reducible e1 σ1 g1⌝ ∗
      ∀ e2 σ2 g2 efs, ⌜head_step e1 σ1 g1 κ e2 σ2 g2 efs⌝ -∗ |={∅,E1}=>
       state_interp σ2 (length efs + nt) ∗
-      global_state_interp g2 (S ns) mj D κs ∗
+      global_state_interp g2 (step_count_next ns) mj D κs ∗
       WPC e2 @ s; k; E1 {{ Φ }} {{ Φc }} ∗
       [∗ list] ef ∈ efs, WPC ef @ s; k; ⊤ {{ fork_post }} {{ True }}))
   ∧ |C={E1}_k=> Φc)%I
@@ -2038,7 +2046,7 @@ Proof.
   iLöb as "IH" forall (e E Φ Φc).
   iEval (rewrite ?wpc0_unfold /wpc_pre).
   iEval (rewrite ?wpc0_unfold /wpc_pre) in "Hwp".
-  destruct Hequiv as (Heqinv&Heqcrash&Heqstate&Heqglobal&Heqfork&Heqnum).
+  destruct Hequiv as (Heqinv&Heqcrash&Heqstate&Heqglobal&Heqfork&Heqnum&Heq_next).
   rewrite Heqinv.
   destruct (to_val e).
   - rewrite ?Heqinv ?Heqcrash ?Heqglobal ?Heqnum.
@@ -2079,6 +2087,8 @@ Proof.
     iMod ("H" with "[$]") as "(Hσ&Hg&Hwpc&Hefs&HNC)".
     rewrite ?Heqstate ?Heqglobal ?Heqcrash. iFrame.
     iModIntro.
+    iSplitL "Hg".
+    { rewrite Heq_next. iFrame. }
     iSplitL "Hwpc".
     { iApply "IH". eauto. }
     iRevert "IH". iIntros "H".
