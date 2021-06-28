@@ -395,4 +395,34 @@ Proof.
     by rewrite {1}(plain (Φ _)).
 Qed.
 
+Lemma fupd2_forall E1 E1' E2 E2' A (Φ : A → _) :
+  (||={E1|E1', E2|E2'}=> ∀ x : A, Φ x) ⊢ ∀ x : A, ||={E1|E1', E2|E2'}=> Φ x.
+Proof. apply forall_intro=> a. by rewrite -(forall_elim a). Qed.
+
+Lemma fupd2_plainly_elim E1 E2 P : ■ P -∗ ||={E1|E2, E1|E2}=> P.
+Proof. by rewrite (fupd2_intro E1 _ (■ P)) fupd2_plainly_mask. Qed.
+
+Lemma fupd2_plain_forall E1 E1' E2 E2' {A} (Φ : A → _) `{!∀ x, Plain (Φ x)} :
+  E2 ⊆ E1 →
+  E2' ⊆ E1' →
+  (||={E1|E1',E2|E2'}=> ∀ x, Φ x) ⊣⊢ (∀ x, ||={E1|E1',E2|E2'}=> Φ x).
+Proof.
+  intros. apply (anti_symm _); first apply fupd2_forall.
+  trans (∀ x, ||={E1|E1', E1|E1'}=> Φ x)%I.
+  { apply forall_mono=> x. by rewrite fupd2_plain_mask. }
+  rewrite fupd2_plain_forall_2. apply fupd2_elim.
+  rewrite {1}(plain (∀ x, Φ x)) (fupd2_mask_intro_discard E1 E1' E2 E2' (■ _)) //.
+  apply fupd2_elim. by rewrite fupd2_plainly_elim.
+Qed.
+
+Global Instance from_forall_fupd2 (E1 E1' E2 E2' : coPset) (A : Type) P (Φ : A → _) (name : ident_name) :
+    TCOr (TCEq E1 E2) (TCOr (TCEq E1 ⊤) (TCEq E2 ∅)) →
+    TCOr (TCEq E1' E2') (TCOr (TCEq E1' ⊤) (TCEq E2' ∅)) →
+    FromForall P Φ name →
+    (∀ x : A, Plain (Φ x)) →
+    FromForall (||={E1|E1',E2|E2'}=> P) (λ a : A, (||={E1|E1',E2|E2'}=> Φ a)%I) name.
+Proof.
+  rewrite /FromForall => -[->|[->|->]] -[->|[->|->]] <- ?; rewrite fupd2_plain_forall; set_solver+.
+Qed.
+
 End fupd2.
