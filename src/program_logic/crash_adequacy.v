@@ -79,21 +79,21 @@ Proof.
 Qed.
 (* The total number of laters used between the physical steps number
    [start] (included) to [start+ns] (excluded). *)
-Local Fixpoint steps_sum (num_laters_per_step : nat → nat) (start ns : nat) : nat :=
+Local Fixpoint steps_sum (num_laters_per_step step_count_next : nat → nat) (start ns : nat) : nat :=
   match ns with
   | O => 0
   | S ns =>
-    S $ num_laters_per_step start + steps_sum num_laters_per_step (step_count_next start) ns
+    S $ num_laters_per_step start + steps_sum num_laters_per_step step_count_next (step_count_next start) ns
   end.
 
-Lemma steps_sum_S (num_laters_per_step : nat → nat) (start ns : nat) :
-  steps_sum num_laters_per_step start (S ns) =
-  steps_sum num_laters_per_step (step_count_next start) ns + S (num_laters_per_step start).
+Lemma steps_sum_S (num_laters_per_step step_count_next : nat → nat) (start ns : nat) :
+  steps_sum num_laters_per_step step_count_next start (S ns) =
+  steps_sum num_laters_per_step step_count_next (step_count_next start) ns + S (num_laters_per_step start).
 Proof. induction ns => //=; try lia. Qed.
 
-Lemma steps_sum_S_r (num_laters_per_step : nat → nat) (start ns : nat) :
-  steps_sum num_laters_per_step start (S ns) =
-  steps_sum num_laters_per_step start ns + S (num_laters_per_step (Nat.iter ns step_count_next start)).
+Lemma steps_sum_S_r (num_laters_per_step step_count_next : nat → nat) (start ns : nat) :
+  steps_sum num_laters_per_step step_count_next start (S ns) =
+  steps_sum num_laters_per_step step_count_next start ns + S (num_laters_per_step (Nat.iter ns step_count_next start)).
 Proof.
   revert start.
   induction ns => start.
@@ -107,7 +107,7 @@ Lemma wptp_steps s k n e1 t1 κs κs' t2 σ1 g1 ns D σ2 g2 Φ Φc :
   state_interp σ1 (length t1) -∗
   global_state_interp g1 ns mj D (κs ++ κs') -∗
   WPC e1 @ s; k; ⊤ {{ Φ }} {{ Φc }} -∗ wptp s k t1 -∗ NC 1 -∗
-  (||={⊤|⊤, ∅|∅}=> ||▷=>^(steps_sum num_laters_per_step ns n) ||={∅|∅,⊤|⊤}=> ∃ e2 t2',
+  (||={⊤|⊤, ∅|∅}=> ||▷=>^(steps_sum num_laters_per_step step_count_next ns n) ||={∅|∅,⊤|⊤}=> ∃ e2 t2',
     ⌜t2 = e2 :: t2'⌝ ∗
     state_interp σ2 (pred (length t2)) ∗
     global_state_interp g2 (Nat.iter n step_count_next ns) mj D κs' ∗
@@ -153,7 +153,7 @@ Lemma wptp0_strong_adequacy Φ Φc k κs' s n e1 t1 κs t2 σ1 g1 ns D σ2 g2 :
   WPC e1 @ s; k; ⊤ {{ Φ }} {{ Φc }} -∗
   wptp s k t1 -∗
   NC 1 -∗
-  ||={⊤|⊤,∅|∅}=> ||▷=>^(steps_sum num_laters_per_step ns n) ||={∅|∅, ⊤|⊤}=> (∃ e2 t2',
+  ||={⊤|⊤,∅|∅}=> ||▷=>^(steps_sum num_laters_per_step step_count_next ns n) ||={∅|∅, ⊤|⊤}=> (∃ e2 t2',
     ⌜ t2 = e2 :: t2' ⌝ ∗
     ▷^(S (S (num_laters_per_step ((Nat.iter n step_count_next ns))))) (⌜ ∀ e2, s = NotStuck → e2 ∈ t2 → not_stuck e2 σ2 g2 ⌝) ∗
     state_interp σ2 (length t2') ∗
@@ -199,7 +199,7 @@ Lemma wptp0_strong_crash_adequacy Φ Φc κs' s k n e1 t1 κs t2 σ1 g1 ns D σ2
   WPC e1 @ s; k; ⊤ {{ Φ }} {{ Φc }} -∗
   wptp s k t1 -∗
   NC 1 -∗
-  ||={⊤|⊤,∅|∅}=> ||▷=>^(steps_sum num_laters_per_step ns (S n)) ||={∅|∅, ⊤|⊤}=>
+  ||={⊤|⊤,∅|∅}=> ||▷=>^(steps_sum num_laters_per_step step_count_next ns (S n)) ||={∅|∅, ⊤|⊤}=>
   ▷ (∃ e2 t2',
     ⌜ t2 = e2 :: t2' ⌝ ∗
     Φc ∗ state_interp σ2 (length t2') ∗ global_state_interp g2 ((Nat.iter n step_count_next ns)) mj D κs' ∗ C).
@@ -254,7 +254,7 @@ Lemma wptp_strong_adequacy Φ Φc k κs' s n e1 t1 κs t2 σ1 g1 ns mj D σ2 g2 
   WPC e1 @ s; k; ⊤ {{ Φ }} {{ Φc }} -∗
   wptp s k t1 -∗
   NC 1 -∗
-  ||={⊤|⊤,∅|∅}=> ||▷=>^(steps_sum num_laters_per_step ns n) ||={∅|∅, ⊤|⊤}=> (∃ e2 t2',
+  ||={⊤|⊤,∅|∅}=> ||▷=>^(steps_sum num_laters_per_step step_count_next ns n) ||={∅|∅, ⊤|⊤}=> (∃ e2 t2',
     ⌜ t2 = e2 :: t2' ⌝ ∗
     ▷^(S (S (num_laters_per_step (Nat.iter n step_count_next ns)))) (⌜ ∀ e2, s = NotStuck → e2 ∈ t2 → not_stuck e2 σ2 g2 ⌝) ∗
     state_interp σ2 (length t2') ∗
@@ -278,7 +278,7 @@ Lemma wptp_strong_crash_adequacy Φ Φc κs' s k n e1 t1 κs t2 σ1 g1 ns mj D �
   WPC e1 @ s; k; ⊤ {{ Φ }} {{ Φc }} -∗
   wptp s k t1 -∗
   NC 1 -∗
-  ||={⊤|⊤,∅|∅}=> ||▷=>^(steps_sum num_laters_per_step ns (S n)) ||={∅|∅, ⊤|⊤}=>
+  ||={⊤|⊤,∅|∅}=> ||▷=>^(steps_sum num_laters_per_step step_count_next ns (S n)) ||={∅|∅, ⊤|⊤}=>
   ▷ (∃ e2 t2',
     ⌜ t2 = e2 :: t2' ⌝ ∗
     Φc ∗ state_interp σ2 (length t2') ∗ global_state_interp g2 (Nat.iter n step_count_next ns) mj D κs' ∗ C).
