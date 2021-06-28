@@ -325,4 +325,74 @@ Proof.
   intros. rewrite -(step_fupd2_mask_mono Eia Eib _ _ Eia Eib) // -!fupd2_intro //.
 Qed.
 
+Lemma fupd2_plainly_mask_empty E1 E2 P :
+  (||={E1|E2,∅|∅}=> ■ P) ⊢ ||={E1|E2,E1|E2}=> P.
+Proof.
+  rewrite uPred_fupd2_eq /uPred_fupd2_def. iIntros "H [Hw HE]".
+  iAssert (◇ ■ P)%I as "#>HP".
+  { by iMod ("H" with "[$]") as "(_ & _ & HP)". }
+  by iFrame.
+Qed.
+
+Lemma fupd2_elim E1 E1' E2 E2' E3 E3' P Q :
+  (Q -∗ (||={E2|E2',E3|E3'}=> P)) → (||={E1|E1',E2|E2'}=> Q) -∗ (||={E1|E1',E3|E3'}=> P).
+Proof. intros ->. rewrite fupd2_trans //. Qed.
+
+Lemma fupd2_plainly_mask E1 E2 E1' E2' P :
+  (||={E1|E2,E1'|E2'}=> ■ P) ⊢ ||={E1|E2,E1|E2}=> P.
+Proof.
+  rewrite -(fupd2_plainly_mask_empty).
+  apply fupd2_elim, (fupd2_mask_intro_discard _ _ _); set_solver.
+Qed.
+
+Lemma fupd2_plainly_keep_l E1 E2 P R:
+  (R -∗ ||={E1|E2,E1|E2}=> ■ P) ∗ R ⊢ ||={E1|E2,E1|E2}=> P ∗ R.
+Proof.
+  rewrite uPred_fupd2_eq /uPred_fupd2_def. iIntros "[H HQ] [Hw HE]".
+  iAssert (◇ ■ P)%I as "#>HP".
+  { by iMod ("H" with "HQ [$]") as "(_ & _ & HP)". }
+  by iFrame.
+Qed.
+
+Lemma fupd2_plainly_later E1 E2 P :
+    (▷ ||={E1|E2,E1|E2}=> ■ P) ⊢ ||={E1|E2,E1|E2}=> ▷ ◇ P.
+Proof.
+  rewrite uPred_fupd2_eq /uPred_fupd2_def. iIntros "H [Hw HE]".
+  iAssert (▷ ◇ ■ P)%I as "#HP".
+  { iNext. by iMod ("H" with "[$]") as "(_ & _ & HP)". }
+  iFrame. iIntros "!> !> !>". by iMod "HP".
+Qed.
+
+Lemma fupd2_plainly_forall_2 E1 E2 {A} Φ :
+    (∀ x : A, ||={E1|E2,E1|E2}=> ■ Φ x) ⊢ ||={E1|E2,E1|E2}=> ∀ x, Φ x.
+Proof.
+  rewrite uPred_fupd2_eq /uPred_fupd2_def. iIntros "HΦ [Hw HE]".
+  iAssert (◇ ■ ∀ x : A, Φ x)%I as "#>HP".
+  { iIntros (x). by iMod ("HΦ" with "[$Hw $HE]") as "(_&_&?)". }
+  by iFrame.
+Qed.
+
+Lemma fupd2_plain_mask_empty E1 E2 P `{!Plain P} :
+  (||={E1|E2,∅|∅}=> P) ⊢ ||={E1|E2,E1|E2}=> P.
+Proof. by rewrite {1}(plain P) fupd2_plainly_mask_empty. Qed.
+
+Lemma fupd2_plain_mask E1 E2 E1' E2' P `{!Plain P} :
+  (||={E1|E2,E1'|E2'}=> P) ⊢ ||={E1|E2,E1|E2}=> P.
+Proof. by rewrite {1}(plain P) fupd2_plainly_mask. Qed.
+
+Lemma fupd2_plain_keep_l E1 E2 P R `{!Plain P}:
+  (R -∗ ||={E1|E2,E1|E2}=> P) ∗ R ⊢ ||={E1|E2,E1|E2}=> P ∗ R.
+Proof. by rewrite {1}(plain P) fupd2_plainly_keep_l. Qed.
+
+Lemma fupd2_plain_later E1 E2 P `{!Plain P} :
+    (▷ ||={E1|E2,E1|E2}=> P) ⊢ ||={E1|E2,E1|E2}=> ▷ ◇ P.
+Proof. by rewrite {1}(plain P) fupd2_plainly_later. Qed.
+
+Lemma fupd2_plain_forall_2 E1 E2 {A} Φ `{!∀ x, Plain (Φ x)}:
+    (∀ x : A, ||={E1|E2,E1|E2}=> Φ x) ⊢ ||={E1|E2,E1|E2}=> ∀ x, Φ x.
+Proof.
+  rewrite -fupd2_plainly_forall_2. apply forall_mono=> x.
+    by rewrite {1}(plain (Φ _)).
+Qed.
+
 End fupd2.

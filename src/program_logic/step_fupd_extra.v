@@ -372,6 +372,13 @@ Proof.
   iModIntro. by iApply "HPQ".
 Qed.
 
+Lemma step_fupdN_step_fupd2N k P :
+  (|={∅}▷=>^k P) -∗ ||▷=>^k P.
+Proof.
+  induction k => //=.
+  iIntros "H". iMod "H". iModIntro. iNext. iMod "H". iModIntro. by iApply IHk.
+Qed.
+
 Lemma step_fupd2N_inner_le k1 k2 E1a E1b E2a E2b P:
   k2 ≤ k1 →
   (||={E1a|E1b,∅|∅}=> ||▷=>^k2 ||={∅|∅,E2a|E2b}=> P) -∗
@@ -391,6 +398,75 @@ Proof.
   destruct k2.
   * simpl. do 3 iMod "H". eauto.
   * rewrite Nat_iter_S. iMod "H". iMod "H". eauto.
+Qed.
+
+Lemma step_fupd2N_S_fupd2 n P :
+  (||▷=>^(S n) P) ⊣⊢ (||▷=>^(S n) ||={∅|∅,∅|∅}=> P).
+Proof.
+  apply (anti_symm (⊢)); rewrite !Nat_iter_S_r.
+  - iIntros "H". iApply (step_fupd2N_wand with "H").
+    iIntros ">H". iModIntro. iNext. iModIntro. auto.
+  - iIntros "H". iApply (step_fupd2N_wand with "H").
+    iIntros ">H". iModIntro. iNext. iMod "H". auto.
+Qed.
+
+Lemma step_fupd2_fupd2 Eo1 Eo2 Ei1 Ei2 P :
+  (||={Eo1|Eo2,Ei1|Ei2}=> ▷ ||={Ei1|Ei2,Eo1|Eo2}=> P) ⊣⊢
+  (||={Eo1|Eo2, Ei1|Ei2}=> ▷ ||={Ei1|Ei2,Eo1|Eo2}=> ||={Eo1|Eo2, Eo1|Eo2}=> P).
+Proof.
+  apply (anti_symm (⊢)).
+  - by rewrite -fupd2_intro.
+  - by rewrite fupd2_trans.
+Qed.
+
+Lemma step_fupd2_plain Eo1 Eo2 Ei1 Ei2 P `{!Plain P} :
+  (||={Eo1|Eo2,Ei1|Ei2}=> ▷ ||={Ei1|Ei2, Eo1|Eo2}=> P) -∗ ||={Eo1|Eo2,Eo1|Eo2}=> ▷ ◇ P.
+Proof.
+  rewrite -(fupd2_plain_mask _ _ Ei1 Ei2 (▷ ◇ P)%I).
+  apply fupd2_elim. by rewrite fupd2_plain_mask -fupd2_plain_later.
+Qed.
+
+Lemma step_fupd2N_plain (k: nat) Eo1 Eo2 P `{!Plain P} :
+  (||▷=>^k ||={∅|∅, Eo1|Eo2}=> P) -∗ ||={∅|∅, ∅|∅}=> ▷^k ◇ P.
+Proof.
+  induction k as [|n IH].
+  - simpl. rewrite -except_0_intro fupd2_plain_mask. iIntros "$".
+  - rewrite Nat_iter_S step_fupd2_fupd2 IH !fupd2_trans step_fupd2_plain.
+    apply fupd2_mono. destruct n as [|n]; simpl.
+    * by rewrite except_0_idemp.
+    * by rewrite except_0_later.
+Qed.
+
+Lemma step_fupd2N_inner_plain (k: nat) P D `{PLAIN: !Plain P} :
+  (||={⊤|D, ∅|∅}=> ||▷=>^k ||={∅|∅, ⊤|D}=> P) -∗
+  ||={⊤|D, ⊤|D}=> ▷^(S k) P.
+Proof.
+  iInduction k as [| k] "IH" forall (P PLAIN).
+  - rewrite //=. iIntros "H".
+    iApply fupd2_plain_mask. do 2 iMod "H".
+    by iModIntro.
+  - iIntros "H".
+    iApply fupd2_plain_mask.
+    iMod "H".
+    iMod (step_fupd2N_plain with "H") as "H".
+    iModIntro. rewrite -!later_laterN !laterN_later.
+    iNext. iNext. by iMod "H".
+Qed.
+
+Lemma step_fupd2N_inner_plain' (k: nat) P D `{PLAIN: !Plain P} :
+  (||={⊤|D, ∅|∅}=> ||▷=>^k ||={∅|∅, ∅|∅}=> P) -∗
+  ||={⊤|D, ⊤|D}=> ▷^(S k) P.
+Proof.
+  iInduction k as [| k] "IH" forall (P PLAIN).
+  - rewrite //=. iIntros "H".
+    iApply fupd2_plain_mask. do 2 iMod "H".
+    by iModIntro.
+  - iIntros "H".
+    iApply fupd2_plain_mask.
+    iMod "H".
+    iMod (step_fupd2N_plain with "H") as "H".
+    iModIntro. rewrite -!later_laterN !laterN_later.
+    iNext. iNext. by iMod "H".
 Qed.
 
 End step_fupd2.

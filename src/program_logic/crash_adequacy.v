@@ -17,7 +17,7 @@ Implicit Types P Q : iProp Σ.
 Implicit Types Φ : val Λ → iProp Σ.
 Implicit Types Φs : list (val Λ → iProp Σ).
 
-Context (mj: nat).
+Context (mj: fracR).
 (* The IH of the theorems here requires working with some fixed choice of mj in the wpc0 form,
    instead of wpc. So, we introduce here a notation to insert the mj explicitly to porting these proofs easier *)
 Local Notation "'WPC' e @ k ; E1 {{ Φ } } {{ Φc } }" := (wpc0 NotStuck k%nat mj E1 e%E Φ Φc)
@@ -29,49 +29,49 @@ Local Notation "'WPC' e @ s ; k ; E1 {{ Φ } } {{ Φc } }" := (wpc0 s k%nat mj E
 
 Notation wptp s k t := ([∗ list] ef ∈ t, WPC ef @ s; k; ⊤ {{ fork_post }} {{ True }})%I.
 
-Lemma wpc_step s k e1 σ1 g1 ns κ κs e2 σ2 g2 efs m Φ Φc :
+Lemma wpc_step s k e1 σ1 g1 ns D κ κs e2 σ2 g2 efs m Φ Φc :
   prim_step e1 σ1 g1 κ e2 σ2 g2 efs →
   state_interp σ1 m -∗
-  global_state_interp g1 ns (κ ++ κs) -∗
+  global_state_interp g1 ns mj D (κ ++ κs) -∗
   WPC e1 @ s; k; ⊤ {{ Φ }} {{ Φc }} -∗ NC 1 -∗
-  |={⊤,∅}=> |={∅}▷=>^(S $ num_laters_per_step ns) |={∅,⊤}=>
+  ||={⊤|⊤∖D,∅|∅}=> ||▷=>^(S $ num_laters_per_step ns) ||={∅|∅,⊤|⊤∖D}=>
   state_interp σ2 (length efs + m) ∗
-  global_state_interp g2 (S ns) κs ∗
+  global_state_interp g2 (step_count_next ns) mj D κs ∗
   WPC e2 @ s; k; ⊤ {{ Φ }} {{ Φc }} ∗
   wptp s k efs ∗
   NC 1.
 Proof.
   rewrite {1}wpc0_unfold /wpc_pre. iIntros (?) "Hσ Hg H HNC".
   rewrite (val_stuck e1 σ1 g1 κ e2 σ2 g2 efs) //.
-  iMod "H". iDestruct "H" as "(H&_)".
+  iDestruct "H" as "(H&_)".
   iMod ("H" $! _ σ1 with "Hσ Hg HNC") as "H".
   iModIntro.
-  iApply (step_fupdN_wand with "H"). iIntros "(_&H)".
+  iApply (step_fupd2N_wand with "H"). iIntros "(_&H)".
   iMod ("H" $! e2 σ2 g2 efs with "[//]") as "H".
   iModIntro. eauto.
 Qed.
 
-Lemma wptp_step s k e1 t1 t2 κ κs σ1 g1 ns σ2 g2 Φ Φc :
+Lemma wptp_step s k e1 t1 t2 κ κs σ1 g1 ns D σ2 g2 Φ Φc :
   step (e1 :: t1,(σ1,g1)) κ (t2, (σ2,g2)) →
   state_interp σ1 (length t1) -∗
-  global_state_interp g1 ns (κ ++ κs) -∗
+  global_state_interp g1 ns mj D (κ ++ κs) -∗
   WPC e1 @ s; k; ⊤ {{ Φ }} {{ Φc }}-∗ wptp s k t1 -∗ NC 1 ==∗
   ∃ e2 t2', ⌜t2 = e2 :: t2'⌝ ∗
-  |={⊤,∅}=> |={∅}▷=>^(S $ num_laters_per_step ns) |={∅,⊤}=>
+  ||={⊤|⊤∖D,∅|∅}=> ||▷=>^(S $ num_laters_per_step ns) ||={∅|∅,⊤|⊤∖D}=>
   state_interp σ2 (pred (length t2)) ∗
-  global_state_interp g2 (S ns) κs ∗
+  global_state_interp g2 (step_count_next ns) mj D κs ∗
   WPC e2 @ s; k; ⊤ {{ Φ }} {{ Φc}} ∗ wptp s k t2' ∗ NC 1.
 Proof.
   iIntros (Hstep) "Hσ Hg He Ht HNC".
   destruct Hstep as [e1' σ1' g1' e2' σ2' g2' efs [|? t1'] t2' ?? Hstep]; simplify_eq/=.
   - iExists e2', (t2' ++ efs). iModIntro. iSplitR; first by eauto.
     iMod (wpc_step with "Hσ Hg He HNC") as "H"; first done. iModIntro.
-    iApply (step_fupdN_wand with "H"). iIntros ">(Hσ & Hg & He2 & Hefs) !>".
+    iApply (step_fupd2N_wand with "H"). iIntros ">(Hσ & Hg & He2 & Hefs) !>".
     rewrite Nat.add_comm app_length. by iFrame.
   - iExists e, (t1' ++ e2' :: t2' ++ efs); iSplitR; first eauto.
     iDestruct "Ht" as "(Ht1 & He1 & Ht2)".
     iModIntro. iMod (wpc_step with "Hσ Hg He1 HNC") as "H"; first done. iModIntro.
-    iApply (step_fupdN_wand with "H"). iIntros ">(Hσ & Hg & He2 & Hefs) !>".
+    iApply (step_fupd2N_wand with "H"). iIntros ">(Hσ & Hg & He2 & Hefs) !>".
     rewrite !app_length /= !app_length.
     replace (length t1' + S (length t2' + length efs))
       with (length efs + (length t1' + S (length t2'))) by lia. by iFrame.
@@ -82,50 +82,51 @@ Local Fixpoint steps_sum (num_laters_per_step : nat → nat) (start ns : nat) : 
   match ns with
   | O => 0
   | S ns =>
-    S $ num_laters_per_step start + steps_sum num_laters_per_step (S start) ns
+    S $ num_laters_per_step start + steps_sum num_laters_per_step (step_count_next start) ns
   end.
 
-Lemma wptp_steps s k n e1 t1 κs κs' t2 σ1 g1 ns σ2 g2 Φ Φc :
+Lemma wptp_steps s k n e1 t1 κs κs' t2 σ1 g1 ns D σ2 g2 Φ Φc :
   nsteps n (e1 :: t1, (σ1,g1)) κs (t2, (σ2,g2)) →
   state_interp σ1 (length t1) -∗
-  global_state_interp g1 ns (κs ++ κs') -∗
+  global_state_interp g1 ns mj D (κs ++ κs') -∗
   WPC e1 @ s; k; ⊤ {{ Φ }} {{ Φc }} -∗ wptp s k t1 -∗ NC 1 -∗
-  (|={⊤, ∅}=> |={∅}▷=>^(steps_sum num_laters_per_step ns n) |={∅,⊤}=> ∃ e2 t2',
+  (||={⊤|⊤∖D, ∅|∅}=> ||▷=>^(steps_sum num_laters_per_step ns n) ||={∅|∅,⊤|⊤∖D}=> ∃ e2 t2',
     ⌜t2 = e2 :: t2'⌝ ∗
     state_interp σ2 (pred (length t2)) ∗
-    global_state_interp g2 (n + ns) κs' ∗
+    global_state_interp g2 (Nat.iter n step_count_next ns) mj D κs' ∗
     WPC e2 @ s; k; ⊤ {{ Φ }} {{ Φc }} ∗ wptp s k t2' ∗
     NC 1).
 Proof.
   revert e1 t1 κs κs' t2 σ1 g1 ns σ2 g2; simpl.
   induction n as [|n IH]=> e1 t1 κs κs' t2 σ1 g1 ns σ2 g2 /=.
   { inversion_clear 1; iIntros "?????"; iExists e1, t1; iFrame; eauto 10.
-    iApply fupd_mask_intro_subseteq; eauto. }
+    iApply fupd2_mask_intro_subseteq; eauto. set_solver. }
   iIntros (Hsteps) "Hσ Hg He Ht HNC". inversion_clear Hsteps as [|?? [t1' [σ1' g1']]].
-  rewrite -(assoc_L (++)) Nat_iter_add plus_n_Sm.
-  iApply step_fupdN_S_fupd.
+  rewrite -(assoc_L (++)).
+  iApply step_fupd2N_inner_plus.
   iMod (wptp_step with "Hσ Hg He Ht HNC") as (e1' t1'' ?) ">H"; first eauto; simplify_eq.
-  iApply (step_fupdN_wand with "H"). iIntros "!> H".
+  iApply (step_fupd2N_wand with "H"). iIntros "!> H".
   iMod "H".
   iDestruct "H" as "(Hσ & Hg & He & Ht & HNC)".
   iMod (IH with "Hσ Hg He Ht HNC") as "IH"; first done.
-  iModIntro. eauto.
+  rewrite -Nat_iter_S_r.
+  iModIntro. iModIntro. eauto.
 Qed.
 
-Lemma wpc_safe k κs m e σ g ns Φ Φc :
+Lemma wpc_safe k κs m e σ g ns D Φ Φc q :
   state_interp σ m -∗
-  global_state_interp g ns κs -∗
-  WPC e @ k ; ⊤  {{ Φ }} {{ Φc }} -∗ |NC={⊤}=>
+  global_state_interp g ns mj D κs -∗
+  WPC e @ k ; ⊤  {{ Φ }} {{ Φc }} -∗ NC q -∗ ||={⊤|⊤, ⊤|⊤}=>
   ▷^(S (S (num_laters_per_step ns))) ⌜is_Some (to_val e) ∨ reducible e σ g⌝.
 Proof.
-  rewrite wpc0_unfold /wpc_pre. iIntros "Hσ Hg H". iDestruct "H" as ">(H&_)".
+  rewrite wpc0_unfold /wpc_pre. iIntros "Hσ Hg H". iDestruct "H" as "(H&_)".
   destruct (to_val e) as [v|] eqn:?; first by eauto.
-  iApply ncfupd_plain_fupd.
-  iIntros (q) "HNC".
-  iApply (step_fupdN_inner_plain (S (num_laters_per_step ns))).
-  iMod ("H" $! _ _ _ _ [] with "[$] [$] [$]") as "H".
-  simpl. iModIntro. iApply (step_fupdN_wand with "H").
-  iNext. iIntros "(%&_)". eauto.
+  iIntros "HNC".
+  iApply (step_fupd2N_inner_plain' (S (num_laters_per_step ns))).
+  iMod (fupd2_mask_subseteq ⊤ (⊤ ∖ D)) as "Hclo"; try set_solver+.
+  iMod ("H" $! _ _ _ _ _ [] with "[$] [$] [$]") as "H".
+  simpl. iModIntro. iApply (step_fupd2N_wand with "H").
+  iNext. iIntros "(%Hred&Hclo')". eauto.
 Qed.
 
 Lemma wptp0_strong_adequacy Φ Φc k κs' s n e1 t1 κs t2 σ1 g1 ns σ2 g2 :
