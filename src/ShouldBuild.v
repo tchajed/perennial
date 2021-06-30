@@ -10,6 +10,7 @@ From Perennial.goose_lang Require
      (* refinement refinement_adequacy
      crash_lock
      logical_reln_adeq *).
+(*
 From Perennial.program_proof Require
      wal.circ_proof_crash
      append_log_proof
@@ -21,7 +22,8 @@ From Perennial.program_proof Require
      jrnl_replication.jrnl_replication_proof
      txn.twophase_refinement_thm
      simple.proofs simple.example
-     wp_to_wpc.
+     (* wp_to_wpc *).
+*)
 From Perennial.program_proof.examples Require
      all_examples.
 
