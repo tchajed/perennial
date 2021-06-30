@@ -254,6 +254,9 @@ Section frac_coPset_prop.
     iModIntro; iExists _; iFrame.
   Qed.
 
+  Lemma ownfCP_init_empty γ : ⊢ |==> ownfCP γ 1 ∅.
+  Proof. iMod (own_unit _ γ) as "H". by iFrame. Qed.
+
   Lemma ownfCP_op_plus γ q1 q2 E :
     ownfCP γ (q1 + q2) E ⊣⊢ ownfCP γ q1 E ∗ ownfCP γ q2 E.
   Proof. by rewrite /ownfCP fCoPset_op_plus own_op. Qed.

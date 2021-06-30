@@ -379,6 +379,21 @@ Qed.
 
 End creditGS_defs.
 
+Lemma credit_name_init `{hC: credit_preG Σ} k :
+  ⊢ |==> ∃ name : cr_names, let _ := creditGS_update_pre _ _ name in
+                           cred_interp k ∗ cred_frag k ∗ pinv_tok 1 ∅.
+Proof.
+  iMod (own_alloc (● k ⋅ ◯ k)) as (γ) "[H1 H2]".
+  { apply auth_both_valid_discrete; split; eauto. econstructor. }
+  iMod (ownfCP_init_empty γ) as "Hemp".
+  iModIntro. iExists {| credit_name := γ; coPset_name := γ |}.
+  rewrite -{2}(plus_0_l k).
+  iDestruct (cred_frag_split with "[H2]") as "($&$)".
+  { rewrite /cred_frag//=. }
+  iFrame.
+Qed.
+
+
 Class heapGS Σ := HeapGS {
   heapG_invG : invGS Σ;
   heapG_crashG : crashG Σ;
@@ -459,6 +474,10 @@ Definition tls (na: naMode) : lock_state :=
 
 Global Existing Instances heapG_na_heapG.
 
+Definition crash_borrow_ginv_number : nat := 3%nat.
+Definition crash_borrow_ginv `{!invGS Σ} `{creditGS Σ}
+  := (inv (nroot.@"borrow") (cred_frag crash_borrow_ginv_number)).
+
 Global Program Instance heapG_irisG `{!heapGS Σ}:
   irisGS goose_lang Σ := {
   iris_invG := heapG_invG;
@@ -470,7 +489,7 @@ Global Program Instance heapG_irisG `{!heapGS Σ}:
       ∗ trace_auth σ.(trace) ∗ oracle_auth σ.(oracle))%I;
   global_state_interp g ns mj D κs :=
     (ffi_global_ctx heapG_ffiG g ∗
-     (@inv _ heapG_invG (nroot.@"borrow") (cred_frag 3)) ∗
+     @crash_borrow_ginv _ heapG_invG _ ∗
      cred_interp ns ∗
      pinv_tok mj D)%I;
   fork_post _ := True%I;

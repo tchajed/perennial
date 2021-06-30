@@ -18,35 +18,36 @@ Theorem heap_recv_adequacy `{ffi_sem: ffi_semantics} `{!ffi_interp ffi} {Hffi_ad
   recv_adequate (CS := goose_crash_lang) s e r σ g (λ v _ _, φ v) (λ v _ _, φr v) (λ σ _, φinv σ).
 Proof.
   intros Hwp.
-  eapply (wp_recv_adequacy_inv _ _ _ heap_local_namesO _ _ _ _ _ _ _ _ _
+  eapply (wp_recv_adequacy_inv _ _ _ heap_local_namesO crash_borrow_ginv_number _ _ _ _ _ _ _ _
            (* (λ names0 Hinv Hc names, ∃ namesg, Φinv (heap_update_local _
-                                         (heap_update_pre _ _ Hinv Hc (heap_extend_local_names (@pbundleT _ _ names) namesg)) Hinv Hc (@pbundleT _ _ names)))%I *) (λ n, n)).
+                                         (heap_update_pre _ _ Hinv Hc (heap_extend_local_names (@pbundleT _ _ names) namesg)) Hinv Hc (@pbundleT _ _ names)))%I *) _).
   iIntros (???) "".
   iMod (na_heap_name_init tls σ.(heap)) as (name_na_heap) "Hh".
   iMod (ffi_name_global_init _ _ g) as (ffi_namesg) "(Hgw&_)"; first auto.
   iMod (ffi_name_init _ _ σ.(world) g with "Hgw") as (ffi_names) "(Hw&Hgw&Hstart)"; first auto.
   iMod (trace_name_init σ.(trace) σ.(oracle)) as (name_trace) "(Htr&Htrfrag&Hor&Hofrag)".
-  (*
+  iMod (credit_name_init crash_borrow_ginv_number) as (name_credit) "(Hcred_auth&Hcred&Htok)".
+  iAssert (|={⊤}=> crash_borrow_ginv)%I with "[Hcred]" as ">#Hinv".
+  { rewrite /crash_borrow_ginv. iApply (inv_alloc _). iNext. eauto. }
   set (hnames := {| heap_heap_names := name_na_heap;
                       heap_ffi_local_names := ffi_names;
                       heap_ffi_global_names := ffi_namesg;
-                      heap_trace_names := name_trace |}).
-   *)
-  set (hnames := {| heap_heap_names := name_na_heap;
-                      heap_ffi_local_names := ffi_names;
-                      heap_ffi_global_names := ffi_namesg;
-                      heap_trace_names := name_trace |}).
+                      heap_trace_names := name_trace;
+                      heap_credit_names := name_credit
+                 |}).
   set (hG := heap_update_pre _ hPre Hinv Hc hnames).
   iExists ({| pbundleT := heap_get_local_names Σ hG |}).
   iExists
     (λ t σ nt, let _ := heap_update_local Σ hG Hinv Hc (@pbundleT _ _ t) in
                state_interp σ nt)%I,
-    (λ t g ns κs, let _ := heap_update_local Σ hG Hinv Hc (@pbundleT _ _ t) in
-                  global_state_interp g ns κs).
+    (λ t g ns mj D κs, let _ := heap_update_local Σ hG Hinv Hc (@pbundleT _ _ t) in
+                  global_state_interp g ns mj D κs).
   iExists _. (* (λ Hc t, λ (σ0 : state) (_ : nat) (κs0 : list observation) (_ : nat),
                                               lifting.heapG_irisG_obligation_1 Σ
                                                 (heap_update Σ (heap_update_pre Σ hPre Hinv Hc hnames) Hinv Hc
                                                    pbundleT) σ0 κs0). *)
+  iExists _.
+  iExists _.
   iExists _.
   iExists _.
   iExists _.
@@ -76,7 +77,9 @@ Proof.
   rewrite /wpr. rewrite /hG//=.
   iFrame.
   rewrite ffi_update_pre_get_local //=. iFrame.
+  iFrame "Hinv".
   Unshelve.
+  - eauto.
   - eauto.
   - exact O.
 Qed.

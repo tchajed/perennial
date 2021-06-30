@@ -456,7 +456,7 @@ Proof.
   - constructor; naive_solver.
 Qed.
 
-Corollary wp_recv_adequacy_inv Σ Λ CS (T: ofe) `{!invGpreS Σ} `{!crashPreG Σ} s k e r σ g φ φr φinv f1 f2:
+Corollary wp_recv_adequacy_inv Σ Λ CS (T: ofe) `{!invGpreS Σ} `{!crashPreG Σ} nsinit s k e r σ g φ φr φinv f1 f2:
   (∀ `{Hinv : !invGS Σ} `{Hc: !crashG Σ} κs,
      ⊢ |={⊤}=> ∃ (t: pbundleG T Σ)
          (stateI : pbundleG T Σ → state Λ → nat → iProp Σ)
@@ -470,7 +470,7 @@ Corollary wp_recv_adequacy_inv Σ Λ CS (T: ofe) `{!invGpreS Σ} `{!crashPreG Σ
                in
        □ (∀ σ nt, stateI t σ nt -∗ |NC={⊤, ∅}=> ⌜ φinv σ ⌝) ∗
        □ (∀ Hc t', Φinv t Hinv Hc t' -∗ □ ∀ σ nt, stateI t' σ nt -∗ |NC={⊤, ∅}=> ⌜ φinv σ ⌝) ∗
-       stateI t σ 0 ∗ global_stateI t g 0 1%Qp ∅ κs ∗
+       stateI t σ 0 ∗ global_stateI t g nsinit 1%Qp ∅ κs ∗
        wpr s k Hc t ⊤ e r (λ v, ⌜φ v⌝) (Φinv t Hinv) (λ _ _ v, ⌜φr v⌝)) →
   recv_adequate (CS := CS) s e r σ g (λ v _ _, φ v) (λ v _ _, φr v) (λ σ _, φinv σ).
 Proof.
@@ -478,9 +478,9 @@ Proof.
   apply recv_adequate_alt.
   intros t2 σ2 g2 stat [n [κs H]]%erased_rsteps_nrsteps.
   destruct (nrsteps_snoc _ _ _ _ _ _ H) as (ns'&n'&->).
-  eapply (step_fupdN_fresh_soundness _ ns' 0
-              (crash_adequacy.steps_sum f1 f2 (Nat.iter (sum_crash_steps ns') f2 0) n')
-               (S (S  (f1 (Nat.iter (n' + sum_crash_steps ns') f2 0)))))
+  eapply (step_fupdN_fresh_soundness _ ns' nsinit
+              (crash_adequacy.steps_sum f1 f2 (Nat.iter (sum_crash_steps ns') f2 nsinit) n')
+               (S (S  (f1 (Nat.iter (n' + sum_crash_steps ns') f2 nsinit)))))
          => Hinv Hc.
   iIntros "HNC".
   iMod (Hwp Hinv Hc κs) as (t stateI global_stateI Hfork_post Hpf1a Hpf1b Hpf1') "H".
@@ -515,6 +515,7 @@ Proof.
     iApply fupd2_plain_mask.
     iMod ("Hinv" with "[$] [$]") as "(Hp&HNC)".
     iDestruct "Hp" as %?. iModIntro.
+    rewrite Hpf3.
     iNext. iNext.
     rewrite /perennial_step_count_next//=.
     iNext.
