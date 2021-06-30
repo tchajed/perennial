@@ -2,6 +2,8 @@ From stdpp Require Export sets coPset.
 From iris.algebra Require Export cmra functions frac.
 From iris.algebra Require Import updates local_updates.
 From iris.prelude Require Import options.
+From Perennial.base_logic Require Export lib.own.
+From iris.proofmode Require Import tactics.
 
 Record frac_coPset :=
   { fc_carrier :> @discrete_fun positive (fun _ => optionO fracR) }.
@@ -235,3 +237,96 @@ Section frac_coPset_cmra_lemmas.
   Proof. eauto using frac_coPset_reserve. Qed.
 
 End frac_coPset_cmra_lemmas.
+
+Section frac_coPset_prop.
+  Context {Σ : gFunctors}.
+  Context {Hin: inG Σ (frac_coPsetR)}.
+
+  Definition ownfCP γ q E : iProp Σ := own γ (fCoPset q E).
+
+  Lemma ownfCP_init γ : ⊢ |==> ∃ E, ownfCP γ 1 E.
+  Proof.
+    iMod (own_unit _ γ) as "H".
+    iMod (own_updateP with "[$]") as "HE".
+    { apply frac_coPset_reserve'. }
+    iDestruct "HE" as (fCP Hpure) "Hown".
+    destruct Hpure as (E&Hinf&->).
+    iModIntro; iExists _; iFrame.
+  Qed.
+
+  Lemma ownfCP_op_plus γ q1 q2 E :
+    ownfCP γ (q1 + q2) E ⊣⊢ ownfCP γ q1 E ∗ ownfCP γ q2 E.
+  Proof. by rewrite /ownfCP fCoPset_op_plus own_op. Qed.
+
+  Lemma ownfCP_op_union γ q E1 E2 :
+    E1 ## E2 →
+    ownfCP γ q E1 ∗ ownfCP γ q E2 ⊣⊢ ownfCP γ q (E1 ∪ E2).
+  Proof. intros. by rewrite /ownfCP fCoPset_op_union // own_op. Qed.
+
+  Definition ownfCP_inf γ q E : iProp Σ :=
+    ⌜ set_infinite E ⌝ ∧ own γ (fCoPset q E).
+
+  Lemma ownfCP_inf_init γ : ⊢ |==> ∃ E, ownfCP_inf γ 1 E.
+  Proof.
+    iMod (own_unit _ γ) as "H".
+    iMod (own_updateP with "[$]") as "HE".
+    { apply frac_coPset_reserve'. }
+    iDestruct "HE" as (fCP Hpure) "Hown".
+    destruct Hpure as (E&Hinf&->).
+    iModIntro; iExists _; iSplit; first eauto. iFrame.
+  Qed.
+
+  Lemma ownfCP_inf_op_plus γ q1 q2 E :
+    ownfCP_inf γ (q1 + q2) E ⊣⊢ ownfCP_inf γ q1 E ∗ ownfCP_inf γ q2 E.
+  Proof.
+    iSplit.
+    - iDestruct 1 as (Hinf) "Hown".
+      rewrite fCoPset_op_plus own_op.
+      iDestruct "Hown" as "(H1&H2)".
+      iFrame. eauto.
+    - iDestruct 1 as "(H1&H2)".
+      iDestruct "H1" as (Hinf1) "Hown1".
+      iDestruct "H2" as (Hinf2) "Hown2".
+      iSplit; first eauto. rewrite fCoPset_op_plus own_op; by iFrame.
+  Qed.
+
+  Lemma ownfCP_op_union_join γ q E1 E2 :
+    E1 ## E2 →
+    ownfCP_inf γ q E1 ∗ ownfCP_inf γ q E2 ⊢ ownfCP_inf γ q (E1 ∪ E2).
+  Proof.
+    iIntros (Hdisj).
+    iDestruct 1 as "(H1&H2)".
+    iDestruct "H1" as (Hinf1) "Hown1".
+    iDestruct "H2" as (Hinf2) "Hown2".
+    iSplit.
+    { iPureIntro. eapply set_infinite_subseteq; try eassumption; set_solver. }
+    rewrite fCoPset_op_union // own_op; by iFrame.
+  Qed.
+
+  Lemma ownfCP_op_union_split γ q E1 E2 :
+    E1 ## E2 →
+    ownfCP_inf γ q (E1 ∪ E2) ⊢ ownfCP γ q E1 ∗ ownfCP γ q E2.
+  Proof.
+    iIntros (Hdisj).
+    iDestruct 1 as (Hinf) "H".
+    rewrite fCoPset_op_union // own_op; by iFrame.
+  Qed.
+
+  Lemma ownfCP_inf_eq γ q E :
+    ownfCP_inf γ q E ⊣⊢ ⌜ set_infinite E ⌝ ∧ ownfCP γ q E.
+  Proof. auto. Qed.
+
+  Lemma ownfCP_disj γ q1 q2 D E :
+    ownfCP γ q1 D ∗ ownfCP_inf γ q2 E -∗ ⌜ E ## D ∨ ✓(q1 + q2)%Qp ⌝.
+  Proof.
+    iIntros "(H1&(%&H2))".
+    iCombine "H1 H2" as "H".
+    iDestruct (own_valid with "H") as %Hval.
+    iPureIntro.
+    rewrite frac_valid.
+    destruct (decide ((1 < q1 + q2))%Qp) as [Hlt|Hnlt].
+    - left. apply fCoPset_valid_op1 in Hval as (?&?); auto; set_solver.
+    - right. apply Qp_le_ngt; auto.
+  Qed.
+
+End frac_coPset_prop.

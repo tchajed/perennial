@@ -101,7 +101,7 @@ Proof.
     { iPureIntro; split; naive_solver. }
     iDestruct (pri_inv_tok_le_acc mj_wp with "Hitok") as "(Hitok_wp&Hitok_inv_clo)".
     { naive_solver. }
-    iMod (pri_inv_tok_disable with "[$]") as "Hg".
+    iMod (pri_inv_tok_disable_reenable with "[$]") as "(Hg&Hreenable)".
     iRewrite -"Hequiv1" in "HPs".
     iEval (rewrite wpc0_unfold /wpc_pre) in "HPs".
     iDestruct "HPs" as "(_&HPs)".
@@ -112,8 +112,7 @@ Proof.
     iMod "HPs".
     iModIntro. iApply (step_fupd2N_wand with "HPs"). iIntros "HPs".
     iMod "HPs" as "(Hg&HPr&HP)".
-    iMod (pri_inv_tok_enable with "[$Hg]") as "(Hitok&Hg)".
-    { eauto. }
+    iMod ("Hreenable" with "[$Hg]") as "(Hitok&Hg)".
     iDestruct ("Hitok_inv_clo" with "[$]") as "Hitok".
     iDestruct (pri_inv_tok_split with "Hitok") as "(Hitok&Hitok_ishare)".
     rewrite -Heq_mj.
@@ -167,7 +166,7 @@ Proof.
     { iPureIntro; split; naive_solver. }
     iDestruct (pri_inv_tok_le_acc mj_wp with "Hitok") as "(Hitok_wp&Hitok_inv_clo)".
     { naive_solver. }
-    iMod (pri_inv_tok_disable with "[$]") as "Hg".
+    iMod (pri_inv_tok_disable_reenable with "[$]") as "(Hg&Hreenable)".
     iRewrite -"Hequiv1" in "HPs".
     iEval (rewrite wpc0_unfold /wpc_pre) in "HPs".
     iDestruct "HPs" as "(Hwp&_)".
@@ -189,7 +188,7 @@ Proof.
       iMod (own_update_2 _ _ _ (● Excl' (canceled mj0) ⋅ ◯ Excl' (canceled mj0))
               with "Hstatus' Hownstat") as "[Hstatus' Hownstat]".
       { by apply auth_update, option_local_update, exclusive_local_update. }
-      iMod (pri_inv_tok_enable with "[$Hg //]") as "(Hitok&Hg)".
+      iMod ("Hreenable" with "Hg") as "(Hitok&Hg)".
       iDestruct ("Hitok_inv_clo" with "[$]") as "Hitok".
       iDestruct (pri_inv_tok_split with "[$Hitok]") as "(Hitok_u&Hitok_ishare)".
       iMod ("Hclo" with "[Hown' Hstatus' Hnew Hitok_ishare]").
@@ -210,7 +209,8 @@ Proof.
       }
       iMod (later_tok_incr with "[$]") as "(Hg&Hltok)".
       iDestruct ("Hg_inv_clo" with "Hg") as "Hg".
-      iMod (global_state_interp_le with "Hg") as "$"; first lia.
+      iMod (global_state_interp_le with "Hg") as "$".
+      { apply lt_le_S. apply step_count_next_mono. lia. }
       iModIntro. iFrame.
       iSplitR "Hefs".
       - iEval (rewrite wpc0_unfold /wpc_pre).
@@ -234,7 +234,7 @@ Proof.
     iMod (own_update_2 _ _ _ (● Excl' (inuse mj_wp mj_ushare) ⋅ ◯ Excl' (inuse mj_wp mj_ushare))
             with "Hstatus' Hownstat") as "[Hstatus' Hownstat]".
     { by apply auth_update, option_local_update, exclusive_local_update. }
-    iMod (pri_inv_tok_enable with "[$Hg //]") as "(Hitok&Hg)".
+    iMod ("Hreenable" with "[$Hg]") as "(Hitok&Hg)".
     iDestruct ("Hitok_inv_clo" with "[$]") as "Hitok".
     iDestruct (pri_inv_tok_split with "[$Hitok]") as "(Hitok&Hitok_ishare)".
     iEval (rewrite -Heq_mj) in "Hitok".
@@ -256,7 +256,8 @@ Proof.
     }
     iDestruct ("Hg_inv_clo" with "Hg") as "Hg".
     iMod (later_tok_incr with "[$]") as "(Hg&Hltok)".
-    iMod (global_state_interp_le with "Hg") as "$"; first lia.
+    iMod (global_state_interp_le with "Hg") as "$".
+    { apply lt_le_S. apply step_count_next_mono. lia. }
     iModIntro. iSplitR "Hefs"; last first.
     { iApply (big_sepL_mono with "Hefs").
       iIntros. iApply (wpc0_mj_le); last by iFrame.
@@ -356,7 +357,7 @@ Proof.
     apply Qp_le_min_r. }
 
 
-  iMod (pri_inv_tok_disable with "[$]") as "Hg".
+  iMod (pri_inv_tok_disable_reenable with "[$]") as "(Hg&Hreenable)".
   iSpecialize ("Hwp" $! mj_wp mj_wp).
   iEval (rewrite wpc0_unfold) in "Hwp".
   iDestruct "Hwp" as "(Hwp&_)".
@@ -385,7 +386,7 @@ Proof.
     iMod (own_update_2 _ _ _ (● Excl' (canceled mj0) ⋅ ◯ Excl' (canceled mj0))
             with "Hstatus' Hownstat") as "[Hstatus' Hownstat]".
     { by apply auth_update, option_local_update, exclusive_local_update. }
-    iMod (pri_inv_tok_enable with "[$Hg //]") as "(Hitok&Hg)".
+    iMod ("Hreenable" with "[$Hg //]") as "(Hitok&Hg)".
     iDestruct ("Hitok_inv_clo" with "[$]") as "Hitok".
     iDestruct (pri_inv_tok_split with "[$Hitok]") as "(Hitok_u&Hitok_ishare)".
     iMod ("Hclo" with "[Hown' Hstatus' Hnew Hitok_ishare]").
@@ -405,7 +406,8 @@ Proof.
       eauto.
     }
     iDestruct ("Hg_inv_clo" with "Hg") as "Hg".
-    iMod (global_state_interp_le with "Hg") as "$"; first lia.
+    iMod (global_state_interp_le with "Hg") as "$".
+    { apply lt_le_S, step_count_next_mono; lia. }
     iModIntro. iFrame.
     iSplitR "Hefs".
     - iEval (rewrite wpc0_unfold /wpc_pre).
@@ -433,7 +435,7 @@ Proof.
   iMod (own_update_2 _ _ _ (● Excl' (inuse mj_wp mj_ushare) ⋅ ◯ Excl' (inuse mj_wp mj_ushare))
           with "Hstatus' Hownstat") as "[Hstatus' Hownstat]".
   { by apply auth_update, option_local_update, exclusive_local_update. }
-  iMod (pri_inv_tok_enable with "[$Hg //]") as "(Hitok&Hg)".
+  iMod ("Hreenable" with "Hg") as "(Hitok&Hg)".
   iDestruct ("Hitok_inv_clo" with "[$]") as "Hitok".
   iDestruct (pri_inv_tok_split with "[$Hitok]") as "(Hitok&Hitok_ishare)".
   iEval (rewrite -Heq_mj) in "Hitok".
@@ -460,7 +462,8 @@ Proof.
     iApply (step_fupd2N_inner_wand with "Hwpc"); auto.
   }
   iDestruct ("Hg_inv_clo" with "Hg") as "Hg".
-  iMod (global_state_interp_le with "Hg") as "$"; first lia.
+  iMod (global_state_interp_le with "Hg") as "$".
+  { apply lt_le_S. apply step_count_next_mono. lia. }
   iModIntro. iSplitR "Hefs"; last first.
   { iApply (big_sepL_mono with "Hefs").
     iIntros. iApply (wpc0_mj_le); last by iFrame.

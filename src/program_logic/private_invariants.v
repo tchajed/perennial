@@ -31,7 +31,7 @@ Class pri_invG {Λ Σ} (IRISG : irisGS Λ Σ) := {
     ⊢ (∀ E g ns q D κ, pri_inv_tok q E ∗ global_state_interp g ns q D κ ==∗
                        global_state_interp g ns q (E ∪ D) κ)%I;
   pri_inv_tok_enable :
-    ⊢ (∀ E g ns q D κ, ⌜ E ## D ⌝ ∧ global_state_interp g ns q (E ∪ D) κ ==∗
+    ⊢ (∀ E g ns q D κ, ⌜ E ## D ∧ set_infinite E ⌝ ∧ global_state_interp g ns q (E ∪ D) κ ==∗
                      pri_inv_tok q E ∗ global_state_interp g ns q D κ)%I;
   pri_inv_tok_disj :
     ⊢ (∀ g ns q1 q2 D κ E, global_state_interp g ns q1 D κ ∗ pri_inv_tok q2 E -∗ ⌜ E ## D ∨ ✓(q1 + q2)%Qp ⌝)
@@ -179,6 +179,27 @@ Context `{PRI: !pri_invG IRISG}.
     }
     iDestruct ("Hclo" with "[$]") as "$".
     iIntros "!> !>". rewrite pri_inv_eq /pri_inv_def. iExists _. iFrame; eauto.
+  Qed.
+
+
+  Lemma pri_inv_tok_disable_reenable E g ns q D κ :
+    pri_inv_tok q E ∗ global_state_interp g ns q D κ ==∗
+    global_state_interp g ns q (E ∪ D) κ ∗
+    □ (∀ g ns q κ, global_state_interp g ns q (E ∪ D) κ ==∗ pri_inv_tok q E ∗ global_state_interp g ns q D κ).
+  Proof.
+    iIntros "(Htok&Hg)".
+    iDestruct (pri_inv_tok_infinite with "[$]") as %Hinf.
+    iDestruct (pri_inv_tok_global_valid with "[$]") as %(Hlt&Hle).
+    iDestruct (pri_inv_tok_disj with "[$]") as %Hdisj.
+    destruct Hdisj as [Hdisj|Hbad]; last first.
+    { exfalso. revert Hbad. rewrite frac_valid.
+      intros Hbad%Qp_le_ngt. apply Hbad.
+      rewrite -Qp_inv_half_half.
+      apply Qp_add_lt_mono; auto. }
+    iMod (pri_inv_tok_disable with "[$]") as "Hg".
+    iModIntro; iFrame. iModIntro.
+    iIntros (????) "H". iApply (pri_inv_tok_enable with "[$H]").
+    eauto.
   Qed.
 
   Lemma pri_inv_acc E1 E2 E P :

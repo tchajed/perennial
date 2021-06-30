@@ -16,7 +16,8 @@ Class later_tokG {Λ Σ} (IRISG : irisGS Λ Σ) := {
   later_tok_incr :
     ⊢ (∀ g ns mj D κ, global_state_interp g ns mj D κ ==∗ global_state_interp g (S ns) mj D κ ∗ later_tok)%I;
   num_laters_per_step_exp:
-              ∀ n1 n2, n1 < n2 → 2 + num_laters_per_step n1 + num_laters_per_step n1 ≤ num_laters_per_step n2
+              ∀ n1 n2, n1 < n2 → 2 + num_laters_per_step n1 + num_laters_per_step n1 ≤ num_laters_per_step n2;
+  step_count_next_mono : ∀ n1 n2, n1 < n2 → step_count_next n1 < step_count_next n2;
 }.
 
 
@@ -80,8 +81,8 @@ Proof.
     iIntros. iMod ("H" with "[//]") as "(Hσ&Hg&Hwp&$)".
     iMod (later_tok_incr with "[$]") as "(Hg&Htok')".
     iFrame.
-    iMod (global_state_interp_le _ (S ns) _ _ with "Hg") as "Hg".
-    { lia. }
+    iMod (global_state_interp_le _ ((step_count_next ns)) _ _ with "Hg") as "Hg".
+    { apply lt_le_S, step_count_next_mono. lia. }
     iFrame.
     iApply (wpc0_strong_mono with "Hwp"); try reflexivity.
     iModIntro. iSplit.
