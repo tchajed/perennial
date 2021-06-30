@@ -1,14 +1,15 @@
 (** ShouldBuild depends on everything that should be regularly compiled (by
 default using make as well as in CI). *)
 
+(*
 From Perennial.program_logic Require
      dist_weakestpre
-     dist_adequacy.
+     dist_adequacy.  *)
 From Perennial.goose_lang Require
-     adequacy recovery_adequacy dist_adequacy
-     refinement refinement_adequacy
+     adequacy recovery_adequacy (* dist_adequacy *)
+     (* refinement refinement_adequacy
      crash_lock
-     logical_reln_adeq.
+     logical_reln_adeq *).
 From Perennial.program_proof Require
      wal.circ_proof_crash
      append_log_proof
@@ -29,6 +30,7 @@ From Perennial.program_proof.lockservice Require
      bank_proof incr_proof incr_proxy_proof two_pc_example. *)
 
 (* In-memory sharded KV system *)
+(*
 From Perennial.program_proof.memkv Require
      rpc_proof
      memkv_clerk_proof memkv_shard_start_proof memkv_shard_make_proof memkv_coord_make_proof
@@ -36,6 +38,7 @@ From Perennial.program_proof.memkv Require
 
 From Perennial.goose_lang Require
      ffi.append_log_ffi.
+*)
 From Perennial.tutorial Require
      ipm_extensions.
 
