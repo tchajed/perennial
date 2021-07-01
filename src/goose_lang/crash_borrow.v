@@ -1,6 +1,9 @@
+From iris.algebra Require Import gmap auth agree gset coPset excl csum.
 From Perennial.program_logic Require Import staged_invariant.
 From Perennial.goose_lang Require Import crash_modality lifting wpr_lifting.
 From Perennial.goose_lang Require Import wpc_proofmode.
+From Perennial.base_logic.lib Require Import saved_prop.
+From Perennial.Helpers Require Import Qextra.
 
 
 Section crash_borrow_def.
@@ -118,36 +121,95 @@ Proof.
 Qed.
 
 Definition crash_borrow Ps Pc : iProp Σ :=
-  (staged_value_idle ⊤ Ps True%I Pc ∗ later_tok).
+  (staged_value_idle ⊤ Ps True%I Pc).
 
-Lemma wpc_crash_borrow_init s k e K `{!LanguageCtx K} Φ Φc P Pc `{Atomic _ StronglyAtomic e} :
+Lemma wpc_crash_borrow_init s k e Φ Φc P Pc :
   language.to_val e = None →
   P -∗
   □ (P -∗ Pc) -∗
-  WPC e @ s; k; (⊤ ∖ ↑borrowN) {{ λ v, crash_borrow P Pc -∗ WPC K (of_val v) @ s; k; ⊤ {{ v, Φ v }} {{ Φc }} }} {{ Φc }} -∗
-  WPC K e @ s; k; ⊤ {{ Φ }} {{ Φc ∗ Pc }}.
+  Φc ∧ (crash_borrow P Pc -∗ WPC e @ s; k; (⊤ ∖ (↑borrowN : coPset)) {{ Φ }} {{ Φc }}) -∗
+  WPC e @ s; k; ⊤ {{ Φ }} {{ Φc ∗ Pc }}.
 Proof.
   iIntros (Hnv) "HP #Hwand Hwpc".
-  iApply wpc_bind.
   iApply wpc_borrow_inv.
   iIntros "#Hinv".
-  iApply wpc_atomic; iSplit; first admit.
-  iInv "Hinv" as ">H".
+  rewrite wpc_unfold /wpc_pre. iIntros (mj).
+  rewrite Hnv.
+  iSplit; last first.
+  { iIntros. iApply step_fupd2N_inner_later; eauto. iNext. iFrame.
+    iDestruct "Hwpc" as "($&_)". by iApply "Hwand". }
+  iIntros (q σ g1 ns D κ κs nt) "Hσ Hg HNC".
+  iInv "Hinv" as ">H" "Hclo".
   rewrite /crash_borrow_ginv_number.
   iDestruct (cred_frag_split 1 _ with "H") as "(Hlt1&H)".
-  iApply (wpc_wp _ k _ _ _ True).
-  iApply (wpc_later_tok_invest _ _ _ k with "[Hlt1]"); auto.
-  iApply (wpc_strong_mono with "Hwpc"); auto.
-  iSplit; last auto.
-  iIntros (v') "Hb !> Htok".
-  iDestruct "Htok" as "(Htok1&Htok2&Htok3&Htok4&_)".
+  iDestruct (cred_frag_split 1 _ with "H") as "(Hlt2&H)".
+  iDestruct "Hwpc" as "(_&Hwpc)".
+
+  iMod (pri_inv_tok_alloc with "[$]") as (Einv Hdisj) "(Hitok&Hg)".
+  iDestruct (pri_inv_tok_global_valid with "[$]") as %(Hgt&Hle).
+
+  (* Create the invariant *)
+
+  iMod (saved_prop_alloc P) as (γprop) "#Hsaved".
+  iMod (saved_prop_alloc True%I) as (γprop') "#Hsaved'".
+  iMod (own_alloc (● (Excl' (γprop, γprop')) ⋅ ◯ (Excl' (γprop, γprop')))) as (γ) "[H1 H2]".
+  { apply auth_both_valid_2; [econstructor | reflexivity]. }
+  iMod (pending_alloc) as (γ') "Hpending".
+  iMod (own_alloc (● (Excl' idle) ⋅ ◯ (Excl' idle))) as (γstatus) "[Hstat1 Hstat2]".
+  { apply auth_both_valid_2; [econstructor | reflexivity]. }
+
+  iDestruct (pri_inv_tok_infinite with "Hitok") as %Hinf.
+  destruct (Qp_plus_inv_2_gt_1_split mj) as (mj_ikeep&mj_ishare&Heq_mj&Hinvalid); first auto.
+  iEval (rewrite -Qp_inv_half_half) in "Hitok".
+  iDestruct (pri_inv_tok_split with "Hitok") as "(Hitok_u&Hitok_i)".
+  iEval (rewrite -Heq_mj) in "Hitok_i".
+  iDestruct (pri_inv_tok_split with "Hitok_i") as "(Hitok_ikeep&Hitok_ishare)".
+  iMod (pri_inv_alloc Einv _ _ (staged_inv_inner ⊤ Einv mj mj_ishare γ γ' γstatus Pc) with "[HP H1 Hitok_ishare Hstat1]") as
+      "#Hpri_inv"; auto.
+  { iNext. rewrite staged_inv_inner_unfold. iExists _, _, idle, P, True%I. iFrame "∗ #".
+    iLeft. iFrame. iModIntro. iIntros "HP HC". iModIntro. iDestruct ("Hwand" with "[$]") as "$"; eauto.
+  }
+
+  iAssert (crash_borrow P Pc)%I with "[Hlt1 H2 Hstat2 Hitok_u]"  as "Hborrow".
+  {
+    iFrame.
+    iExists _, _, _, _, _, _. iFrame "∗". iFrame "Hsaved Hsaved'".
+    iExists _, _. iFrame "Hpri_inv". eauto.
+  }
+
+  iAssert (staged_inv_cancel ⊤ mj Pc)%I with "[Hitok_ikeep Hpending Hlt2]" as "Hcancel".
+  {
+    iExists _, _, _, _, _, _, _. iFrame "%". iFrame. eauto.
+  }
+  iSpecialize ("Hwpc" with "[$]").
+  rewrite wpc_unfold /wpc_pre.
+  iSpecialize ("Hwpc" $! mj). iDestruct ("Hwpc") as "(Hwpc&_)".
+  rewrite Hnv.
+  iMod (later_tok_decr with "[$]") as (ns' Heq) "Hg".
+  iMod ("Hwpc" with "[$] [$] [$]") as "Hwpc".
   iModIntro.
-  iSplitL "Htok1 H".
-  { iNext. iApply (cred_frag_join with "[$]"). }
-  iSplit; last admit.
+  iApply (step_fupd_extra.step_fupd2N_le (S (num_laters_per_step ns')) (num_laters_per_step ns) with "[-]").
+  { assert (Hlt: ns' < ns) by lia.
+    apply num_laters_per_step_lt in Hlt. lia.
+  }
+  iApply (step_fupd2N_wand with "Hwpc").
+  iIntros "($&H)".
+  iIntros. iMod ("H" with "[//]") as "(Hσ&Hg&Hwp&$)".
+  iFrame.
+  iMod (later_tok_incrN 10 with "[$]") as "(Hg&Htoks)".
+  iMod (global_state_interp_le _ ((step_count_next ns)) _ _ with "Hg") as "Hg".
+  { by apply step_count_next_add. }
+  iFrame.
+  iMod ("Hclo" with "[Htoks]").
+  { iNext. replace 3 with (1 + 1 + 1) by lia. rewrite -?cred_frag_join.
+    iDestruct "Htoks" as "(?&?&?&?)"; iFrame. }
   iModIntro.
-  iApply (wpc_staged_inv_init _ _ _ _ _ _ P Pc).
-  { iFrame "∗ #". iIntros "H". iApply "Hb". iFrame. }
-Admitted.
+  iApply (wpc0_staged_inv_cancel with "[$]").
+  { destruct (to_val e2); eauto. }
+  { auto. }
+  iApply (wpc0_strong_mono with "Hwp"); auto.
+  { destruct (to_val e2); eauto. }
+Qed.
+
 
 End crash_borrow_def.
