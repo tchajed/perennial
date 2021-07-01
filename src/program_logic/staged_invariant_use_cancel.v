@@ -44,9 +44,9 @@ Implicit Types N : namespace.
 Implicit Types P Q R : iProp Σ.
 Existing Instances pri_inv_tok_timeless later_tok_timeless.
 
-Lemma wpc_staged_inv_inuse_cancel_aux k e E1' E1 mj mj_wp mj_ukeep Φ Φc P :
-  staged_value_inuse_cancel k e E1' E1 mj mj_wp mj_ukeep Φ Φc P -∗
-  wpc0 NotStuck k mj E1 e Φ Φc.
+Lemma wpc_staged_inv_inuse_cancel_aux k e E1' mj mj_wp mj_ukeep Φ Φc P :
+  staged_value_inuse_cancel k e E1' ⊤ mj mj_wp mj_ukeep Φ Φc P -∗
+  wpc0 NotStuck k mj ⊤ e Φ Φc.
 Proof.
   iIntros "Hsv".
   iLöb as "IH" forall (e).
@@ -224,7 +224,7 @@ Proof.
     }
     iFrame "HNC".
     iMod (saved_prop_alloc
-            (wpc0 NotStuck k mj_wp E1 e2 (λ v : val Λ, staged_inv_cancel E1 mj_wp P ∗ Φc ∧ Φ v)
+            (wpc0 NotStuck k mj_wp ⊤ e2 (λ v : val Λ, staged_inv_cancel _ mj_wp P ∗ Φc ∧ Φ v)
               (Φc ∗ P))%I) as (γprop_stored') "#Hsaved1''".
     iMod (saved_prop_alloc Φc) as (γprop_remainder') "#Hsaved2''".
     iMod (own_update_2 _ _ _ (● Excl' (γprop_stored', γprop_remainder') ⋅
@@ -278,16 +278,15 @@ Proof.
   }
 Qed.
 
-Lemma wpc_staged_inv_use_idle k E1 E1' e Φ Φc Qs P :
+Lemma wpc_staged_inv_use_cancel k E1 e Φ Φc Qs P :
   to_val e = None →
-  E1 ⊆ E1' →
-  staged_value E1' Qs P ∗
+  staged_value ⊤ Qs P ∗
                (Φc ∧ (Qs -∗ ∀ mj_wp, WPC e @ NotStuck; k; E1
-                                             {{(λ v : val Λ, staged_inv_cancel E1 mj_wp P ∗ (Φc ∧ Φ v)) }}
+                                             {{(λ v : val Λ, staged_inv_cancel ⊤ mj_wp P ∗ (Φc ∧ Φ v)) }}
                                              {{ Φc ∗ P }}))
   ⊢ WPC e @ NotStuck; k; E1 {{ Φ }} {{ Φc }}.
 Proof.
-  iIntros (Hnval Hsub) "(Hstaged&Hwp)".
+  iIntros (Hnval) "(Hstaged&Hwp)".
   iDestruct "Hstaged" as (??????) "(Hown&Hownstat&#Hsaved1&#Hsaved2&Hltok&Hitok&Hinv)".
   iDestruct "Hinv" as (mj_wp_init mj_ishare Hlt) "#Hinv".
   rewrite /staged_inv.
@@ -425,7 +424,7 @@ Proof.
 
   iFrame "HNC".
     iMod (saved_prop_alloc
-            (wpc0 NotStuck k mj_wp E1 e2 (λ v : val Λ, staged_inv_cancel E1 mj_wp P ∗ Φc ∧ Φ v)
+            (wpc0 NotStuck k mj_wp ⊤ e2 (λ v : val Λ, staged_inv_cancel ⊤ mj_wp P ∗ Φc ∧ Φ v)
               (Φc ∗ P))%I) as (γprop_stored') "#Hsaved1''".
   iMod (saved_prop_alloc Φc) as (γprop_remainder') "#Hsaved2''".
   iMod (own_update_2 _ _ _ (● Excl' (γprop_stored', γprop_remainder') ⋅
@@ -473,7 +472,7 @@ Proof.
         etransitivity; first eapply Qp_le_min_l.
         eapply Qp_le_min_r.
   }
-  iAssert (staged_value_inuse_cancel k e2 E1' E1 mj mj_wp mj_ukeep Φ Φc P) with "[-]" as "Hsv".
+  iAssert (staged_value_inuse_cancel k e2 ⊤ ⊤ mj mj_wp mj_ukeep Φ Φc P) with "[-]" as "Hsv".
   {
     iExists _, _, mj_ishare, _, _, _, _, _. iExists _. iFrame "∗".
     iSplit; first eauto.

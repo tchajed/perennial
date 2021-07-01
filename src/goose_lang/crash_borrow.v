@@ -1,5 +1,6 @@
 From Perennial.program_logic Require Import staged_invariant.
 From Perennial.goose_lang Require Import crash_modality lifting wpr_lifting.
+From Perennial.goose_lang Require Import wpc_proofmode.
 
 
 Section crash_borrow_def.
@@ -35,7 +36,7 @@ Proof.
     etransitivity; last eapply (Nat.pow_le_mono_r _ 1); try (simpl; lia).
   - intros n1 n2 Hlt => /=. lia.
   - intros n1 n2 Hlt => /=. lia.
-Qed.
+Defined.
 
 Lemma ownfCP_inf_le1 γ (q : Qp) (E : coPset) :
   ownfCP_inf γ q E -∗ ⌜ q ≤ 1 ⌝%Qp.
@@ -117,6 +118,36 @@ Proof.
 Qed.
 
 Definition crash_borrow Ps Pc : iProp Σ :=
-  (staged_value_idle ⊤ Ps True%I Pc ∗ later_tok ∗ later_tok ∗ later_tok).
+  (staged_value_idle ⊤ Ps True%I Pc ∗ later_tok).
+
+Lemma wpc_crash_borrow_init s k e K `{!LanguageCtx K} Φ Φc P Pc `{Atomic _ StronglyAtomic e} :
+  language.to_val e = None →
+  P -∗
+  □ (P -∗ Pc) -∗
+  WPC e @ s; k; (⊤ ∖ ↑borrowN) {{ λ v, crash_borrow P Pc -∗ WPC K (of_val v) @ s; k; ⊤ {{ v, Φ v }} {{ Φc }} }} {{ Φc }} -∗
+  WPC K e @ s; k; ⊤ {{ Φ }} {{ Φc ∗ Pc }}.
+Proof.
+  iIntros (Hnv) "HP #Hwand Hwpc".
+  iApply wpc_bind.
+  iApply wpc_borrow_inv.
+  iIntros "#Hinv".
+  iApply wpc_atomic; iSplit; first admit.
+  iInv "Hinv" as ">H".
+  rewrite /crash_borrow_ginv_number.
+  iDestruct (cred_frag_split 1 _ with "H") as "(Hlt1&H)".
+  iApply (wpc_wp _ k _ _ _ True).
+  iApply (wpc_later_tok_invest _ _ _ k with "[Hlt1]"); auto.
+  iApply (wpc_strong_mono with "Hwpc"); auto.
+  iSplit; last auto.
+  iIntros (v') "Hb !> Htok".
+  iDestruct "Htok" as "(Htok1&Htok2&Htok3&Htok4&_)".
+  iModIntro.
+  iSplitL "Htok1 H".
+  { iNext. iApply (cred_frag_join with "[$]"). }
+  iSplit; last admit.
+  iModIntro.
+  iApply (wpc_staged_inv_init _ _ _ _ _ _ P Pc).
+  { iFrame "∗ #". iIntros "H". iApply "Hb". iFrame. }
+Admitted.
 
 End crash_borrow_def.

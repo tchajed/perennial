@@ -40,7 +40,9 @@ Proof.
   iApply (step_fupdN_wand with "H"). iIntros "($&H)".
   iIntros. iMod "Hclo". iMod ("H" with "[//]") as "($ & $ & He & Hef)".
   iModIntro. iFrame. iSplitL "He".
-  - by iApply wpc0_wpc.
+  - iApply wpc0_wpc.
+    iApply (wpc_strong_mono' with "[$]"); auto.
+    destruct (to_val); set_solver.
   - iApply (big_sepL_mono with "Hef")=>???/=. iApply wpc0_wpc.
 Qed.
 

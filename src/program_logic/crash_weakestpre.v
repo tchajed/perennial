@@ -432,7 +432,7 @@ Definition wpc_pre `{!irisGS Λ Σ} (s : stuckness) (k : nat) (mj: fracR)
         ∀ e2 σ2 g2 efs, ⌜prim_step e1 σ1 g1 κ e2 σ2 g2 efs⌝ -∗ ||={∅|∅,E1|⊤∖D}=>
           (state_interp σ2 (length efs + nt) ∗
           global_state_interp g2 (step_count_next ns) mj D κs ∗
-          wpc E1 e2 Φ Φc ∗
+          wpc (match to_val e2 with | Some _ => E1 | _ => ⊤ end) e2 Φ Φc ∗
           ([∗ list] i ↦ ef ∈ efs, wpc ⊤ ef fork_post True) ∗
           NC q))
    end ∧
@@ -610,7 +610,7 @@ Proof. rewrite wpc_eq. rewrite /wpc_def. f_equiv => mj. apply wpc0_unfold. Qed.
 Global Instance wpc0_ne s k mj E1 e n :
   Proper (pointwise_relation _ (dist n) ==> dist n ==> dist n) (wpc0 s k mj E1 e).
 Proof.
-  revert e. induction (lt_wf n) as [n _ IH]=> e Φ Ψ HΦ Φc Ψc HΦc.
+  revert E1 e. induction (lt_wf n) as [n _ IH]=> E1 e Φ Ψ HΦ Φc Ψc HΦc.
   rewrite !wpc0_unfold /wpc_pre.
   (* FIXME: figure out a way to properly automate this proof *)
   (* FIXME: reflexivity, as being called many times by f_equiv and f_contractive
@@ -677,7 +677,14 @@ Proof.
     iDestruct "H" as "(Hσ & Hg & H & Hefs & HNC)". iMod "Hclo" as "_". iModIntro.
     iFrame.
     iSplitR "Hefs".
-    ** iApply ("IH" with "[] H [HΦ]"); auto.
+    ** iApply ("IH" with "[] H [HΦ]"); first (destruct (to_val e2); auto).
+       iSplit.
+       *** iDestruct "HΦ" as "(HΦ&_)". iIntros (v) "H".
+           iMod (ncfupd_mask_subseteq E2) as "Hclo"; first (destruct (to_val e2); set_solver).
+           iMod ("HΦ" with "[$]"). iMod "Hclo". eauto.
+       *** iDestruct "HΦ" as "(_&HΦ)". iIntros "H".
+           iApply (cfupd_weaken_all); last (by iApply "HΦ"); auto.
+           destruct (to_val e2); set_solver.
     ** iApply (big_sepL_impl with "Hefs"); iIntros "!#" (k ef _).
        iIntros "H". eauto. iApply ("IH" with "[] H"); auto.
   - iDestruct "H" as "(_&H)". iDestruct "HΦ" as "(_&HΦ)".
@@ -715,7 +722,14 @@ Proof.
     iMod ("H" with "[//]") as "(Hσ & Hg & H & Hefs & HNC)". iMod "Hclo" as "_". iModIntro.
     iFrame.
     iSplitR "Hefs".
-    ** iApply (wpc0_strong_mono with "[H] [HΦ]"); eauto.
+    ** iApply (wpc0_strong_mono with "H [HΦ]"); eauto;  first (destruct (to_val e2); auto).
+       iSplit.
+       *** iDestruct "HΦ" as "(HΦ&_)". iIntros (v) "H".
+           iMod (ncfupd_mask_subseteq E2) as "Hclo"; first (destruct (to_val e2); set_solver).
+           iMod ("HΦ" with "[$]"). iMod "Hclo". eauto.
+       *** iDestruct "HΦ" as "(_&HΦ)". iIntros "H".
+           iApply (cfupd_weaken_all); last (by iApply "HΦ"); auto.
+           destruct (to_val e2); set_solver.
     ** iApply (big_sepL_impl with "Hefs"); iIntros "!#" (k ef _).
        iIntros "H".  iApply (wpc0_strong_mono with "H []"); eauto.
   - iDestruct "H" as "(_&H)". iDestruct "HΦ" as "(_&HΦ)".
@@ -876,6 +890,8 @@ Proof.
     iFrame.
     iSplitR "Hefs".
     ** iApply ("IH" with "[] [] H [HΦ]"); auto.
+       { destruct (to_val e2); auto. }
+       { destruct (to_val e2); auto. }
     ** iApply (big_sepL_impl with "Hefs"); iIntros "!#" (k ef _).
        iIntros "H". eauto. iApply (wpc0_strong_mono with "H"); eauto.
   - iDestruct "H" as "(_&H)". iIntros.
@@ -1273,11 +1289,16 @@ Proof.
     iIntros (e2 σ2 g2 efs Hstep).
     iMod ("H" with "[//]") as "(Hσ & Hg & H & Hefs & HNC)".
     iMod "HR". iModIntro. iFrame "Hσ Hefs". iFrame.
-    iApply (wpc0_strong_mono s s k k mj E2 with "H"); auto.
+    iApply (wpc0_strong_mono s s k k mj _ with "H"); auto.
+    { destruct (to_val e2); set_solver. }
     iSplit.
-    * iIntros (?) "H". iDestruct "HR" as "(HR&_)". by iMod ("H" with "[$]").
+    * iIntros (?) "H". iDestruct "HR" as "(HR&_)".
+      iApply (ncfupd_mask_mono); last by by iMod ("H" with "[$]"). auto.
+      { destruct (to_val e2); set_solver. }
     * iDestruct "HR" as "(_&HR)". iIntros "H".
-      iMod (cfupd_weaken_all with "HR"); auto. iModIntro. by iApply "H".
+      iMod (cfupd_weaken_all with "HR"); auto.
+      { destruct (to_val e2); set_solver. }
+      iModIntro. by iApply "H".
 Qed.
 
 (* written to match the premise of wpc_bind *)
@@ -1299,8 +1320,11 @@ Proof.
 Qed.
 *)
 
-Lemma wpc_bind K `{!LanguageCtx K} s k E1 e Φ Φc :
-  WPC e @ s; k; E1 {{ v, WPC K (of_val v) @ s; k; E1 {{ Φ }} {{ Φc }} }} {{ Φc }}
+Lemma wpc_bind' K `{!LanguageCtx K} s k E1 e Φ Φc :
+  WPC e @ s; k; E1 {{ v, WPC K (of_val v) @ s; k; (match to_val e, to_val (K (of_val v)) with
+                                                  | Some _, _ | _, Some _ => E1
+                                                  | _, _ => ⊤
+                                                  end) {{ Φ }} {{ Φc }} }} {{ Φc }}
                      ⊢ WPC K e @ s; k; E1 {{ Φ }} {{ Φc }}.
 Proof.
   iIntros "H". rewrite ?wpc_eq. iIntros (mj). iSpecialize ("H" $! mj).
@@ -1345,7 +1369,52 @@ Proof.
   iSpecialize ("H" $! e2' σ2 g2 efs with "[//]").
   simpl. iMod "H". iModIntro.
   iDestruct "H" as "(Hσ&Hg&H&Hefs&$)".
-  iFrame "Hσ Hg Hefs". by iApply "IH".
+  iFrame "Hσ Hg Hefs".
+  destruct (to_val e2') eqn:Hval'; eauto.
+  - destruct (to_val (K e2')) eqn:Hval''.
+    { iApply ("IH" with "[H]").
+      iApply (wpc0_strong_mono with "H"); auto.
+      iSplit; last by (iIntros "? !>"; eauto).
+      iIntros (v') "H".
+      iModIntro.
+      rewrite Hval'.
+      assert (is_Some (to_val (K (of_val v')))) as (?&->).
+      { eapply fill_val_inv. apply of_to_val in Hval'. rewrite -Hval' // in Hval''. eauto. }
+      eauto.
+    }
+    { iApply ("IH" with "[H]").
+      iApply (wpc0_strong_mono with "H"); auto.
+      iSplit; last by (iIntros "? !>"; eauto).
+      iIntros (v') "H".
+      iModIntro.
+      rewrite Hval'.
+      rewrite -wpc_eq.
+      iApply (wpc_strong_mono with "H"); auto.
+    }
+  - rewrite fill_not_val //.
+    iApply ("IH" with "[H]").
+    iApply (wpc0_strong_mono with "H"); auto.
+    iSplit; last by (iIntros "? !>"; eauto).
+    iIntros (v') "H".
+    iModIntro.
+    rewrite Hval'.
+    rewrite -wpc_eq.
+    iApply (wpc_strong_mono with "H"); auto.
+    destruct (to_val (K (of_val v'))); set_solver.
+Qed.
+
+Lemma wpc_bind K `{!LanguageCtx K} s k E1 e Φ Φc :
+  WPC e @ s; k; E1 {{ v, WPC K (of_val v) @ s; k; E1 {{ Φ }} {{ Φc }} }} {{ Φc }}
+                     ⊢ WPC K e @ s; k; E1 {{ Φ }} {{ Φc }}.
+Proof.
+  iIntros "H".
+  iApply wpc_bind'.
+  iApply (wpc_strong_mono' with "H"); auto.
+  iSplit; auto.
+  iIntros. iModIntro.
+  iApply (wpc_strong_mono' with "[$]"); auto.
+  { destruct (to_val _); auto.
+    destruct (to_val _); auto. }
 Qed.
 
 (*
@@ -1393,7 +1462,8 @@ Proof.
   iIntros. iMod "Hclo". iMod ("H" with "[//]") as "H". iModIntro.
   iDestruct "H" as "($&$&Hwpc&Hlist)".
   iSplitL "Hwpc".
-  - by iApply wpc0_wpc.
+  - iApply wpc0_wpc. iApply (wpc_strong_mono with "[$]"); eauto.
+    destruct (to_val _); set_solver.
   - iFrame. iApply (big_sepL_mono with "Hlist"). intros.
       by iApply wpc0_wpc.
 Qed.

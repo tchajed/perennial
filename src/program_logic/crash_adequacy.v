@@ -50,6 +50,7 @@ Proof.
   iApply (step_fupd2N_wand with "H"). iIntros "(_&H)".
   iMod ("H" $! e2 σ2 g2 efs with "[//]") as "H".
   iMod "Hclo". iModIntro. eauto.
+  destruct (to_val e2); eauto.
 Qed.
 
 Lemma wptp_step s k e1 t1 t2 κ κs σ1 g1 ns D σ2 g2 Φ Φc :

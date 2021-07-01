@@ -132,7 +132,7 @@ Context `{PRI: !pri_invG IRISG}.
       iSplitL "Hg Hclo".
       { iApply "Hclo"; auto. }
       iSplitL "Hwpc".
-      { iApply "IH"; auto. }
+      { destruct (to_val e2); iApply "IH"; auto. }
       iApply (big_sepL_impl with "Hefs"). iIntros "!#" (?? _).
       iIntros "H". eauto. iApply ("IH" with "H"); auto.
   Qed.
@@ -181,7 +181,6 @@ Context `{PRI: !pri_invG IRISG}.
     iDestruct ("Hclo" with "[$]") as "$".
     iIntros "!> !>". rewrite pri_inv_eq /pri_inv_def. iExists _. iFrame; eauto.
   Qed.
-
 
   Lemma pri_inv_tok_disable_reenable E g ns q D κ :
     pri_inv_tok q E ∗ global_state_interp g ns q D κ ==∗

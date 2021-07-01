@@ -89,6 +89,7 @@ Proof.
   iMod ("H" with "[//]") as "($ & Hg & H & $ & HNC)".
   - destruct (atomic _ _ _ _ _ _ _ Hstep) as [v <-%of_to_val].
     iDestruct (wpc0_value_inv' with "H") as "H".
+    rewrite to_of_val.
     iMod ("H" with "[$] [$]") as "(H&Hg&HNC)".
     iMod ("H" with "[$]") as "(H&HNC)".
     iModIntro. iFrame. rewrite wpc0_unfold /wpc_pre.
@@ -142,8 +143,11 @@ Proof.
     iIntros "!> [$ H]". iIntros.
     iMod "HP". simpl. iMod ("H" with "[//]") as "($ & $ & Hwp & $)". iMod "HP".
     iModIntro. iApply (wpc0_strong_mono with "Hwp"); auto.
+    { destruct (to_val _); eauto. }
     iSplit; last by auto.
-    iIntros (v) "HΦ". iMod ("HΦ" with "HP"). done.
+    iIntros (v) "HΦ".
+    iApply (ncfupd_mask_mono); last by iMod ("HΦ" with "[$]").
+    { destruct (to_val _); eauto. }
   - destruct n0 as [|n0]; [lia|]=>/=.
     iMod "H".
     iModIntro. iNext. iMod "HP". iMod "H".
