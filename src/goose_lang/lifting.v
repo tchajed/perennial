@@ -474,9 +474,10 @@ Definition tls (na: naMode) : lock_state :=
 
 Global Existing Instances heapG_na_heapG.
 
+Definition borrowN := nroot.@"borrow".
 Definition crash_borrow_ginv_number : nat := 3%nat.
 Definition crash_borrow_ginv `{!invGS Σ} `{creditGS Σ}
-  := (inv (nroot.@"borrow") (cred_frag crash_borrow_ginv_number)).
+  := (inv borrowN (cred_frag crash_borrow_ginv_number)).
 
 Global Program Instance heapG_irisG `{!heapGS Σ}:
   irisGS goose_lang Σ := {
@@ -717,6 +718,35 @@ Implicit Types efs : list expr.
 Implicit Types σ : state.
 Implicit Types v : val.
 Implicit Types l : loc.
+
+Lemma wpc_borrow_inv s k E e Φ Φc :
+  (crash_borrow_ginv -∗ WPC e @ s; k; E {{ Φ }} {{ Φc }}) -∗
+  WPC e @ s; k; E {{ Φ }} {{ Φc }}.
+Proof.
+  iIntros "H".
+  rewrite wpc_unfold.
+  iIntros (mj). rewrite /wpc_pre.
+  iSplit; last first.
+  { iIntros (????) "Hg HC".
+    iAssert (crash_borrow_ginv) with "[Hg]" as "#Hinv". 
+    { iDestruct "Hg" as "(_&#Hinv&_)". eauto. }
+    iDestruct ("H" with "[$]") as "H".
+    iDestruct ("H" $! _) as "(_&H)".
+    iApply ("H" with "[$]"); eauto. }
+  destruct (language.to_val _).
+  - iIntros (?????) "Hg HNC".
+    iAssert (crash_borrow_ginv) with "[Hg]" as "#Hinv".
+    { iDestruct "Hg" as "(_&#Hinv&_)". eauto. }
+    iDestruct ("H" with "[$]") as "H".
+    iDestruct ("H" $! _) as "(H&_)".
+    iApply ("H" with "[$]"); eauto.
+  - iIntros (????????) "Hσ Hg HNC".
+    iAssert (crash_borrow_ginv) with "[Hg]" as "#Hinv".
+    { iDestruct "Hg" as "(_&#Hinv&_)". eauto. }
+    iDestruct ("H" with "[$]") as "H".
+    iDestruct ("H" $! _) as "(H&_)".
+    iApply ("H" with "[$] [$]"); eauto.
+Qed.
 
 Lemma wp_panic s msg E Φ :
   ▷ False -∗ WP Panic msg @ s; E {{ Φ }}.
