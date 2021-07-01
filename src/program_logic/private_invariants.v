@@ -20,7 +20,8 @@ Class pri_invG {Λ Σ} (IRISG : irisGS Λ Σ) := {
   pri_inv_tok_global_valid : ∀ g ns q D κ, global_state_interp g ns q D κ -∗ ⌜ /2 < q ∧ q ≤ 1⌝%Qp;
   pri_inv_tok_global_split :
      ∀ g ns q1 q2 D κ, ⌜ /2 < q2 ⌝%Qp -∗ global_state_interp g ns (q1 + q2)%Qp D κ -∗
-                         global_state_interp g ns q2 D κ ∗ pri_inv_tok q1 D;
+                         global_state_interp g ns q2 D κ ∗
+                         (∀ g ns κ, global_state_interp g ns q2 D κ -∗ global_state_interp g ns (q1 + q2)%Qp D κ);
   pri_inv_tok_global_join :
      ∀ g ns q1 q2 D κ, global_state_interp g ns q2 D κ ∗ pri_inv_tok q1 D -∗
                        global_state_interp g ns (q1 + q2)%Qp D κ;
@@ -94,7 +95,7 @@ Context `{PRI: !pri_invG IRISG}.
     rewrite Qp_add_comm in Hplus.
     rewrite -Hplus.
     iDestruct (pri_inv_tok_global_split with "[] Hg") as "(Hg&Hitok)"; eauto.
-    iFrame. iIntros. iApply pri_inv_tok_global_join. by iFrame.
+    iFrame.
   Qed.
 
   Lemma wpc0_mj_le s k mj1 mj2 e Φ Φc:

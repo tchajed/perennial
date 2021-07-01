@@ -21,8 +21,8 @@ Program Global Instance heapG_perennialG `{!heapGS Σ} :
   perennial_irisG := λ Hcrash hnames,
                      @heapG_irisG _ _ _ _ _ (heap_update_local _ _ _ Hcrash (@pbundleT _ _ hnames));
   perennial_crashG := λ _ _, eq_refl;
-  perennial_num_laters_per_step := (λ n, (n + 1) * (n + 1) * (n + 1))%nat;
-  perennial_step_count_next := (λ n, 10 + n)%nat;
+  perennial_num_laters_per_step := (λ n, 3 ^ (n + 1))%nat;
+  perennial_step_count_next := (λ n, 10 * n)%nat;
 }.
 Next Obligation. eauto. Qed.
 Next Obligation. eauto. Qed.
@@ -102,8 +102,9 @@ Proof.
       { rewrite ?ffi_global_ctx_nolocal //. }
       unshelve (iExists _); auto.
       iDestruct "Hg" as "($&Hc&$)".
-      iMod (cred_interp_incr_k _ 10 with "Hc") as "(Hc&_)".
-      rewrite plus_comm. by iFrame "Hc".
+      iMod (cred_interp_incr_k _ (9 * ns) with "Hc") as "(Hc&_)".
+      assert (ns + 9 * ns = 10 * ns)%nat as -> by lia.
+      by iFrame.
     }
   }
 Qed.

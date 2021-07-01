@@ -482,8 +482,8 @@ Global Program Instance heapG_irisG `{!heapGS Σ}:
   irisGS goose_lang Σ := {
   iris_invG := heapG_invG;
   iris_crashG := heapG_crashG;
-  num_laters_per_step := (λ n, (n + 1) * (n + 1) * (n + 1))%nat;
-  step_count_next := (λ n, 10 + n)%nat;
+  num_laters_per_step := (λ n, 3 ^ (n + 1))%nat;
+  step_count_next := (λ n, 10 * n)%nat;
   state_interp σ nt :=
     (na_heap_ctx tls σ.(heap) ∗ ffi_ctx heapG_ffiG σ.(world)
       ∗ trace_auth σ.(trace) ∗ oracle_auth σ.(oracle))%I;
@@ -491,6 +491,7 @@ Global Program Instance heapG_irisG `{!heapGS Σ}:
     (ffi_global_ctx heapG_ffiG g ∗
      @crash_borrow_ginv _ heapG_invG _ ∗
      cred_interp ns ∗
+     ⌜(/ 2 < mj ≤ 1) ⌝%Qp ∗
      pinv_tok mj D)%I;
   fork_post _ := True%I;
 }.
