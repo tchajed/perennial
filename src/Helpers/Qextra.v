@@ -185,3 +185,51 @@ Proof.
   - rewrite /Qcanon.Qclt => //=.
     rewrite ?Qred_correct; auto.
 Qed.
+
+Local Open Scope Qp.
+
+Lemma Qp_add_cancel (p q r : Qp) :
+  p + q = p + r →
+  q = r.
+Proof.
+  intros Heq.
+  apply (anti_symm (≤)%Qp).
+  - rewrite (Qp_add_le_mono_l _ _ p). rewrite Heq. eauto.
+  - rewrite (Qp_add_le_mono_l _ _ p). rewrite Heq. eauto.
+Qed.
+
+Lemma Qp_plus_split_alt (q1 q2 : Qp) :
+  ((/2 < q1 < q2) →
+  (q2 ≤ 1) →
+  ∃ qa qb,
+    qa + qa + qb = 1 ∧
+    1 < q2 + qa ∧
+    q1 ≤ qa + qb)%Qp.
+Proof.
+  intros Hrange1 Hrange2.
+  assert (q1 < 1)%Qp as Hlt1.
+  { eapply Qp_lt_le_trans; try eassumption. naive_solver. }
+  apply (Qp_split_1) in Hlt1 as (qa&Heq).
+  assert (∃ qb, (qa + qa) + qb = 1) as (qb&Heq_qb).
+  { apply Qp_split_1.
+    cut (qa < /2).
+    { intros. rewrite -Qp_inv_half_half. apply Qp_add_lt_mono; auto. }
+    apply Qp_lt_nge. intros Hge.
+    assert (Hfalse: 1 < q1 + qa).
+    { rewrite -Qp_inv_half_half.
+      destruct Hrange1 as (Hlt1&Hlt2).
+      eapply Qp_lt_le_trans.
+      { apply Qp_add_lt_mono_r; (try eassumption). }
+      apply Qp_add_le_mono_l. auto. }
+    rewrite Heq in Hfalse.
+    apply Qp_lt_nge in Hfalse. apply Hfalse. eauto.
+  }
+  exists qa, qb.
+  split_and!; try eauto.
+  * rewrite -Heq. apply Qp_add_lt_mono_r. naive_solver.
+  * rewrite -Heq in Heq_qb.
+    rewrite (comm _ q1 qa) in Heq_qb.
+    rewrite -assoc in Heq_qb.
+    apply Qp_add_cancel in Heq_qb.
+    rewrite -Heq_qb //.
+Qed.

@@ -475,7 +475,7 @@ Definition tls (na: naMode) : lock_state :=
 Global Existing Instances heapG_na_heapG.
 
 Definition borrowN := nroot.@"borrow".
-Definition crash_borrow_ginv_number : nat := 3%nat.
+Definition crash_borrow_ginv_number : nat := 6%nat.
 Definition crash_borrow_ginv `{!invGS Σ} `{creditGS Σ}
   := (inv borrowN (cred_frag crash_borrow_ginv_number)).
 

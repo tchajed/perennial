@@ -277,5 +277,174 @@ Proof.
   iMod "H" as "(_&H)". by iMod ("H" with "[$] [$]") as "$".
 Qed.
 
+Lemma wpc_crash_modality_combine E1 mj P1 P2 :
+  later_tok -∗
+  ▷ wpc_crash_modality E1 mj P1 -∗
+  ▷ wpc_crash_modality E1 mj P2 -∗
+  wpc_crash_modality E1 mj (P1 ∗ P2).
+Proof.
+  iIntros "Htok H1 H2".
+  rewrite /wpc_crash_modality.
+  iIntros (g1 ns D κs) "Hg #C".
+  iMod (later_tok_decr with "[$]") as (ns' Hle) "Hg".
+  iApply (step_fupd2N_inner_fupd2).
+  iApply (step_fupd2N_inner_le).
+  { apply (num_laters_per_step_exp ns'). lia. }
+  iMod (fupd2_mask_subseteq ∅ ∅) as "Hclo'"; try set_solver+.
+  iEval (simpl).
+  do 2 (iModIntro; iModIntro; iNext).
+  iMod "Hclo'".
+  iApply step_fupd2N_inner_plus.
+  iSpecialize ("H1" with "[$] [$]").
+  iApply (step_fupd2N_inner_wand with "H1"); auto.
+  iIntros "(Hg&HP1)".
+  iSpecialize ("H2" with "[$] [$]").
+  iApply (step_fupd2N_inner_wand with "H2"); auto.
+  iIntros "(Hg&$)".
+  iMod (global_state_interp_le with "[$]") as "$"; auto. lia.
+Qed.
+
+Lemma wpc_crash_modality_split E Einv mj1 mj2 P1 P2 :
+  (/2 < mj1 < mj2)%Qp →
+  later_tok -∗
+  later_tok -∗
+  pri_inv_tok 1%Qp Einv -∗
+  wpc_crash_modality E mj1 (P1 ∗ P2) -∗
+  ||={∅|∅, ∅|∅}=> wpc_crash_modality E mj2 P1 ∗ wpc_crash_modality E mj2 P2.
+Proof using stagedG0.
+  destruct (decide (mj2 ≤ 1)%Qp) as [Hle|Hnle]; last first.
+  { iIntros. iModIntro.
+    iSplitL.
+    - iIntros (????) "Hg HC".
+      iDestruct (pri_inv_tok_global_valid with "[$]") as %(?&?).
+      exfalso. naive_solver.
+    - iIntros (????) "Hg HC".
+      iDestruct (pri_inv_tok_global_valid with "[$]") as %(?&?).
+      exfalso. naive_solver.
+  }
+  iIntros (Hlt) "Hltok Hltok2 H".
+  iIntros "Hg".
+  destruct (Qp_plus_split_alt mj1 mj2) as (qa&qb&Hle1&Hlt2&Hle3); auto.
+  rewrite -Hle1.
+  iDestruct (pri_inv_tok_split with "H") as "(Hqa&Hqb)".
+  iDestruct (pri_inv_tok_split with "Hqa") as "(Hqa1&Hqa2)".
+  iMod (pending_alloc) as (γ1) "H1".
+  iMod (pending_alloc) as (γ2) "H2".
+  iDestruct (pri_inv_tok_infinite with "Hqb") as %Hinf.
+  iMod (pri_inv_alloc Einv _ _
+                      (pri_inv_tok qb Einv ∗ (wpc_crash_modality E mj1 (P1 ∗ P2) ∨
+                                              ((P1 ∨ staged_done γ1) ∗ (P2 ∨ staged_done γ2)))) with "[$Hqb $Hg]")
+  as "#Hinv"; first done.
+  iModIntro.
+  iSplitL "Hltok Hqa1 H1".
+  {
+    rewrite /wpc_crash_modality.
+    iIntros.
+    iMod (later_tok_decr with "[$]") as (ns' Hle') "Hg".
+    iApply (step_fupd2N_inner_fupd2).
+    iApply (step_fupd2N_inner_le _ (S (num_laters_per_step ns'))).
+    { apply lt_le_S. apply (num_laters_per_step_lt). lia. }
+    simpl.
+    iDestruct (pri_inv_tok_disj with "[$]") as %[Hdisj|Hval]; last first.
+    { exfalso. apply Qp_lt_nge in Hlt2. revert Hval. rewrite frac_valid.
+      intros HleX. apply Hlt2. etransitivity; last eassumption.
+      apply Qp_add_le_mono_r. auto. }
+    iMod (pri_inv_acc with "Hinv") as "(Hinner&Hclo)".
+    { set_solver. }
+    iMod (fupd2_mask_subseteq ∅ ∅) as "Hclo'"; try set_solver+.
+    iModIntro. iModIntro. iNext. iMod "Hclo'".
+    iDestruct "Hinner" as "(Htok&Hcases)".
+    iDestruct "Hcases" as "[Hunrun|Hrun]".
+    {
+      iDestruct (pri_inv_tok_join with "Hqa1 Htok") as "Hitok'".
+      iDestruct (pri_inv_tok_le_acc mj1 with "[$]") as "(Hitok&Hitok_clo)".
+      { auto. }
+      iDestruct (pri_inv_tok_global_le_acc _ _ _ mj1 with "[] Hg") as "(Hg&Hg_clo)".
+      { iPureIntro. split; first naive_solver.
+        apply Qp_lt_le_incl; naive_solver. }
+      iMod (pri_inv_tok_disable with "[$Hg $Hitok]") as "Hg".
+      replace (⊤ ∖ D ∖ Einv) with (⊤ ∖ (Einv ∪ D)) by set_solver.
+      iSpecialize ("Hunrun" with "[$] [$]").
+      iMod "Hunrun".  iModIntro. iApply (step_fupd2N_wand with "Hunrun").
+      iIntros "Hunrun". iMod "Hunrun" as "(Hg&HP1&HP2)".
+      iMod (pending_upd_done with "H1") as "Hdone".
+      iMod (pri_inv_tok_enable with "[$Hg //]") as "(Hitok&Hg)".
+      iDestruct ("Hitok_clo" with "[$]") as "Hitok".
+      iDestruct (pri_inv_tok_split with "[$]") as "(Hitok1&Hitok2)".
+      iMod ("Hclo" with "[Hitok2 HP2 Hdone]").
+      { iFrame. iNext. iRight. iFrame. }
+      iModIntro.
+      iDestruct ("Hg_clo" with "[$]") as "Hg_clo".
+      iMod (global_state_interp_le with "[$]") as "$".
+      { lia. }
+      eauto.
+    }
+    iDestruct "Hrun" as "(Hrun1&Hrun2)".
+    iDestruct "Hrun1" as "[HP1|Hfalse]"; last first.
+    { iDestruct (pending_done with "[$] [$]") as %[]. }
+    iMod (pending_upd_done with "H1") as "Hdone".
+    iMod ("Hclo" with "[Hdone Hrun2 Htok]").
+    { iFrame. iRight. iNext. iFrame. }
+
+    iApply (step_fupd2N_inner_later); auto. iModIntro.
+    iMod (global_state_interp_le with "[$]") as "$".
+    { lia. }
+    iFrame. eauto.
+  }
+  {
+    rewrite /wpc_crash_modality.
+    iIntros.
+    iMod (later_tok_decr with "[$]") as (ns' Hle') "Hg".
+    iApply (step_fupd2N_inner_fupd2).
+    iApply (step_fupd2N_inner_le _ (S (num_laters_per_step ns'))).
+    { apply lt_le_S. apply (num_laters_per_step_lt). lia. }
+    simpl.
+    iDestruct (pri_inv_tok_disj with "[$]") as %[Hdisj|Hval]; last first.
+    { exfalso. apply Qp_lt_nge in Hlt2. revert Hval. rewrite frac_valid.
+      intros HleX. apply Hlt2. etransitivity; last eassumption.
+      apply Qp_add_le_mono_r. auto. }
+    iMod (pri_inv_acc with "Hinv") as "(Hinner&Hclo)".
+    { set_solver. }
+    iMod (fupd2_mask_subseteq ∅ ∅) as "Hclo'"; try set_solver+.
+    iModIntro. iModIntro. iNext. iMod "Hclo'".
+    iDestruct "Hinner" as "(Htok&Hcases)".
+    iDestruct "Hcases" as "[Hunrun|Hrun]".
+    {
+      iDestruct (pri_inv_tok_join with "Hqa2 Htok") as "Hitok'".
+      iDestruct (pri_inv_tok_le_acc mj1 with "[$]") as "(Hitok&Hitok_clo)".
+      { auto. }
+      iDestruct (pri_inv_tok_global_le_acc _ _ _ mj1 with "[] Hg") as "(Hg&Hg_clo)".
+      { iPureIntro. split; first naive_solver.
+        apply Qp_lt_le_incl; naive_solver. }
+      iMod (pri_inv_tok_disable with "[$Hg $Hitok]") as "Hg".
+      replace (⊤ ∖ D ∖ Einv) with (⊤ ∖ (Einv ∪ D)) by set_solver.
+      iSpecialize ("Hunrun" with "[$] [$]").
+      iMod "Hunrun".  iModIntro. iApply (step_fupd2N_wand with "Hunrun").
+      iIntros "Hunrun". iMod "Hunrun" as "(Hg&HP1&HP2)".
+      iMod (pending_upd_done with "H2") as "Hdone".
+      iMod (pri_inv_tok_enable with "[$Hg //]") as "(Hitok&Hg)".
+      iDestruct ("Hitok_clo" with "[$]") as "Hitok".
+      iDestruct (pri_inv_tok_split with "[$]") as "(Hitok1&Hitok2)".
+      iMod ("Hclo" with "[Hitok2 HP1 Hdone]").
+      { iFrame. iNext. iRight. iFrame. }
+      iModIntro.
+      iDestruct ("Hg_clo" with "[$]") as "Hg_clo".
+      iMod (global_state_interp_le with "[$]") as "$".
+      { lia. }
+      eauto.
+    }
+    iDestruct "Hrun" as "(Hrun1&Hrun2)".
+    iDestruct "Hrun2" as "[HP2|Hfalse]"; last first.
+    { iDestruct (pending_done with "[$] [$]") as %[]. }
+    iMod (pending_upd_done with "H2") as "Hdone".
+    iMod ("Hclo" with "[Hdone Hrun1 Htok]").
+    { iFrame. iRight. iNext. iFrame. }
+
+    iApply (step_fupd2N_inner_later); auto. iModIntro.
+    iMod (global_state_interp_le with "[$]") as "$".
+    { lia. }
+    iFrame. eauto.
+  }
+Qed.
 
 End inv.

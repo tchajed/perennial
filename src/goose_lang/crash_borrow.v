@@ -121,7 +121,7 @@ Proof.
 Qed.
 
 Definition crash_borrow Ps Pc : iProp Σ :=
-  (staged_value_idle ⊤ Ps True%I Pc).
+  (staged_value_idle ⊤ Ps True%I Pc ∗ later_tok).
 
 Lemma wpc_crash_borrow_init s k e Φ Φc P Pc :
   language.to_val e = None →
@@ -143,6 +143,8 @@ Proof.
   rewrite /crash_borrow_ginv_number.
   iDestruct (cred_frag_split 1 _ with "H") as "(Hlt1&H)".
   iDestruct (cred_frag_split 1 _ with "H") as "(Hlt2&H)".
+  iDestruct (cred_frag_split 1 _ with "H") as "(Hlt3&H)".
+  iDestruct (cred_frag_split 1 _ with "H") as "(Hlt4&_)".
   iDestruct "Hwpc" as "(_&Hwpc)".
 
   iMod (pri_inv_tok_alloc with "[$]") as (Einv Hdisj) "(Hitok&Hg)".
@@ -170,14 +172,14 @@ Proof.
     iLeft. iFrame. iModIntro. iIntros "HP HC". iModIntro. iDestruct ("Hwand" with "[$]") as "$"; eauto.
   }
 
-  iAssert (crash_borrow P Pc)%I with "[Hlt1 H2 Hstat2 Hitok_u]"  as "Hborrow".
+  iAssert (crash_borrow P Pc)%I with "[Hlt1 Hlt2 H2 Hstat2 Hitok_u]"  as "Hborrow".
   {
     iFrame.
     iExists _, _, _, _, _, _. iFrame "∗". iFrame "Hsaved Hsaved'".
     iExists _, _. iFrame "Hpri_inv". eauto.
   }
 
-  iAssert (staged_inv_cancel ⊤ mj Pc)%I with "[Hitok_ikeep Hpending Hlt2]" as "Hcancel".
+  iAssert (staged_inv_cancel ⊤ mj Pc)%I with "[Hitok_ikeep Hpending Hlt3]" as "Hcancel".
   {
     iExists _, _, _, _, _, _, _. iFrame "%". iFrame. eauto.
   }
@@ -201,8 +203,9 @@ Proof.
   { by apply step_count_next_add. }
   iFrame.
   iMod ("Hclo" with "[Htoks]").
-  { iNext. replace 3 with (1 + 1 + 1) by lia. rewrite -?cred_frag_join.
-    iDestruct "Htoks" as "(?&?&?&?)"; iFrame. }
+  { iNext.
+    repeat (iDestruct "Htoks" as "(?&Htoks)").
+    repeat (rewrite -(cred_frag_join (S 0)); iFrame). }
   iModIntro.
   iApply (wpc0_staged_inv_cancel with "[$]").
   { destruct (to_val e2); eauto. }
@@ -210,6 +213,31 @@ Proof.
   iApply (wpc0_strong_mono with "Hwp"); auto.
   { destruct (to_val e2); eauto. }
 Qed.
+
+Lemma wpc_crash_borrow_split1 k E e Φ Φc P Pc P1 P2 Pc1 Pc2 :
+  language.to_val e = None →
+  crash_borrow P Pc -∗
+  (P -∗ P1 ∗ P2) -∗
+  □ (P1 -∗ Pc1) -∗
+  □ (P2 -∗ Pc2) -∗
+  □ (Pc1 ∗ Pc2 -∗ Pc) -∗
+  WPC e @ NotStuck; k; E {{ λ v, (crash_borrow P1 Pc1 ∗ crash_borrow P2 Pc2) -∗  Φ v }} {{ Φc }} -∗
+  WPC e @ NotStuck; k; E {{ Φ }} {{ Φc }}.
+Proof.
+  iIntros (Hnval) "Hborrow Hshift #Hwand1 #Hwand2 #Hwandc Hwpc".
+  iDestruct "Hborrow" as "(Hinv&Htok)".
+  iApply (wpc_staged_inv_use_cancel); first done.
+  iFrame "Hinv".
+  iSplit.
+  { admit. }
+  iIntros "HP" (mj).
+  (* iAssert (later_tok ∗ later_tok ∗ later_tok)%I as "(Hlt1&Hlt2&Hlt3)". *)
+  iApply (wpc_later_tok_invest with "[$]"); auto.
+  
+
+
+
+
 
 
 End crash_borrow_def.
