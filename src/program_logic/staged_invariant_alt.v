@@ -246,35 +246,18 @@ Proof.
 Qed.
 *)
 
-Lemma wpc0_pri_inv_tok_res s k mj E1 e Φ Φc :
-  (∀ D E', pri_inv_tok 1%Qp E' ∗ ⌜ (/2 < mj)%Qp ∧ E' ## D ⌝ -∗ ||={E1|⊤∖D, E1|⊤∖D}=> wpc0 s k mj E1 e Φ Φc) -∗
-  wpc0 s k mj E1 e Φ Φc.
+Lemma wpc_crash_modality_wand E1 mj P Q :
+  wpc_crash_modality E1 mj P -∗
+  (P ={E1}=∗ Q) -∗
+  wpc_crash_modality E1 mj Q.
 Proof.
-  iIntros "H".
-  iEval (rewrite wpc0_unfold).
-  rewrite /wpc_pre.
-  iSplit.
-  {
-    destruct (to_val e) eqn:Heq_val.
-    - iIntros (q g1 ns D κs) "Hg HNC".
-      iMod (pri_inv_tok_alloc with "[$]") as (Einv Hdisj) "(Hitok&Hg)".
-      iDestruct (pri_inv_tok_global_valid with "[$]") as %(?&?).
-      iSpecialize ("H" with "[$Hitok //]").
-      rewrite wpc0_unfold/ wpc_pre. rewrite Heq_val.
-      iMod "H" as "(H&_)". by iMod ("H" with "[$] [$]") as "$".
-    - iIntros.
-      iMod (pri_inv_tok_alloc with "[$]") as (Einv Hdisj) "(Hitok&Hg)".
-      iDestruct (pri_inv_tok_global_valid with "[$]") as %(?&?).
-      iSpecialize ("H" with "[$Hitok //]").
-      rewrite wpc0_unfold/ wpc_pre. rewrite Heq_val.
-      iMod "H" as "(H&_)". by iMod ("H" with "[$] [$] [$]") as "$".
-  }
-  iIntros.
-  iMod (pri_inv_tok_alloc with "[$]") as (Einv Hdisj) "(Hitok&Hg)".
-  iDestruct (pri_inv_tok_global_valid with "[$]") as %(?&?).
-  iSpecialize ("H" with "[$Hitok //]").
-  rewrite wpc0_unfold/ wpc_pre.
-  iMod "H" as "(_&H)". by iMod ("H" with "[$] [$]") as "$".
+  iIntros "Hwpc Hwand".
+  rewrite /wpc_crash_modality.
+  iIntros (g1 ns D κs) "Hg #C".
+  iApply (step_fupd2N_inner_fupd2).
+  iSpecialize ("Hwpc" with "[$] [$]").
+  iApply (step_fupd2N_inner_wand with "Hwpc"); auto.
+  iIntros "($&HP)". by iMod ("Hwand" with "[$]") as "$".
 Qed.
 
 Lemma wpc_crash_modality_combine E1 mj P1 P2 :

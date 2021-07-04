@@ -646,6 +646,61 @@ Lemma wpc0_wpc s k E1 e Φ Φc mj:
   wpc0 s k mj E1 e Φ Φc.
 Proof. rewrite wpc0_unfold wpc_unfold. iIntros "H". iApply "H". Qed.
 
+Lemma wpc0_strong_mono_fupd2 s1 s2 k1 k2 mj E1 E2 e Φ Ψ Φc Ψc :
+  s1 ⊑ s2 → k1 ≤ k2 → E1 ⊆ E2 →
+  wpc0 s1 k1 mj E1 e Φ Φc -∗
+  (∀ v, Φ v -∗ ||={E2|∅,E2|∅}=> Ψ v) ∧ (Φc -∗ ||={E2|∅, E2|∅}=> Ψc) -∗
+  wpc0 s2 k2 mj E2 e Ψ Ψc.
+Proof.
+  iIntros (?? HE) "H HΦ".
+  iLöb as "IH" forall (e E1 E2 HE Φ Ψ Φc Ψc).
+  rewrite !wpc0_unfold /wpc_pre.
+  iSplit.
+  - destruct (to_val e) as [v|] eqn:?.
+    {
+      iDestruct "HΦ" as "(HΦ&_)". iDestruct "H" as "(H&_)".
+      iMod (fupd_mask_subseteq E1) as "Hclo"; first by auto.
+      iIntros.
+      iMod ("H" with "[$] [$]") as "(?&?&?)". iMod "Hclo" as "_".
+      iSpecialize ("HΦ" with "[$]").
+      iMod (fupd2_mask_subseteq E2 ∅) as "Hclo"; first done; try set_solver.
+      iMod "HΦ". iMod "Hclo". iFrame. eauto.
+    }
+    iIntros (q σ1 g1 ns D κ κs n) "Hσ Hg HNC".
+    iMod (fupd2_mask_subseteq E1 (⊤ ∖ _)) as "Hclo"; first done.
+    { reflexivity. }
+    iDestruct "H" as "(H&_)".
+    iMod ("H" with "[$] [$] [$]") as "H".
+    iModIntro. simpl. iMod "H". iModIntro. iNext. iMod "H". iModIntro.
+    iApply (step_fupd2N_wand with "H"). iIntros "[% H]".
+    iSplit; [by destruct s1, s2|]. iIntros (e2 σ2 g2 efs Hstep).
+    iSpecialize ("H" with "[//]"). simpl. iMod "H".
+    iDestruct "H" as "(Hσ & Hg & H & Hefs & HNC)". iMod "Hclo" as "_". iModIntro.
+    iFrame.
+    iSplitR "Hefs".
+    ** iApply ("IH" with "[] H [HΦ]"); first (destruct (to_val e2); auto).
+       iSplit.
+       *** iDestruct "HΦ" as "(HΦ&_)". iIntros (v) "H".
+           iMod (fupd2_mask_subseteq E2 ∅) as "Hclo"; first (destruct (to_val e2); set_solver).
+           { done. }
+           iMod ("HΦ" with "[$]"). iMod "Hclo". eauto.
+       *** iDestruct "HΦ" as "(_&HΦ)". iIntros "H".
+           iMod (fupd2_mask_subseteq E2 ∅) as "Hclo"; first (destruct (to_val e2); set_solver).
+           { done. }
+           iMod ("HΦ" with "[$]"). iMod "Hclo". eauto.
+    ** iApply (big_sepL_impl with "Hefs"); iIntros "!#" (k ef _).
+       iIntros "H". eauto. iApply ("IH" with "[] H"); auto.
+  - iDestruct "H" as "(_&H)". iDestruct "HΦ" as "(_&HΦ)".
+    iIntros.
+    iSpecialize ("H" with "[$] [$]").
+    iMod (fupd2_mask_subseteq E1 (⊤ ∖ _)) as "Hclo"; first done.
+    { reflexivity. }
+    iApply (step_fupd2N_wand with "H").
+    iIntros "H". iMod "H" as "($&H)". iMod "Hclo" as "_".
+    iMod (fupd2_mask_subseteq E2 ∅) as "Hclo"; try set_solver+.
+    iMod ("HΦ" with "H"). iMod "Hclo". eauto.
+Qed.
+
 Lemma wpc0_strong_mono s1 s2 k1 k2 mj E1 E2 e Φ Ψ Φc Ψc :
   s1 ⊑ s2 → k1 ≤ k2 → E1 ⊆ E2 →
   wpc0 s1 k1 mj E1 e Φ Φc -∗
@@ -773,6 +828,16 @@ Proof.
   rewrite wp_eq /wp_def wpc_eq. iIntros "H" (?).
   iApply wpc0_change_k.
   iApply (wpc0_strong_mono with "H"); auto.
+Qed.
+
+Lemma wpc_strong_mono_fupd2 s1 s2 k1 k2 E1 E2 e Φ Ψ Φc Ψc :
+  s1 ⊑ s2 → k1 ≤ k2 → E1 ⊆ E2 →
+  wpc s1 k1 E1 e Φ Φc -∗
+  (∀ v, Φ v -∗ ||={E2|∅,E2|∅}=> Ψ v) ∧ (Φc -∗ ||={E2|∅, E2|∅}=> Ψc) -∗
+  wpc s2 k2 E2 e Ψ Ψc.
+Proof.
+  iIntros (?? HE) "H HΦ". rewrite wpc_eq. iIntros (mj). iSpecialize ("H" $! mj).
+  iApply (wpc0_strong_mono_fupd2 _ _ _ _ mj with "[$] [$]"); eauto.
 Qed.
 
 Lemma wpc_strong_mono s1 s2 k1 k2 E1 E2 e Φ Ψ Φc Ψc :
@@ -1127,6 +1192,12 @@ Proof.
       iApply ("H" with "[$] [$] [$]").
   - iIntros. iMod "H" as "H". iSpecialize ("H" $! mj). iDestruct "H" as "(_&H)".
     iApply ("H" with "[$] [$]").
+Qed.
+
+Lemma wpc_fupd2 s k E1 e Φ Φc:
+  ( WPC e @ s; k; E1 {{ v, ||={E1|∅, E1|∅}=> Φ v }} {{ Φc }}) ⊢ WPC e @ s; k; E1 {{ Φ }} {{ Φc }}.
+Proof.
+  iIntros "H". iApply (wpc_strong_mono_fupd2 with "H"); auto.
 Qed.
 
 Lemma wpc_fupd s k E1 e Φ Φc:

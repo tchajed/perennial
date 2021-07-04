@@ -121,7 +121,7 @@ Proof.
 Qed.
 
 Definition crash_borrow Ps Pc : iProp Σ :=
-  (staged_value_idle ⊤ Ps True%I Pc ∗ later_tok).
+  (□ (Ps -∗ Pc) ∗ staged_value_idle ⊤ Ps True%I Pc ∗ later_tok).
 
 Lemma wpc_crash_borrow_init s k e Φ Φc P Pc :
   language.to_val e = None →
@@ -174,7 +174,7 @@ Proof.
 
   iAssert (crash_borrow P Pc)%I with "[Hlt1 Hlt2 H2 Hstat2 Hitok_u]"  as "Hborrow".
   {
-    iFrame.
+    iFrame "# ∗".
     iExists _, _, _, _, _, _. iFrame "∗". iFrame "Hsaved Hsaved'".
     iExists _, _. iFrame "Hpri_inv". eauto.
   }
@@ -214,30 +214,143 @@ Proof.
   { destruct (to_val e2); eauto. }
 Qed.
 
-Lemma wpc_crash_borrow_split1 k E e Φ Φc P Pc P1 P2 Pc1 Pc2 :
+Lemma wpc_crash_borrow_split k E e Φ Φc P Pc P1 P2 Pc1 Pc2 :
   language.to_val e = None →
   crash_borrow P Pc -∗
   (P -∗ P1 ∗ P2) -∗
   □ (P1 -∗ Pc1) -∗
   □ (P2 -∗ Pc2) -∗
-  □ (Pc1 ∗ Pc2 -∗ Pc) -∗
-  WPC e @ NotStuck; k; E {{ λ v, (crash_borrow P1 Pc1 ∗ crash_borrow P2 Pc2) -∗  Φ v }} {{ Φc }} -∗
+  (Pc1 ∗ Pc2 -∗ Pc) -∗
+  WPC e @ NotStuck; k; E {{ λ v, (crash_borrow P1 Pc1 ∗ crash_borrow P2 Pc2) -∗  (Φc ∧ Φ v) }} {{ Φc }} -∗
   WPC e @ NotStuck; k; E {{ Φ }} {{ Φc }}.
 Proof.
-  iIntros (Hnval) "Hborrow Hshift #Hwand1 #Hwand2 #Hwandc Hwpc".
-  iDestruct "Hborrow" as "(Hinv&Htok)".
-  iApply (wpc_staged_inv_use_cancel); first done.
+  iIntros (Hnval) "Hborrow Hshift #Hwand1 #Hwand2 Hwandc Hwpc".
+  iDestruct "Hborrow" as "(#Hwand&Hinv&Htok)".
+  iApply (wpc_staged_inv_inuse); first done.
   iFrame "Hinv".
   iSplit.
+  { iIntros. rewrite wpc_unfold. iDestruct ("Hwpc" $! _) as "(_&Hwpc)".
+    iApply "Hwpc". }
+  iIntros "HP".
+  iDestruct ("Hshift" with "[$]") as "(HP1&HP2)".
+  iIntros (mj Hlt).
+  iApply wpc_fupd2.
+  iApply (wpc_pri_inv_tok_res).
+  iIntros (E1') "Hitok1".
+  iApply (wpc_pri_inv_tok_res).
+  iIntros (E2') "Hitok2".
+  iApply (wpc_later_tok_invest with "[$]"); first done.
+  rewrite wpc_eq. iIntros (mj').
+  iApply (wpc0_strong_mono with "Hwpc"); auto.
+  iSplit; last first.
+  { iIntros "$ !>". iApply "Hwandc". iSplitL "HP1".
+    - iApply "Hwand1". eauto.
+    - iApply "Hwand2". eauto.
+  }
+  iIntros (v) "Hc !> Htok".
+
+  (* create staged inv for first crash borrow *)
+  iDestruct ("Htok") as "(Htok1&Htok)".
+  iDestruct ("Htok") as "(Htok2&Htok)".
+  iMod (staged_inv_create _ _ P1 Pc1 ⊤ _ mj with "[$] [$] Hitok1 [$] [$]") as "(Hval1&Hcancel1)".
+  { auto. }
+
+  (* create staged inv for second crash borrow *)
+  iDestruct ("Htok") as "(Htok1&Htok)".
+  iDestruct ("Htok") as "(Htok2&Htok)".
+  iMod (staged_inv_create _ _ P2 Pc2 ⊤ _ mj with "[$] [$] Hitok2 [$] [$]") as "(Hval2&Hcancel2)".
+  { auto. }
+
+  iDestruct ("Htok") as "(Htok1&Htok)".
+  iDestruct ("Htok") as "(Htok2&Htok)".
+  iSpecialize ("Hc" with "[Htok1 Htok2 Hval1 Hval2]").
+  { iFrame "# ∗". }
+  iDestruct (staged_inv_cancel_wpc_crash_modality with "Hcancel1") as "Hcancel1".
+  iDestruct (staged_inv_cancel_wpc_crash_modality with "Hcancel2") as "Hcancel2".
+
+  iDestruct ("Htok") as "(Htok1&Htok)".
+  iDestruct (wpc_crash_modality_combine with "[$] [$] [$]") as "Hcombined".
+  iModIntro. iFrame.
+  iApply (wpc_crash_modality_wand with "Hcombined").
+  iIntros "(?&?) !>". iApply "Hwandc"; by iFrame.
+Qed.
+
+Lemma wpc_crash_borrow_combine k E e Φ Φc P P1 P2 Pc1 Pc2 :
+  language.to_val e = None →
+  crash_borrow P1 Pc1 -∗
+  crash_borrow P2 Pc2 -∗
+  □ (P -∗ (Pc1 ∗ Pc2)) -∗
+  (P1 ∗ P2 ==∗ P) -∗
+  WPC e @ NotStuck; k; E {{ λ v, (crash_borrow P (Pc1 ∗ Pc2)) -∗ (Φc ∧ Φ v) }} {{ Φc }} -∗
+  WPC e @ NotStuck; k; E {{ Φ }} {{ Φc }}.
+Proof.
+  iIntros (Hnval) "Hborrow1 Hborrow2 #Hc Hwand Hwpc".
+
+  iDestruct "Hborrow1" as "(#Hwand1&Hinv1&Htok1)".
+  iApply (wpc_staged_inv_inuse); first done.
+  iFrame "Hinv1".
+  iSplit.
+  { iIntros. rewrite wpc_unfold. iDestruct ("Hwpc" $! _) as "(_&Hwpc)".
+    iApply "Hwpc". }
+  iIntros "HP1". iIntros (mj_wp1 Hlt1).
+
+  iDestruct "Hborrow2" as "(#Hwand2&Hinv2&Htok2)".
+  iApply (wpc_staged_inv_inuse); first done.
+  iFrame "Hinv2".
+  iSplit.
+  { iIntros. rewrite wpc_unfold. iDestruct ("Hwpc" $! _) as "(_&Hwpc)".
+    iApply (wpc_crash_modality_wand with "Hwpc").
+    iIntros "HΦc".
+    iModIntro. iFrame. iApply "Hwand1". iFrame. }
+
+  iIntros "HP2". iIntros (mj_wp2 Hlt2).
+  iApply wpc_fupd2.
+  iApply (wpc_later_tok_invest with "[$]"); first done.
+  iApply (wpc_pri_inv_tok_res).
+  iIntros (Enew) "Hitok_new".
+  iApply (wpc_pri_inv_tok_res).
+  iIntros (Esplit) "Hitok_split".
+  rewrite wpc_eq. iIntros (mj').
+
+  iApply (wpc0_strong_mono with "Hwpc"); auto.
+  iSplit; last first.
+  { iIntros "$ !>". iSplitL "HP1".
+    - iApply "Hwand1". eauto.
+    - iApply "Hwand2". eauto.
+  }
+  iIntros (v) "Hc' !> Htok".
+
+  iDestruct ("Htok") as "(Htok2&Htok)".
+  iMod ("Hwand" with "[$]") as "HP".
+  assert (∃ mj0, /2 < mj0 ∧ mj0 < mj_wp1 `min` mj_wp2)%Qp as (mj0&Hmj0).
   { admit. }
-  iIntros "HP" (mj).
-  (* iAssert (later_tok ∗ later_tok ∗ later_tok)%I as "(Hlt1&Hlt2&Hlt3)". *)
-  iApply (wpc_later_tok_invest with "[$]"); auto.
-  
 
+  iMod (staged_inv_create _ _ P (Pc1 ∗ Pc2) ⊤ _ mj0 with "[$] [$] Hitok_new [$] [$]") as "(Hval&Hcancel)".
+  { naive_solver. }
 
+  iDestruct (staged_inv_cancel_wpc_crash_modality with "Hcancel") as "Hcancel".
+  iDestruct ("Htok") as "(Htok1&Htok)".
+  iDestruct ("Htok") as "(Htok2&Htok)".
+  iDestruct (wpc_crash_modality_split _ _ _ (mj_wp1 `min` mj_wp2) with "[$] [$] [$] [$]") as "Hcancel".
+  { auto. }
 
+  iMod (fupd2_mask_subseteq ∅ ∅) as "Hclo"; try set_solver+.
+  iMod "Hcancel" as "(Hcancel1&Hcancel2)".
+  iMod "Hclo" as "_". iModIntro.
 
+  iSplitL "Hcancel2".
+  { admit. (* need lemma about weakening mj *) }
 
+  iSplit.
+  { admit. (* need staged inv use rule to add wpc_crash_modality around Pc in post-condition *) }
+
+  iDestruct ("Htok") as "(Htok1&Htok)".
+  iSpecialize ("Hc'" with "[Hval Htok1]").
+  { iFrame "Hval Htok1". eauto. }
+
+  iFrame "Hc'".
+  { admit. (* need lemma about weakening mj *) }
+
+Abort.
 
 End crash_borrow_def.

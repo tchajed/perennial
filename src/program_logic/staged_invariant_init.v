@@ -28,18 +28,16 @@ Proof using PRI.
   iModIntro. iApply "H"; iPureIntro; naive_solver.
 Qed.
 
-Lemma wpc0_staged_inv_create s k mj' mj E e Φ Φc P Pc :
-  (/ 2 < mj')%Qp →
-  later_tok ∗
-  later_tok ∗
-  P ∗
-  □ (P -∗ Pc) ∗
-  (staged_value E P Pc ∗ staged_inv_cancel E mj' Pc -∗ wpc0 s k mj E e Φ (Φc ∗ Pc))
-  ⊢ wpc0 s k mj E e Φ (Φc ∗ Pc).
+Lemma staged_inv_create E1 E2 P Pc E Einv mj' :
+  (/2 < mj')%Qp →
+  later_tok -∗
+  later_tok -∗
+  pri_inv_tok 1%Qp Einv -∗
+  P -∗
+  □ (P -∗ Pc) -∗
+  ||={E1|E2,E1|E2}=> (staged_value E P Pc ∗ staged_inv_cancel E mj' Pc).
 Proof.
-  iIntros (Hlt) "(Htok1&Htok2&HP&#Hwand&Hwp)".
-  iApply wpc0_pri_inv_tok_res.
-  iIntros (D Einv) "(Hitok&%Hgt&%Hdisj)".
+  iIntros (Hlt) "Htok1 Htok2 Hitok HP #Hwand".
 
   (* Create the invariant *)
 
@@ -63,7 +61,6 @@ Proof.
     iLeft. iFrame. iModIntro. iIntros "HP HC". iModIntro. iDestruct ("Hwand" with "[$]") as "$"; eauto.
   }
   iModIntro.
-  iApply "Hwp".
   iSplitL "Htok1 H2 Hstat2 Hitok_u".
   {
     iExists _, _, _, _, _, _. iFrame "∗". iFrame "Hsaved Hsaved'".
@@ -73,6 +70,23 @@ Proof.
     iExists _, _, _, _, _, _. iFrame "%". iFrame. eauto.
   }
 Qed.
+
+Lemma wpc0_staged_inv_create s k mj' mj E e Φ Φc P Pc :
+  (/ 2 < mj')%Qp →
+  later_tok ∗
+  later_tok ∗
+  P ∗
+  □ (P -∗ Pc) ∗
+  (staged_value E P Pc ∗ staged_inv_cancel E mj' Pc -∗ wpc0 s k mj E e Φ (Φc ∗ Pc))
+  ⊢ wpc0 s k mj E e Φ (Φc ∗ Pc).
+Proof.
+  iIntros (Hlt) "(Htok1&Htok2&HP&#Hwand&Hwp)".
+  iApply wpc0_pri_inv_tok_res.
+  iIntros (D Einv) "(Hitok&%Hgt&%Hdisj)".
+  iMod (staged_inv_create with "[$] [$] [$] HP [$]") as "H"; first (apply Hlt).
+  iModIntro. by iApply "Hwp".
+Qed.
+
 
 Lemma wpc0_crash_modality_cancel s k mj' mj E1 E2 e Φ Φc Pc:
   E1 ⊆ E2 →

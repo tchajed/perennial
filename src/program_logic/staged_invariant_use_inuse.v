@@ -283,10 +283,12 @@ Proof.
   }
 Qed.
 
-Lemma wpc_staged_inv k E1 e Φ Φc Qs P :
+Lemma wpc_staged_inv_inuse k E1 e Φ Φc Qs P :
   to_val e = None →
   staged_value ⊤ Qs P ∗
-  (Φc ∧ (Qs -∗ ∀ mj_wp, WPC e @ NotStuck; k; E1 {{λ v, wpc_crash_modality ⊤ mj_wp P ∗ (Φc ∧ Φ v)}}
+  ((∀ mj_wp, wpc_crash_modality E1 mj_wp Φc) ∧
+   (Qs -∗ ∀ mj_wp, ⌜ (/2 < mj_wp)%Qp ⌝ → WPC e @ NotStuck; k; E1
+                                 {{λ v, wpc_crash_modality ⊤ mj_wp P ∗ (Φc ∧ Φ v)}}
                                  {{ Φc ∗ P }}))
   ⊢ WPC e @ NotStuck; k; E1 {{ Φ }} {{ Φc }}.
 Proof.
@@ -304,8 +306,8 @@ Proof.
   {
     iDestruct "Hwp" as "(Hwp&_)".
     iIntros (g1 ns D' κs) "Hg #HC".
-    iApply step_fupd2N_inner_later'.
-    iNext; iModIntro; iFrame.
+    iSpecialize ("Hwp" $! mj with "[$] [$]").
+    iApply (step_fupd2N_inner_wand with "Hwp"); auto.
   }
   rewrite Hnval.
   iIntros (q σ1 g1 ns D κ κs nt) "Hσ Hg HNC".
@@ -361,7 +363,8 @@ Proof.
 
 
   iMod (pri_inv_tok_disable_reenable with "[$]") as "(Hg&Hreenable)".
-  iSpecialize ("Hwp" $! mj_wp mj_wp).
+  unshelve (iSpecialize ("Hwp" $! mj_wp _ mj_wp)).
+  { rewrite //=. }
   iEval (rewrite wpc0_unfold) in "Hwp".
   iDestruct "Hwp" as "(Hwp&_)".
   iMod ("Hclo'").
