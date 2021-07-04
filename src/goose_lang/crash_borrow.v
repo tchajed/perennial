@@ -293,8 +293,8 @@ Proof.
   iIntros (Hnval) "Hborrow1 Hborrow2 #Hc Hwand Hwpc".
 
   iDestruct "Hborrow1" as "(#Hwand1&Hinv1&Htok1)".
-  iApply (wpc_staged_inv_inuse); first done.
-  iFrame "Hinv1".
+  iApply (wpc_staged_inv_inuse2); first done.
+  iFrame "Htok1 Hinv1".
   iSplit.
   { iIntros. rewrite wpc_unfold. iDestruct ("Hwpc" $! _) as "(_&Hwpc)".
     iApply "Hwpc". }
@@ -307,7 +307,7 @@ Proof.
   { iIntros. rewrite wpc_unfold. iDestruct ("Hwpc" $! _) as "(_&Hwpc)".
     iApply (wpc_crash_modality_wand with "Hwpc").
     iIntros "HΦc".
-    iModIntro. iFrame. iApply "Hwand1". iFrame. }
+    iModIntro. iFrame. iApply wpc_crash_modality_intro. iApply "Hwand1". iFrame. }
 
   iIntros "HP2". iIntros (mj_wp2 Hlt2).
   iApply wpc_fupd2.
@@ -321,15 +321,19 @@ Proof.
   iApply (wpc0_strong_mono with "Hwpc"); auto.
   iSplit; last first.
   { iIntros "$ !>". iSplitL "HP1".
-    - iApply "Hwand1". eauto.
+    - iApply wpc_crash_modality_intro. iApply "Hwand1". eauto.
     - iApply "Hwand2". eauto.
   }
   iIntros (v) "Hc' !> Htok".
 
+  iDestruct ("Htok") as "(Htok1&Htok)".
   iDestruct ("Htok") as "(Htok2&Htok)".
   iMod ("Hwand" with "[$]") as "HP".
   assert (∃ mj0, /2 < mj0 ∧ mj0 < mj_wp1 `min` mj_wp2)%Qp as (mj0&Hmj0).
-  { admit. }
+  {
+    apply Qp_lt_densely_ordered.
+    apply Qp_min_glb1_lt; auto.
+  }
 
   iMod (staged_inv_create _ _ P (Pc1 ∗ Pc2) ⊤ _ mj0 with "[$] [$] Hitok_new [$] [$]") as "(Hval&Hcancel)".
   { naive_solver. }
@@ -356,13 +360,13 @@ Proof.
   { iFrame "Hval Htok1". eauto. }
 
   iSplit.
-  { iApply (wpc_crash_modality_strong_wand with "Hcancel1"); auto.
-    { admit. }
+  { iApply wpc_crash_modality_intro.
+    iDestruct "Hc'" as "($&_)".
+    iApply (wpc_crash_modality_strong_wand with "Hcancel1"); auto.
     { split.
       - apply Qp_min_glb1_lt; auto.
-      - apply Qp_le_min_r.
+      - apply Qp_le_min_l.
     }
-    iIntros "$". by iDestruct "Hc'" as "($&_)".
   }
 
   iSplitL "Hcancel1".
@@ -376,6 +380,6 @@ Proof.
  iSplit.
  - iDestruct "Hc'" as "(Hc'&_)". iApply wpc_crash_modality_intro. auto.
  - iDestruct "Hc'" as "(_&$)".
-Abort.
+Qed.
 
 End crash_borrow_def.

@@ -3,3 +3,4 @@ From Perennial.program_logic Require Export staged_invariant_init.
 From Perennial.program_logic Require Export staged_invariant_use_cancel.
 From Perennial.program_logic Require Export staged_invariant_use_idle.
 From Perennial.program_logic Require Export staged_invariant_use_inuse.
+From Perennial.program_logic Require Export staged_invariant_use_inuse2.

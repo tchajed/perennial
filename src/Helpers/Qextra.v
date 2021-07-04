@@ -5,7 +5,7 @@ Require Import QArith.
 Local Open Scope Q_scope.
 
 Lemma Qp_min_glb1_lt (q q1 q2 : Qp) :
-  (q < q1 → q < q2 → q < q1 `min` q2)%Qp. 
+  (q < q1 → q < q2 → q < q1 `min` q2)%Qp.
 Proof.
   intros Hlt1 Hlt2.
   destruct (Qp_min_spec_le q1 q2) as [(?&->)|(?&->)]; auto.
@@ -232,4 +232,15 @@ Proof.
     rewrite -assoc in Heq_qb.
     apply Qp_add_cancel in Heq_qb.
     rewrite -Heq_qb //.
+Qed.
+
+Lemma Qp_lt_densely_ordered (q1 q2 : Qp) :
+  q1 < q2 →
+  ∃ q, (q1 < q < q2).
+Proof.
+  intros (r&Heq)%Qp_split_lt.
+  exists (q1 + (r/2)). split.
+  - apply Qp_lt_add_l.
+  - rewrite -Heq.
+    apply Qp_add_lt_mono_l. apply Qp_div_2_lt.
 Qed.
