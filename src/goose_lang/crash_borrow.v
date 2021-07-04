@@ -270,9 +270,15 @@ Proof.
 
   iDestruct ("Htok") as "(Htok1&Htok)".
   iDestruct (wpc_crash_modality_combine with "[$] [$] [$]") as "Hcombined".
-  iModIntro. iFrame.
-  iApply (wpc_crash_modality_wand with "Hcombined").
-  iIntros "(?&?) !>". iApply "Hwandc"; by iFrame.
+  iModIntro. iSplitR "Hc".
+  {
+    iApply (wpc_crash_modality_wand with "Hcombined").
+    iIntros "(?&?) !>". iApply "Hwandc"; by iFrame.
+  }
+  iSplit.
+  - iDestruct "Hc" as "(Hc&_)".
+    iApply (wpc_crash_modality_intro). auto.
+  - iDestruct "Hc" as "(_&$)".
 Qed.
 
 Lemma wpc_crash_borrow_combine k E e Φ Φc P P1 P2 Pc1 Pc2 :
@@ -339,18 +345,37 @@ Proof.
   iMod "Hclo" as "_". iModIntro.
 
   iSplitL "Hcancel2".
-  { admit. (* need lemma about weakening mj *) }
-
-  iSplit.
-  { admit. (* need staged inv use rule to add wpc_crash_modality around Pc in post-condition *) }
+  { iApply (wpc_crash_modality_strong_wand with "Hcancel2"); auto.
+    split.
+    - apply Qp_min_glb1_lt; auto.
+    - apply Qp_le_min_r.
+  }
 
   iDestruct ("Htok") as "(Htok1&Htok)".
   iSpecialize ("Hc'" with "[Hval Htok1]").
   { iFrame "Hval Htok1". eauto. }
 
-  iFrame "Hc'".
-  { admit. (* need lemma about weakening mj *) }
+  iSplit.
+  { iApply (wpc_crash_modality_strong_wand with "Hcancel1"); auto.
+    { admit. }
+    { split.
+      - apply Qp_min_glb1_lt; auto.
+      - apply Qp_le_min_r.
+    }
+    iIntros "$". by iDestruct "Hc'" as "($&_)".
+  }
 
+  iSplitL "Hcancel1".
+  { iApply (wpc_crash_modality_strong_wand with "Hcancel1"); auto.
+    { split.
+      - apply Qp_min_glb1_lt; auto.
+      - apply Qp_le_min_l.
+    }
+  }
+
+ iSplit.
+ - iDestruct "Hc'" as "(Hc'&_)". iApply wpc_crash_modality_intro. auto.
+ - iDestruct "Hc'" as "(_&$)".
 Abort.
 
 End crash_borrow_def.

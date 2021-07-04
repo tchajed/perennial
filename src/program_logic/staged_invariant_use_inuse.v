@@ -26,7 +26,7 @@ Definition staged_value_inuse k e E1' E1 mj mj_wp mj_ukeep Φ Φc P :=
       own γsaved (◯ Excl' (γprop, γprop')) ∗
       own γstatus (◯ Excl' (inuse mj_wp mj_ushare)) ∗
       saved_prop_own γprop (wpc0 NotStuck k mj_wp E1 e
-                     (λ v : val Λ, (wpc_crash_modality E1 mj_wp P) ∗ (Φc ∧ Φ v))
+                     (λ v : val Λ, (wpc_crash_modality E1 mj_wp P) ∗ (wpc_crash_modality E1 mj_wp Φc ∧ Φ v))
                      (Φc ∗ P)) ∗
       saved_prop_own γprop' Φc ∗
       later_tok ∗
@@ -221,7 +221,13 @@ Proof.
         rewrite Heq_val.
         iSplit.
         * iIntros. iModIntro. iFrame. iDestruct "Hv" as "(_&$)".
-        * iIntros. iApply step_fupd2N_inner_later; auto. iModIntro. iFrame. iDestruct "Hv" as "($&_)".
+        * iDestruct "Hv" as "(H&_)". iIntros.
+          iDestruct (pri_inv_tok_global_le_acc _ _ _  mj_wp with "[] [$]") as "(Hg&Hg_clo)".
+          { iPureIntro; naive_solver. }
+          iSpecialize ("H" with "[$] [$]").
+          iApply (step_fupd2N_inner_wand with "H"); auto.
+          iIntros "(Hg&$)".
+          iApply "Hg_clo". iFrame.
       - iApply (big_sepL_mono with "Hefs").
         iIntros. iApply (wpc0_mj_le); last by iFrame.
         split; auto. naive_solver.
@@ -229,7 +235,7 @@ Proof.
     iFrame "HNC".
     iMod (saved_prop_alloc
             (wpc0 NotStuck k mj_wp ⊤ e2
-              (λ v : val Λ, wpc_crash_modality ⊤ mj_wp P ∗ (Φc ∧ Φ v))
+              (λ v : val Λ, wpc_crash_modality ⊤ mj_wp P ∗ (wpc_crash_modality ⊤ mj_wp Φc ∧ Φ v))
               (Φc ∗ P))%I) as (γprop_stored') "#Hsaved1''".
     iMod (saved_prop_alloc Φc) as (γprop_remainder') "#Hsaved2''".
     iMod (own_update_2 _ _ _ (● Excl' (γprop_stored', γprop_remainder') ⋅
@@ -288,7 +294,7 @@ Lemma wpc_staged_inv_inuse k E1 e Φ Φc Qs P :
   staged_value ⊤ Qs P ∗
   ((∀ mj_wp, wpc_crash_modality E1 mj_wp Φc) ∧
    (Qs -∗ ∀ mj_wp, ⌜ (/2 < mj_wp)%Qp ⌝ → WPC e @ NotStuck; k; E1
-                                 {{λ v, wpc_crash_modality ⊤ mj_wp P ∗ (Φc ∧ Φ v)}}
+                                 {{λ v, wpc_crash_modality ⊤ mj_wp P ∗ (wpc_crash_modality E1 mj_wp Φc ∧ Φ v)}}
                                  {{ Φc ∗ P }}))
   ⊢ WPC e @ NotStuck; k; E1 {{ Φ }} {{ Φc }}.
 Proof.
@@ -427,7 +433,16 @@ Proof.
         rewrite Heq_val.
         iSplit.
         * iIntros. iModIntro. iFrame. iDestruct "Hv" as "(_&$)".
-        * iIntros. iApply step_fupd2N_inner_later; auto. iModIntro. iFrame. iDestruct "Hv" as "($&_)".
+        * iDestruct "Hv" as "(H&_)". iIntros.
+          iDestruct (pri_inv_tok_global_le_acc _ _ _  mj_wp with "[] [$]") as "(Hg&Hg_clo)".
+          { iPureIntro; split; auto.
+            etransitivity; first eapply Qp_le_min_l.
+            etransitivity; first eapply Qp_le_min_l.
+            eapply Qp_le_min_r. }
+          iSpecialize ("H" with "[$] [$]").
+          iApply (step_fupd2N_inner_wand with "H"); auto.
+          iIntros "(Hg&$)".
+          iApply "Hg_clo". iFrame.
       - iApply (big_sepL_mono with "Hefs").
         iIntros. iApply (wpc0_mj_le); last by iFrame.
         split; auto.
@@ -438,7 +453,7 @@ Proof.
   iFrame "HNC".
   iMod (saved_prop_alloc
           (wpc0 NotStuck k mj_wp ⊤ e2
-            (λ v : val Λ, wpc_crash_modality ⊤ mj_wp P ∗ (Φc ∧ Φ v))
+            (λ v : val Λ, wpc_crash_modality ⊤ mj_wp P ∗ (wpc_crash_modality ⊤ mj_wp Φc ∧ Φ v))
             (Φc ∗ P))%I) as (γprop_stored') "#Hsaved1''".
   iMod (saved_prop_alloc Φc) as (γprop_remainder') "#Hsaved2''".
   iMod (own_update_2 _ _ _ (● Excl' (γprop_stored', γprop_remainder') ⋅
@@ -465,6 +480,14 @@ Proof.
         etransitivity; first eapply Qp_le_min_l.
         etransitivity; first eapply Qp_le_min_l.
         eapply Qp_le_min_l.
+    }
+    iSplitL "H".
+    { iApply (wpc0_strong_mono with "H"); auto.
+      iSplit; last by (iIntros; iModIntro; iFrame).
+      iIntros (?) "($&H)". iModIntro.
+      iSplit.
+      - iDestruct "H" as "(H&_)". iApply (wpc_crash_modality_strong_wand with "[$]"); auto.
+      - iDestruct "H" as "(_&$)".
     }
     iFrame.
     iModIntro. iIntros "Hwpc".

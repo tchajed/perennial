@@ -47,6 +47,12 @@ Definition wpc_crash_modality `{!irisGS Λ Σ, !crashG Σ} E1 mj Φc :=
        global_state_interp g1 ns mj D κs -∗ C -∗
      ||={E1|E2,∅|∅}=> ||▷=>^(num_laters_per_step ns) ||={∅|∅,E1|E2}=> global_state_interp g1 ns mj D κs ∗ Φc))%I.
 
+Definition wpc_value_modality `{!irisGS Λ Σ, !crashG Σ} E1 mj Φc :=
+  ((∀ q g1 ns D κs,
+       let E2 :=  ⊤ ∖ D in
+       global_state_interp g1 ns mj D κs -∗ NC q -∗
+     ||={E1|E2,E1|E2}=> global_state_interp g1 ns mj D κs ∗ Φc ∗ NC q))%I.
+
 Section def.
 Context `{IRISG: !irisGS Λ Σ}.
 Context `{!pri_invG IRISG}.
@@ -245,6 +251,124 @@ Proof.
     iIntros "(?&$)". by iApply "HPQ".
 Qed.
 *)
+
+Lemma wpc_crash_modality_strong_wand E1 E2 mj1 mj2 P Q :
+  E1 ⊆ E2 →
+  (/2 < mj1 ≤ mj2)%Qp →
+  wpc_crash_modality E1 mj1 P -∗
+  (P ={E2}=∗ Q) -∗
+  wpc_crash_modality E2 mj2 Q.
+Proof using PRI.
+  iIntros (??) "Hwpc Hwand".
+  rewrite /wpc_crash_modality.
+  iIntros (g1 ns D κs) "Hg #C".
+  iApply (step_fupd2N_inner_fupd2).
+  iDestruct (pri_inv_tok_global_le_acc with "[//] Hg") as "(Hg&Hg_clo)".
+  iSpecialize ("Hwpc" with "[$] [$]").
+  iApply (step_fupd2N_inner_wand with "Hwpc"); auto.
+  iIntros "(Hg&HP)". iDestruct ("Hg_clo" with "[$Hg]") as "$".
+  by iMod ("Hwand" with "[$]") as "$".
+Qed.
+
+Lemma wpc0_modality_postcondition_cancel_atomic s k mj E e Φ Φc `{!Atomic StronglyAtomic e}:
+  (wpc0 s k mj E e Φ Φc) -∗
+  (wpc0 s k mj E e (λ v, wpc_crash_modality E mj Φc ∧ (wpc_value_modality E mj (Φ v))) Φc).
+Proof.
+  iIntros "H".
+  rewrite ?wpc0_unfold. rewrite /wpc_pre.
+  iSplit; last first.
+  { iDestruct "H" as "(_&H)". eauto. }
+  destruct (to_val e).
+  - iIntros (q g1 ns D κs) "Hg HNC".
+    iFrame. iModIntro.
+    iSplit.
+    { iDestruct "H" as "(_&H)".
+      iIntros (????) "Hg HC".
+      iSpecialize ("H" with "[$] [$]").
+      iApply (step_fupd2N_inner_wand with "H"); auto.
+    }
+    { iDestruct "H" as "(H&_)".
+      rewrite /wpc_value_modality. iIntros.
+      iSpecialize ("H" with "[$] [$]").
+      iMod (fupd2_mask_subseteq E (⊤ ∖ _)) as "Hclo".
+      { auto. }
+      { reflexivity. }
+      iMod "H" as "($&$&$)". iMod "Hclo"; eauto. }
+  - iIntros.
+    iDestruct "H" as "(H&_)".
+    iMod ("H" with "[$] [$] [$]") as "H". iModIntro.
+    simpl. iMod "H". iModIntro. iNext. iMod "H". iModIntro.
+    iApply (step_fupd2N_wand with "H").
+    iIntros "($&H)".
+    iIntros.
+    iMod ("H" with "[//]") as "($&$&H&$)".
+    iModIntro.
+    rewrite /Atomic/= in Atomic0.
+    edestruct (Atomic0) as (v&Hval); eauto.
+    rewrite Hval. rewrite ?wpc0_unfold /wpc_pre.
+    rewrite Hval. iSplit; last first.
+    { iDestruct "H" as "(_&H)". eauto. }
+    iIntros. iModIntro. iFrame.
+    iSplit.
+    { iDestruct "H" as "(_&H)".
+      iIntros (????) "Hg HC".
+      iSpecialize ("H" with "[$] [$]").
+      iApply (step_fupd2N_inner_wand with "H"); auto.
+    }
+    { iDestruct "H" as "(H&_)".
+      rewrite /wpc_value_modality. iIntros.
+      iSpecialize ("H" with "[$] [$]").
+      iMod (fupd2_mask_subseteq E (⊤ ∖ _)) as "Hclo".
+      { auto. }
+      { reflexivity. }
+      iMod "H" as "($&$&$)". iMod "Hclo"; eauto. }
+Qed.
+
+Lemma wpc0_modality_postcondition_cancel s k mj E e Φ Φc :
+  (wpc0 s k mj E e Φ Φc) -∗
+  (wpc0 s k mj E e (λ v, wpc_crash_modality ⊤ mj Φc ∧ (wpc_value_modality ⊤ mj (Φ v))) Φc).
+Proof.
+  iIntros "H".
+  iLöb as "IH" forall (e E).
+  rewrite ?wpc0_unfold. rewrite /wpc_pre.
+  iSplit; last first.
+  { iDestruct "H" as "(_&H)". eauto. }
+  destruct (to_val e).
+  - iIntros (q g1 ns D κs) "Hg HNC".
+    iFrame. iModIntro.
+    iSplit.
+    { iDestruct "H" as "(_&H)".
+      iIntros (????) "Hg HC".
+      iSpecialize ("H" with "[$] [$]").
+      iApply (step_fupd2N_inner_wand with "H"); auto.
+    }
+    { iDestruct "H" as "(H&_)".
+      rewrite /wpc_value_modality. iIntros.
+      iSpecialize ("H" with "[$] [$]").
+      iMod (fupd2_mask_subseteq E (⊤ ∖ _)) as "Hclo".
+      { auto. }
+      { reflexivity. }
+      iMod "H" as "($&$&$)". iMod "Hclo"; eauto. }
+  - iIntros.
+    iDestruct "H" as "(H&_)".
+    iMod ("H" with "[$] [$] [$]") as "H". iModIntro.
+    simpl. iMod "H". iModIntro. iNext. iMod "H". iModIntro.
+    iApply (step_fupd2N_wand with "H").
+    iIntros "($&H)".
+    iIntros.
+    iMod ("H" with "[//]") as "($&$&H&$)".
+    iModIntro. by iApply "IH".
+Qed.
+
+Lemma wpc_crash_modality_intro E1 mj P :
+  P -∗ wpc_crash_modality E1 mj P.
+Proof.
+  iIntros "H".
+  rewrite /wpc_crash_modality.
+  iIntros (g1 ns D κs) "Hg #C".
+  iApply (step_fupd2N_inner_later); auto.
+  iNext. iFrame.
+Qed.
 
 Lemma wpc_crash_modality_wand E1 mj P Q :
   wpc_crash_modality E1 mj P -∗
