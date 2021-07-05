@@ -10,6 +10,8 @@ From Perennial.goose_lang Require Import proofmode wpc_proofmode notation crash_
 From Perennial.goose_lang Require Import persistent_readonly.
 From Perennial.goose_lang.lib Require Import typed_mem.
 From Perennial.goose_lang.lib Require Export rwlock.impl.
+Require Import Field.
+Add Field Qcfield : Qcanon.Qcft.
 Set Default Proof Using "Type".
 
 Section goose_lang.
@@ -23,23 +25,85 @@ Section proof.
   Context `{!heapGS Σ} (N : namespace).
   Context `{!stagedG Σ}.
 
-  Definition rfrac: Qp. Admitted.
-  Definition remaining_frac (n: u64) : Qp. Admitted.
+  Definition rfrac: Qp :=
+    (Qp_inv (Qp_of_Z (2^64)))%Qp.
+
+  Definition num_readers (n : u64) := 0 `max` int.Z (word.sub n 1).
+  Definition remaining_readers (n : u64) : Z :=
+    (2^64 - num_readers n).
+  Definition remaining_frac (n: u64) :=
+    ((Qp_of_Z (remaining_readers n)) * rfrac)%Qp.
 
   Lemma remaining_frac_read_acquire n :
-    int.Z n ≤ int.Z (word.add n 1) →
-    (* int.Z (word.add n 1) < 2^64 → *)
+    1 ≤ int.Z n →
+    int.Z n < int.Z (word.add n 1) →
     remaining_frac n = Qp_add (remaining_frac (word.add n 1)) rfrac.
-  Proof. Admitted.
+  Proof.
+    intros Hle1 Hle2.
+    intros.
+    rewrite -Qp_to_Qc_inj_iff/Qp_of_Z//=.
+    assert (Heq1: Qc_of_Z (1 `max` remaining_readers n) = Qc_of_Z (remaining_readers n)).
+    { f_equal. rewrite /remaining_readers.
+      rewrite Z.max_r //. rewrite /num_readers.
+      word_cleanup.
+    }
+    assert (Heq2: Qc_of_Z (1 `max` remaining_readers (word.add n 1)) =
+                  Qc_of_Z (remaining_readers (word.add n 1))).
+    { f_equal. rewrite /remaining_readers.
+      rewrite Z.max_r //. rewrite /num_readers.
+      word_cleanup.
+    }
+    rewrite ?Heq1 ?Heq2.
+    assert (Heq3: (remaining_readers (word.add n 1)) = remaining_readers n - 1).
+    { rewrite /remaining_readers/num_readers.
+      word_cleanup.
+      assert ((int.Z (word.add n 1) - 1) = int.Z n) as ->.
+      { word_cleanup. }
+      lia.
+    }
+    rewrite Heq3 //=.
+    rewrite Z2Qc_inj_sub.
+    field_simplify => //=.
+    f_equal. rewrite Z2Qc_inj_1. field.
+  Qed.
 
   Lemma remaining_frac_read_release n :
     1 < int.Z n →
     Qp_add (remaining_frac n) rfrac = remaining_frac (word.sub n 1).
-  Proof. Admitted.
+  Proof.
+    intros Hlt.
+    rewrite -Qp_to_Qc_inj_iff/Qp_of_Z//=.
+    assert (Heq1: Qc_of_Z (1 `max` remaining_readers n) = Qc_of_Z (remaining_readers n)).
+    { f_equal. rewrite /remaining_readers.
+      rewrite Z.max_r //. rewrite /num_readers.
+      word_cleanup.
+    }
+    assert (Heq2: Qc_of_Z (1 `max` remaining_readers (word.sub n 1)) =
+                  Qc_of_Z (remaining_readers (word.sub n 1))).
+    { f_equal. rewrite /remaining_readers.
+      rewrite Z.max_r //. rewrite /num_readers.
+      word_cleanup.
+    }
+    rewrite ?Heq1 ?Heq2.
+    assert (Heq3: (remaining_readers (word.sub n 1)) = remaining_readers n + 1).
+    { rewrite /remaining_readers/num_readers.
+      word_cleanup.
+    }
+    rewrite Heq3 //=.
+    rewrite Z2Qc_inj_add.
+    field_simplify => //=.
+  Qed.
 
   Lemma remaining_free :
     remaining_frac 1 = 1%Qp.
-  Proof. Admitted.
+  Proof.
+    rewrite -Qp_to_Qc_inj_iff/Qp_of_Z//=.
+    assert (Heq1: Qc_of_Z (1 `max` remaining_readers 1) = Qc_of_Z (remaining_readers 1)).
+    { f_equal. }
+    rewrite Heq1 //=.
+    field_simplify => //=.
+    rewrite Z2Qc_inj_1. auto.
+  Qed.
 
   Definition rwlock_inv (l : loc) (R Rc: Qp → iProp Σ) : iProp Σ :=
     (∃ u : u64, l ↦{1/4} #u ∗
@@ -161,7 +225,7 @@ Section proof.
     iSplitL "Hl HR".
     { iNext. iExists _. iFrame. }
     wp_pures.
-    destruct (decide (int.Z 1 ≤ int.Z u ∧ int.Z u ≤ int.Z (word.add u 1))).
+    destruct (decide (int.Z 1 ≤ int.Z u ∧ int.Z u < int.Z (word.add u 1))).
     - rewrite ?bool_decide_eq_true_2; try naive_solver.
       wp_pures. wp_bind (CmpXchg _ _ _). iInv N as (u') "[>Hl HR]".
       destruct (decide (u' = u)).
@@ -178,7 +242,7 @@ Section proof.
                                        (Rc (remaining_frac (word.add u 1)))
                                        (Rc rfrac)
                   with "HR"); auto.
-        { rewrite remaining_frac_read_acquire; last naive_solver.
+        { rewrite remaining_frac_read_acquire; try naive_solver.
           iDestruct ("Hwand1" $! _ _) as "(H&?)".
           iApply "H".
         }
@@ -186,7 +250,7 @@ Section proof.
           iDestruct ("Hwand2" $! _ _) as "(_&H)".
           iIntros. iDestruct ("H" with "[$]") as "Hcomb".
           iExactEq "Hcomb".
-          f_equal. rewrite -remaining_frac_read_acquire //; last naive_solver.
+          f_equal. rewrite -remaining_frac_read_acquire //; try naive_solver.
         }
         iApply wp_wpc.
         wp_cmpxchg_suc.

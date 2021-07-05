@@ -18,7 +18,7 @@ Module rwlock.
     Definition try_read_acquire : val :=
       λ: "l",
       let: "n" := ! "l" in
-      if: (#1 ≤ "n") `and` ("n" ≤ "n" + #1) then
+      if: (#1 ≤ "n") `and` ("n" < "n" + #1) then
         CAS "l" "n" ("n" + #1)
       else #false.
 
