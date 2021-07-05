@@ -4,6 +4,12 @@ Require Import Psatz.
 Require Import QArith.
 Local Open Scope Q_scope.
 
+Fixpoint Qppower (q: Qp) (n: nat) :=
+  match n with 
+  | O => 1%Qp
+  | S n' => (q * (Qppower q n'))%Qp
+  end.
+
 Lemma Qp_min_glb1_lt (q q1 q2 : Qp) :
   (q < q1 → q < q2 → q < q1 `min` q2)%Qp.
 Proof.
