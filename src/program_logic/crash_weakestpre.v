@@ -1391,14 +1391,14 @@ Proof.
 Qed.
 *)
 
-Lemma wpc_bind' K `{!LanguageCtx K} s k E1 e Φ Φc :
-  WPC e @ s; k; E1 {{ v, WPC K (of_val v) @ s; k; (match to_val e, to_val (K (of_val v)) with
+Lemma wpc0_bind K `{!LanguageCtx K} s k E1 mj e Φ Φc :
+  wpc0 s k mj E1 e (λ v, wpc0 s k mj (match to_val e, to_val (K (of_val v)) with
                                                   | Some _, _ | _, Some _ => E1
                                                   | _, _ => ⊤
-                                                  end) {{ Φ }} {{ Φc }} }} {{ Φc }}
-                     ⊢ WPC K e @ s; k; E1 {{ Φ }} {{ Φc }}.
+                                                  end) (K (of_val v)) Φ Φc) Φc
+  ⊢ wpc0 s k mj E1 (K e) Φ Φc.
 Proof.
-  iIntros "H". rewrite ?wpc_eq. iIntros (mj). iSpecialize ("H" $! mj).
+  iIntros "H".
   iLöb as "IH" forall (E1 e Φ). rewrite wpc0_unfold /wpc_pre.
   destruct (to_val e) as [v|] eqn:He.
   { setoid_rewrite wpc0_unfold. rewrite /wpc_pre //.
@@ -1408,16 +1408,14 @@ Proof.
     - iSplit.
       * iDestruct "H" as "(H&_)". iIntros.
         iMod ("H" with "[$] [$]") as "(H&Hg&HNC)".
-        rewrite /wpc_def. iSpecialize ("H" $! mj). rewrite wpc0_unfold. rewrite /wpc_pre.
-        rewrite Heq1.
+        rewrite /wpc_def.
         iDestruct "H" as "(H&_)".
         iMod ("H" with "[$] [$]"); eauto.
       * iDestruct "H" as "(_&$)".
     - iSplit.
       * iDestruct "H" as "(H&_)". iIntros.
         iDestruct ("H" with "[$] [$]") as ">(H&Hg&NC)".
-        rewrite /wpc_def. iSpecialize ("H" $! mj). rewrite wpc0_unfold. rewrite /wpc_pre.
-        rewrite Heq1.
+        rewrite /wpc_def.
         iDestruct "H" as "(H&_)".
         iMod ("H" with "[$] [$] [$]") as "$".
         eauto.
@@ -1459,8 +1457,7 @@ Proof.
       iIntros (v') "H".
       iModIntro.
       rewrite Hval'.
-      rewrite -wpc_eq.
-      iApply (wpc_strong_mono with "H"); auto.
+      iApply (wpc0_strong_mono with "H"); auto.
     }
   - rewrite fill_not_val //.
     iApply ("IH" with "[H]").
@@ -1469,9 +1466,19 @@ Proof.
     iIntros (v') "H".
     iModIntro.
     rewrite Hval'.
-    rewrite -wpc_eq.
-    iApply (wpc_strong_mono with "H"); auto.
+    iApply (wpc0_strong_mono with "H"); auto.
     destruct (to_val (K (of_val v'))); set_solver.
+Qed.
+
+Lemma wpc_bind' K `{!LanguageCtx K} s k E1 e Φ Φc :
+  WPC e @ s; k; E1 {{ v, WPC K (of_val v) @ s; k; (match to_val e, to_val (K (of_val v)) with
+                                                  | Some _, _ | _, Some _ => E1
+                                                  | _, _ => ⊤
+                                                  end) {{ Φ }} {{ Φc }} }} {{ Φc }}
+                     ⊢ WPC K e @ s; k; E1 {{ Φ }} {{ Φc }}.
+Proof.
+  iIntros "H". rewrite ?wpc_eq. iIntros (mj). iSpecialize ("H" $! mj).
+  iApply wpc0_bind. iApply (wpc0_strong_mono with "H"); auto.
 Qed.
 
 Lemma wpc_bind K `{!LanguageCtx K} s k E1 e Φ Φc :

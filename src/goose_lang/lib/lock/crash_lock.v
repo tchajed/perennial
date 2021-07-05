@@ -3,11 +3,11 @@ From iris.proofmode Require Import tactics.
 From iris.algebra Require Import excl.
 From Perennial.base_logic.lib Require Import invariants.
 From Perennial.program_logic Require Export weakestpre.
-From Perennial.program_logic Require Import crash_weakestpre staged_invariant.
+From Perennial.program_logic Require Import crash_weakestpre.
 From Perennial.program_logic Require Export na_crash_inv.
 
 From Perennial.goose_lang Require Export lang typing.
-From Perennial.goose_lang Require Import proofmode wpc_proofmode notation.
+From Perennial.goose_lang Require Import proofmode wpc_proofmode notation crash_borrow.
 From Perennial.goose_lang.lib Require Import typed_mem.
 From Perennial.goose_lang.lib Require Import lock.
 
@@ -21,108 +21,78 @@ Context {ext_tys: ext_types ext}.
 Section proof.
   Context `{!heapGS Σ, stagedG Σ} (Nlock: namespace).
 
-  Definition is_crash_lock k (lk: val) (R Rcrash: iProp Σ) : iProp Σ :=
-    is_lock Nlock lk (na_crash_inv k R Rcrash).
+  Definition is_free_crash_lock lk : iProp Σ :=
+    is_free_lock lk ∗ later_tok ∗ later_tok ∗ later_tok.
 
-  Definition crash_locked k lk R Rcrash : iProp Σ :=
-    (na_crash_inv k R Rcrash ∗
-     is_lock Nlock lk (na_crash_inv k R Rcrash) ∗
+  Definition is_crash_lock (lk: val) (R Rcrash: iProp Σ) : iProp Σ :=
+    is_lock Nlock lk (crash_borrow R Rcrash).
+
+  Definition crash_locked lk R Rcrash : iProp Σ :=
+    (crash_borrow R Rcrash ∗
+     is_lock Nlock lk (crash_borrow R Rcrash) ∗
      locked lk)%I.
 
-  (*
-  Lemma newlock_spec K `{!LanguageCtx K} k k' E Φ Φc (R Rcrash : iProp Σ):
-    (k' < k)%nat →
+  Lemma newlock_crash_spec k (P R Rcrash : iProp Σ) K `{!LanguageCtx K} Φ Φc :
+    R -∗
+    □ (R -∗ Rcrash) -∗
+    Φc ∧ (∀ lk, is_crash_lock lk R Rcrash -∗ WPC (K (of_val lk)) @ k; ⊤ {{ Φ }} {{ Φc }}) -∗
+    WPC K (lock.new #()) @ k; ⊤ {{ Φ }} {{ Φc ∗ Rcrash }}.
+  Proof.
+    iIntros "HR #Hwand1 Hwpc".
+    iApply (wpc_crash_borrow_init_ctx' _ _ _ _ _ R Rcrash with "[$] [$] [-]").
+    { auto. }
+    iSplit.
+    { iDestruct "Hwpc" as "($&_)". }
+    iIntros "Hborrow".
+    iApply (wp_wpc_frame').
+    iSplitL "Hwpc".
+    { iExact "Hwpc". }
+
+    iApply (newlock_spec Nlock _ (crash_borrow R Rcrash) with "[$Hborrow]").
+    iNext.
+    iIntros (lk) "His_lock HP".
+    iApply "HP". eauto.
+  Qed.
+
+  Lemma alloc_crash_lock k Φ Φc e lk (R Rcrash : iProp Σ):
     □ (R -∗ Rcrash) ∗
     R ∗
-    Φc ∗
-    (∀ lk γ, Φc -∗ is_crash_lock (LVL k') lk R Rcrash -∗
-             WPC K (of_val lk) @ (LVL k); ⊤; E {{ Φ }} {{ Φc }}) -∗
-    WPC K (lock.new #()) @  (LVL (S k)); ⊤; E {{ Φ }} {{ Φc ∗ Rcrash }}.
-  Proof using ext_tys.
-    iIntros (?) "(#HRcrash&HR&HΦc&Hwp)".
-    iMod (na_crash_inv_alloc Ncrash (LVL k') ⊤ ⊤ Rcrash R with "[HR]") as
-        (γ1) "(Hfull&Hpending)".
-    { iFrame "HR". iModIntro. by iApply "HRcrash". }
-    iApply (wpc_ci_inv _ k k' Ncrash ⊤ E with "[-]"); try assumption.
-    { set_solver +. }
-    iFrame. iFrame "Hstaged_inv".
-    iApply wpc_bind.
-    iApply wp_wpc_frame. iFrame.
-    iApply (newlock_spec Nlock _ with "Hstaged_val").
-    iNext. iIntros (lk γlk) "Hlk HΦc".
-    iApply ("Hwp" with "[$]").
-    rewrite /is_crash_lock. iExists _, _. iFrame. iFrame "#".
-  Qed.
-*)
-
-
-  Lemma alloc_crash_lock' k E lk (R Rcrash : iProp Σ):
-    is_free_lock lk -∗
-    na_crash_inv k R Rcrash
-    ={E}=∗ is_crash_lock k #lk R Rcrash.
+    is_free_crash_lock lk ∗
+    (is_crash_lock #lk R Rcrash -∗
+          WPC e @ k; ⊤ {{ Φ }} {{ Rcrash -∗ Φc }}) -∗
+    WPC e @ k; ⊤ {{ Φ }} {{ Φc }}.
   Proof.
     clear.
-    iIntros "Hfree Hfull".
-    iMod (alloc_lock Nlock _ with "Hfree Hfull") as "Hlk".
-    iModIntro. rewrite /is_crash_lock. eauto.
+    iIntros "(#HRcrash&HR&Hfree&Hwp)".
+    iDestruct "Hfree" as "(Hfree1&Htoks)".
+    iApply (wpc_crash_borrow_init_toks with "[$] HR HRcrash").
+    iIntros "Hborrow".
+    iMod (alloc_lock with "[$] [Hborrow]") as "H".
+    { iNext. iExact "Hborrow". }
+    iApply "Hwp". iFrame.
   Qed.
 
-  Lemma alloc_crash_lock_cfupd {lk} k' (R Rcrash : iProp Σ):
-    is_free_lock lk -∗
-    □ (▷ R -∗ |C={⊤}_k'=> ▷ Rcrash) -∗
-    ▷ R ={⊤}=∗
-    is_crash_lock (S k') #lk R Rcrash ∗
-    <disc> |C={⊤}_(S k')=> ▷ Rcrash.
-  Proof.
-    clear.
-    iIntros "Hfree #HRcrash HR".
-    iPoseProof (na_crash_inv_alloc k' ⊤ Rcrash R with "[HR] HRcrash") as "H".
-    { iFrame "HR". }
-    iMod (fupd_level_fupd with "H") as "(Hfull&?)".
-    iMod (alloc_crash_lock' with "Hfree Hfull") as "Hlk".
-    by iFrame.
-  Qed.
-
-  Lemma alloc_crash_lock k k' Φ Φc e lk (R Rcrash : iProp Σ):
-    (k' < k)%nat →
-    □ (▷ R -∗ |C={⊤}_k'=> ▷ Rcrash) ∗
-    ▷ R ∗
-    is_free_lock lk ∗
-    (is_crash_lock (S k') #lk R Rcrash -∗
-          WPC e @ (S k); ⊤ {{ Φ }} {{ ▷ Rcrash -∗ Φc }}) -∗
-    WPC e @ (S k); ⊤ {{ Φ }} {{ Φc }}.
-  Proof.
-    clear.
-    iIntros (?) "(#HRcrash&HR&Hfree&Hwp)".
-    iMod (alloc_crash_lock_cfupd k' with "Hfree HRcrash HR") as "(Hlk&Hcfupd)".
-    iSpecialize ("Hwp" with "Hlk").
-    iApply (wpc_crash_frame_wand with "Hwp [Hcfupd]").
-    iModIntro.
-    iMod "Hcfupd". do 2 iModIntro; auto.
-  Qed.
-
-  Lemma acquire_spec k E (R Rcrash : iProp Σ) lk:
+  Lemma acquire_spec E (R Rcrash : iProp Σ) lk:
     ↑Nlock ⊆ E →
-    {{{ is_crash_lock k lk R Rcrash }}}
+    {{{ is_crash_lock lk R Rcrash }}}
     lock.acquire lk @ E
-    {{{ RET #(); crash_locked k lk R Rcrash }}}.
+    {{{ RET #(); crash_locked lk R Rcrash }}}.
   Proof.
     iIntros (? Φ) "#Hcrash HΦ".
     wp_apply (acquire_spec' with "Hcrash"); auto.
     iIntros "(?&?)". iApply "HΦ". iFrame. iFrame "#".
   Qed.
 
-  Lemma use_crash_locked E1 k k' e lk R Rcrash Φ Φc {HL: AbsLaterable Φc}:
-    (S k ≤ k')%nat →
-    crash_locked (S k') lk R Rcrash -∗
-    <disc> Φc ∧ (▷ R -∗
-         WPC e @ (S k); E1 {{ λ v, (crash_locked (S k') lk R Rcrash -∗ (<disc> Φc ∧ Φ v)) ∗ ▷ R }}
-                                         {{ Φc ∗ ▷ Rcrash }}) -∗
-    WPC e @ (S k); E1 {{ Φ }} {{ Φc }}.
+  Lemma use_crash_locked E1 k e lk R Rcrash Φ Φc :
+    to_val e = None →
+    crash_locked lk R Rcrash -∗
+    Φc ∧ (R -∗ WPC e @ k; E1 {{ λ v, (crash_locked lk R Rcrash -∗ (Φc ∧ Φ v)) ∗ R }}
+                                         {{ Φc ∗ Rcrash }}) -∗
+    WPC e @ k; E1 {{ Φ }} {{ Φc }}.
   Proof.
     iIntros (?) "Hcrash_locked H".
     iDestruct "Hcrash_locked" as "(Hfull&#His_lock&Hlocked)".
-    iApply (wpc_na_crash_inv_open _ k k' (S k) with "[$] [H Hlocked]"); try iFrame; auto.
+    iApply (wpc_crash_borrow_open with "[$]"); auto.
     iSplit.
     - iDestruct "H" as "($&_)".
     - iIntros "HR". iDestruct "H" as "(_&H)".
@@ -131,12 +101,12 @@ Section proof.
       iSplit.
       * iIntros (?) "(Hclose&?)". iModIntro. iFrame. iFrame "#".
         iIntros. iApply "Hclose". iFrame; eauto.
-      * iIntros.  iIntros "!> $". eauto.
+      * iIntros.  iIntros "!>". eauto.
   Qed.
 
-  Lemma release_spec k E (R Rcrash : iProp Σ) lk:
+  Lemma release_spec E (R Rcrash : iProp Σ) lk:
     ↑Nlock ⊆ E →
-    {{{ crash_locked k lk R Rcrash }}}
+    {{{ crash_locked lk R Rcrash }}}
     lock.release lk @ E
     {{{ RET #(); True }}}.
   Proof.
@@ -153,14 +123,13 @@ Section proof.
      let: "v" := e in
      lock.release lk)%E.
 
-  Lemma with_lock_spec k k' Φ Φc {HL: AbsLaterable Φc} (R Rcrash : iProp Σ) lk e:
-    (S k ≤ k')%nat →
-    is_crash_lock (S k') lk R Rcrash ∗
-    (<disc> Φc ∧
-      (▷ R -∗ WPC e @ (S k); ⊤ {{ λ v, (<disc> Φc ∧ Φ #()) ∗ ▷ R }} {{ Φc ∗ ▷ Rcrash }})) -∗
-    WPC (with_lock lk e) @ (S k) ; ⊤ {{ Φ }} {{ Φc }}.
+  Lemma with_lock_spec k Φ Φc (R Rcrash : iProp Σ) lk e:
+    to_val e = None →
+    is_crash_lock lk R Rcrash ∗
+    (Φc ∧ (R -∗ WPC e @ k; ⊤ {{ λ v, (Φc ∧ Φ #()) ∗ R }} {{ Φc ∗ Rcrash }})) -∗
+    WPC (with_lock lk e) @ k ; ⊤ {{ Φ }} {{ Φc }}.
   Proof.
-    iIntros (?) "(#Hcrash&Hwp)".
+    iIntros (Hnv) "(#Hcrash&Hwp)".
     rewrite /with_lock.
     wpc_bind (lock.acquire lk).
     wpc_frame "Hwp".
@@ -179,7 +148,7 @@ Section proof.
     iSpecialize ("H" with "[$]").
     iApply (wpc_strong_mono with "H"); eauto.
     iSplit; last first.
-    { iIntros. iModIntro. iIntros "H". repeat iModIntro; auto. }
+    { iIntros. iModIntro. iFrame. }
     iIntros (?) "(H&?)". iModIntro. iFrame.
     iIntros "Hlocked".
     iSplit.
