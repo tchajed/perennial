@@ -275,7 +275,7 @@ Section proof.
             assert (int.Z (word.sub u 1) = int.Z 0) as Heqsub.
             { rewrite Heq //. }
             rewrite word.unsigned_sub in Heqsub.
-            rewrite wrap_small in Heqsub. 
+            rewrite wrap_small in Heqsub.
             {
               replace (int.Z 0) with 0 in * by auto.
               replace (int.Z 1) with 1 in * by auto.
@@ -302,6 +302,71 @@ Section proof.
     wp_apply (try_read_release_spec with "[$Hl $Hcb]"); auto. iIntros ([]).
     - iIntros "H". wp_if. iApply "HΦ"; by iFrame.
     - iIntros "H". wp_if. iApply ("IH" with "[$] [HΦ]"). auto.
+  Qed.
+
+  Lemma try_write_acquire_spec lk R Rc :
+    {{{ is_rwlock lk R Rc }}} rwlock.try_write_acquire lk
+    {{{ b, RET #b; if b is true then wlocked lk ∗ crash_borrow (R 1%Qp) (Rc 1%Qp) else True }}}.
+  Proof.
+    iIntros (Φ) "(#Hwand1&#Hwand2&#Hwand3&#Hl) HΦ". iDestruct "Hl" as (l ->) "#Hinv".
+    wp_rec.
+    wp_bind (CmpXchg _ _ _). iInv N as (u') "[>Hl HR]".
+    destruct (decide (u' = 1)).
+    - rewrite decide_False; last first.
+      { intros Heq0. subst. inversion Heq0. }
+      subst.
+      iDestruct "HR" as "(>Hl2&Hb)".
+      iCombine "Hl Hl2" as "Hl".
+      rewrite Qp_quarter_three_quarter.
+      wp_cmpxchg_suc.
+      iModIntro.
+      iEval (rewrite -Qp_quarter_three_quarter) in "Hl".
+      iDestruct (fractional.fractional_split_1 with "Hl") as "[Hl1 Hl2]".
+      iSplitL "Hl1"; first (iNext; iExists (U64 0); eauto).
+      wp_pures.
+      iApply "HΦ".
+      rewrite remaining_free.
+      iFrame. rewrite /wlocked.
+      eauto with iFrame.
+    - wp_cmpxchg_fail.
+      iModIntro.
+      iSplitL "Hl HR".
+      { iExists u'. iFrame. }
+      wp_pures. by iApply "HΦ".
+  Qed.
+
+  Lemma write_acquire_spec lk R Rc :
+    {{{ is_rwlock lk R Rc }}}
+      rwlock.write_acquire lk
+    {{{ RET #(); wlocked lk ∗ crash_borrow (R 1%Qp) (Rc 1%Qp) }}}.
+  Proof.
+    iIntros (Φ) "#Hl HΦ". iLöb as "IH". wp_rec.
+    wp_apply (try_write_acquire_spec with "Hl"); auto. iIntros ([]).
+    - iIntros "[Hlked HR]". wp_if. iApply "HΦ"; by iFrame.
+    - iIntros "_". wp_if. iApply ("IH" with "[HΦ]"). auto.
+  Qed.
+
+  Lemma release_spec lk R Rc :
+    {{{ is_rwlock lk R Rc ∗ wlocked lk ∗ crash_borrow (R 1%Qp) (Rc 1%Qp) }}}
+      rwlock.write_release lk
+    {{{ RET #(); True }}}.
+  Proof.
+    iIntros (Φ) "((#Hwand1&#Hwand2&#Hwand3&#Hl)&Hlocked&Hborrow) HΦ". iDestruct "Hl" as (l ->) "#Hinv".
+    wp_rec.
+    wp_bind (CmpXchg _ _ _).
+    iInv N as (b) "[>Hl _]".
+
+    iDestruct (locked_loc with "Hlocked") as "Hl2".
+    iDestruct (heap_mapsto_agree with "[$Hl $Hl2]") as %->.
+    iCombine "Hl Hl2" as "Hl".
+    rewrite Qp_quarter_three_quarter.
+    wp_cmpxchg_suc.
+    iModIntro.
+    iSplitR "HΦ"; last by wp_seq; iApply "HΦ".
+    iEval (rewrite -Qp_quarter_three_quarter) in "Hl".
+    iDestruct (fractional.fractional_split_1 with "Hl") as "[Hl1 Hl2]".
+    iNext. iExists (U64 1). iFrame.
+    rewrite remaining_free. eauto.
   Qed.
 
 End proof.
