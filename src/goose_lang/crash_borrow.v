@@ -391,16 +391,17 @@ Proof.
   - iDestruct "Hc" as "(_&$)". eauto.
 Qed.
 
-Lemma wpc_crash_borrow_combine k E e Φ Φc P P1 P2 Pc1 Pc2 :
+Lemma wpc_crash_borrow_combine k E e Φ Φc P Pc P1 P2 Pc1 Pc2 :
   language.to_val e = None →
   ▷ crash_borrow P1 Pc1 -∗
   ▷ crash_borrow P2 Pc2 -∗
-  □ (P -∗ (Pc1 ∗ Pc2)) -∗
+  □ (P -∗ Pc) -∗
+  (Pc -∗ (Pc1 ∗ Pc2)) -∗
   (P1 ∗ P2 ==∗ P) -∗
-  WPC e @ NotStuck; k; E {{ λ v, (crash_borrow P (Pc1 ∗ Pc2)) -∗ (Φc ∧ Φ v) }} {{ Φc }} -∗
+  WPC e @ NotStuck; k; E {{ λ v, (crash_borrow P Pc) -∗ (Φc ∧ Φ v) }} {{ Φc }} -∗
   WPC e @ NotStuck; k; E {{ Φ }} {{ Φc }}.
 Proof.
-  iIntros (Hnval) "Hborrow1 Hborrow2 #Hc Hwand Hwpc".
+  iIntros (Hnval) "Hborrow1 Hborrow2 #Hc Hwandc12 HwandP Hwpc".
 
   iDestruct "Hborrow1" as "(#Hwand1&Hinv1&Htok1&>Htok2)".
   iApply (wpc_later_tok_use with "[$]"); first done.
@@ -442,19 +443,22 @@ Proof.
 
   iDestruct ("Htok") as "(Htok1&Htok)".
   iDestruct ("Htok") as "(Htok2&Htok)".
-  iMod ("Hwand" with "[$]") as "HP".
+  iMod ("HwandP" with "[$]") as "HP".
   assert (∃ mj0, /2 < mj0 ∧ mj0 < mj_wp1 `min` mj_wp2)%Qp as (mj0&Hmj0).
   {
     apply Qp_lt_densely_ordered.
     apply Qp_min_glb1_lt; auto.
   }
 
-  iMod (staged_inv_create _ _ P (Pc1 ∗ Pc2) ⊤ _ mj0 with "[$] [$] Hitok_new [$] [$]") as "(Hval&Hcancel)".
+  iMod (staged_inv_create _ _ P Pc ⊤ _ mj0 with "[$] [$] Hitok_new [$] [$]") as "(Hval&Hcancel)".
   { naive_solver. }
 
   iDestruct (staged_inv_cancel_wpc_crash_modality with "Hcancel") as "Hcancel".
   iDestruct ("Htok") as "(Htok1&Htok)".
   iDestruct ("Htok") as "(Htok2&Htok)".
+  iAssert (wpc_crash_modality ⊤ mj0 (Pc1 ∗ Pc2))%I with "[Hwandc12 Hcancel]" as "Hcancel".
+  { iApply (wpc_crash_modality_wand with "Hcancel"). iIntros "? !>".
+    by iApply "Hwandc12". }
   iDestruct (wpc_crash_modality_split _ _ _ (mj_wp1 `min` mj_wp2) with "[$] [$] [$] [$]") as "Hcancel".
   { auto. }
 

@@ -222,33 +222,89 @@ Section proof.
     - iIntros "_". wp_if. iApply ("IH" with "[HΦ]"). auto.
   Qed.
 
+  Lemma try_read_release_spec lk R Rc :
+    {{{ is_rwlock lk R Rc ∗ crash_borrow (R rfrac) (Rc rfrac) }}} rwlock.try_read_release lk
+    {{{ b, RET #b; if b is false then crash_borrow (R rfrac) (Rc rfrac) else True }}}.
+  Proof.
+    iIntros (Φ) "((#Hwand1&#Hwand2&#Hwand3&#Hl)&Hborrow) HΦ". iDestruct "Hl" as (l ->) "#Hinv".
+    wp_rec. wp_bind (!#l)%E.
+    iInv N as (u) "[Hl HR]".
+    iApply (wp_load with "[$]").
+    iNext. iIntros "Hl".
+    iModIntro.
+    iSplitL "Hl HR".
+    { iNext. iExists _. iFrame. }
+    wp_pures.
+    case_bool_decide.
+    - wp_pures. wp_bind (CmpXchg _ _ _). iInv N as (u') "[>Hl HR]".
+      destruct (decide (u' = u)).
+      * subst.
+        rewrite (decide_False); last first.
+        {  intros Hu. subst. inversion H.  }
+        iDestruct "HR" as "[>Hl2 HR]".
+        iCombine "Hl Hl2" as "Hl".
+        rewrite Qp_quarter_three_quarter.
+        iApply (wpc_wp NotStuck 0 _ _ _ True).
+        iApply (wpc_crash_borrow_combine _ _ _ _ _ (R (remaining_frac (word.sub u 1))) _
+                                       (R (remaining_frac u))
+                                       (R rfrac)
+                                       (Rc (remaining_frac u))
+                                       (Rc rfrac)
+                  with "HR Hborrow"); auto.
+        { rewrite -remaining_frac_read_release; last naive_solver.
+          iDestruct ("Hwand2" $! _ _) as "(H&?)".
+          iApply "H".
+        }
+        {
+          iDestruct ("Hwand1" $! _ _) as "(_&H)".
+          iIntros. iModIntro. iDestruct ("H" with "[$]") as "Hcomb".
+          iExactEq "Hcomb".
+          f_equal. rewrite -remaining_frac_read_release; auto.
+        }
+        iApply wp_wpc.
+        wp_cmpxchg_suc.
+        iModIntro.
+        iEval (rewrite -Qp_quarter_three_quarter) in "Hl".
+        iDestruct (fractional.fractional_split_1 with "Hl") as "[Hl1 Hl2]".
+        iIntros "Hc".
+        iSplit; first done. iModIntro.
+        iSplitL "Hl1 Hl2 Hc"; first (iNext; iExists (word.sub u 1); eauto).
+        { iFrame.
+          rewrite (decide_False); last first.
+          { intros Heq.
+            assert (int.Z (word.sub u 1) = int.Z 0) as Heqsub.
+            { rewrite Heq //. }
+            rewrite word.unsigned_sub in Heqsub.
+            rewrite wrap_small in Heqsub. 
+            {
+              replace (int.Z 0) with 0 in * by auto.
+              replace (int.Z 1) with 1 in * by auto.
+              lia.
+            }
+            split.
+            - lia.
+            - word_cleanup.
+          }
+          iFrame.
+        }
+        wp_pures. iModIntro. iApply "HΦ". eauto.
+      * wp_cmpxchg_fail. iModIntro.
+        iSplitL "Hl HR".
+        { iNext. iExists _. iFrame. }
+        wp_pures. iModIntro. iApply "HΦ". eauto.
+    - wp_pures. iModIntro. iApply "HΦ". eauto.
+  Qed.
+
   Lemma read_release_spec lk R Rc :
     {{{ is_rwlock lk R Rc ∗ crash_borrow (R rfrac) (Rc rfrac) }}} rwlock.read_release lk {{{ RET #(); True }}}.
   Proof.
-    iIntros (Φ) "((#Hwand1&#Hwand2&#Hwand3&Hlock) & HR) HΦ".
-    iDestruct "Hlock" as (l ->) "#Hinv".
-    rewrite /rwlock.read_release /=. wp_lam.
-    wp_bind (CmpXchg _ _ _).
-    iInv N as (b) "[>Hl _]".
-
-    iDestruct (locked_loc with "Hlocked") as "Hl2".
-    iDestruct (heap_mapsto_agree with "[$Hl $Hl2]") as %->.
-    iCombine "Hl Hl2" as "Hl".
-    rewrite Qp_quarter_three_quarter.
-    wp_cmpxchg_suc.
-    iModIntro.
-    iSplitR "HΦ"; last by wp_seq; iApply "HΦ".
-    iEval (rewrite -Qp_quarter_three_quarter) in "Hl".
-    iDestruct (fractional.fractional_split_1 with "Hl") as "[Hl1 Hl2]".
-    iNext. iExists false. iFrame.
+    iIntros (Φ) "(#Hl&Hcb) HΦ". iLöb as "IH". wp_rec.
+    wp_apply (try_read_release_spec with "[$Hl $Hcb]"); auto. iIntros ([]).
+    - iIntros "H". wp_if. iApply "HΦ"; by iFrame.
+    - iIntros "H". wp_if. iApply ("IH" with "[$] [HΦ]"). auto.
   Qed.
-
-  Lemma release_spec lk R :
-    {{{ is_lock lk R ∗ locked lk ∗ ▷ R }}} lock.release lk {{{ RET #(); True }}}.
-  Proof. eapply release_spec'; auto. Qed.
-
 
 End proof.
 End goose_lang.
 
-Typeclasses Opaque is_lock is_cond locked.
+Typeclasses Opaque is_rwlock.
