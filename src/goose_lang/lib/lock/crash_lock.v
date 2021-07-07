@@ -22,7 +22,7 @@ Section proof.
   Context `{!heapGS Σ, stagedG Σ} (Nlock: namespace).
 
   Definition is_free_crash_lock lk : iProp Σ :=
-    is_free_lock lk ∗ later_tok ∗ later_tok ∗ later_tok.
+    is_free_lock lk ∗ pre_borrow.
 
   Definition is_crash_lock (lk: val) (R Rcrash: iProp Σ) : iProp Σ :=
     is_lock Nlock lk (crash_borrow R Rcrash).
@@ -31,6 +31,17 @@ Section proof.
     (crash_borrow R Rcrash ∗
      is_lock Nlock lk (crash_borrow R Rcrash) ∗
      locked lk)%I.
+
+  Lemma wp_new_free_crash_lock :
+    {{{ True }}} lock.new #() {{{ lk, RET #lk; is_free_crash_lock lk }}}.
+  Proof.
+    iIntros (Φ) "_ HΦ".
+    iApply (wpc_wp _ O).
+    iApply wpc_crash_borrow_generate_pre; auto.
+    iApply wp_wpc.
+    wp_apply wp_new_free_lock.
+    iIntros. iApply "HΦ". iFrame.
+  Qed.
 
   Lemma newlock_crash_spec k (P R Rcrash : iProp Σ) K `{!LanguageCtx K} Φ Φc :
     R -∗
@@ -65,7 +76,7 @@ Section proof.
     clear.
     iIntros "(#HRcrash&HR&Hfree&Hwp)".
     iDestruct "Hfree" as "(Hfree1&Htoks)".
-    iApply (wpc_crash_borrow_init_toks with "[$] HR HRcrash").
+    iApply (wpc_crash_borrow_inits with "[$] HR HRcrash").
     iIntros "Hborrow".
     iMod (alloc_lock with "[$] [Hborrow]") as "H".
     { iNext. iExact "Hborrow". }

@@ -171,7 +171,7 @@ Section proof.
   Global Instance wlocked_timeless l : Timeless (wlocked l).
   Proof. apply _. Qed.
 
-  Definition is_free_lock (l: loc): iProp Σ := l ↦ #1.
+  Definition is_free_lock (l: loc): iProp Σ := l ↦ #1 ∗ later_tok ∗ later_tok ∗ later_tok ∗ later_tok.
 
   Theorem is_free_lock_ty lk :
     is_free_lock lk -∗ ⌜val_ty #lk rwlockRefT⌝.
@@ -185,7 +185,7 @@ Section proof.
     □ (∀ q1 q2, R (q1 + q2)%Qp ∗-∗ R q1 ∗ R q2) -∗
     □ (∀ q1 q2, Rc (q1 + q2)%Qp ∗-∗ Rc q1 ∗ Rc q2) -∗
     □ (∀ q, R q -∗ Rc q) -∗
-    is_free_lock l -∗ crash_borrow (R 1%Qp) (Rc 1%Qp) ={E}=∗ is_rwlock #l R Rc.
+    l ↦ #1 -∗ crash_borrow (R 1%Qp) (Rc 1%Qp) ={E}=∗ is_rwlock #l R Rc.
   Proof.
     iIntros "? ? ? Hl HR".
     iMod (inv_alloc N _ (rwlock_inv l R Rc) with "[Hl HR]") as "#?".
@@ -203,12 +203,35 @@ Section proof.
     iSplit; eauto.
   Qed.
 
-  Lemma wp_new_free_lock E:
-    {{{ True }}} rwlock.new #() @ E {{{ lk, RET #lk; is_free_lock lk }}}.
+  Lemma wp_new_free_lock:
+    {{{ True }}} rwlock.new #() {{{ lk, RET #lk; is_free_lock lk }}}.
   Proof.
     iIntros (Φ) "_ HΦ".
     wp_call.
+    iApply wp_crash_borrow_generate_pre; first auto.
     wp_apply wp_alloc_untyped; auto.
+    iIntros (?) "Hl Htoks".
+    iApply "HΦ". iFrame.
+ Qed.
+
+  Lemma alloc_rwlock k Φ Φc e lk (R Rc : Qp → iProp Σ):
+    □ (∀ q1 q2, R (q1 + q2)%Qp ∗-∗ R q1 ∗ R q2) -∗
+    □ (∀ q1 q2, Rc (q1 + q2)%Qp ∗-∗ Rc q1 ∗ Rc q2) -∗
+    □ (∀ q, R q -∗ Rc q) -∗
+    R 1%Qp ∗
+    is_free_lock lk ∗
+    (is_rwlock #lk R Rc -∗
+          WPC e @ k; ⊤ {{ Φ }} {{ Rc 1%Qp -∗ Φc }}) -∗
+    WPC e @ k; ⊤ {{ Φ }} {{ Φc }}.
+  Proof.
+    clear.
+    iIntros "#Hwand1 #Hwand2 #Hwand3 (HR&Hfree&Hwp)".
+    iDestruct "Hfree" as "(Hfree1&Htoks)".
+    iApply (wpc_crash_borrow_inits with "[$] HR []").
+    { iModIntro. iApply "Hwand3". }
+    iIntros "Hborrow".
+    iMod (alloc_lock with "[] [] [] [$] Hborrow") as "H"; try eauto.
+    iApply "Hwp". eauto.
   Qed.
 
   Lemma try_read_acquire_spec E lk R Rc :
