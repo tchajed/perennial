@@ -211,11 +211,11 @@ Proof.
   iApply (wp_wpc). iApply "H".
 Qed.
 
-Lemma wpc_crash_borrow_init_ctx' s k e Φ Φc P Pc K `{!LanguageCtx K} :
+Lemma wpc_crash_borrow_init_ctx'' s k e Φ Φc P Pc K `{!LanguageCtx K} :
   language.to_val e = None →
   P -∗
   □ (P -∗ Pc) -∗
-  Φc ∧ (crash_borrow P Pc -∗
+  (∀ mj, wpc_crash_modality ⊤ mj Φc) ∧ (crash_borrow P Pc -∗
         WPC e @ s; k; (⊤ ∖ (↑borrowN : coPset))
                  {{ λ v, WPC K (of_val v) @ s; k ; ⊤ {{ Φ }} {{ Φc }} }}
                  {{ Φc }}) -∗
@@ -228,8 +228,13 @@ Proof.
   rewrite Hnv.
   rewrite wpc0_unfold.
   iSplit; last first.
-  { iIntros. iApply step_fupd2N_inner_later; eauto. iNext. iFrame.
-    iDestruct "Hwpc" as "($&_)". by iApply "Hwand". }
+  { iIntros. iDestruct "Hwpc" as "(H&_)".
+    iSpecialize ("H" $! mj).
+    rewrite /wpc_crash_modality.
+    iSpecialize ("H" with "[$] [$]").
+    iApply (step_fupd2N_inner_wand with "H"); auto.
+    iIntros "($&$)". iApply "Hwand". iFrame.
+  }
   rewrite Hnv.
   iIntros (q σ g1 ns D κ κs nt) "Hσ Hg HNC".
   iInv "Hinv" as ">H" "Hclo".
@@ -321,6 +326,23 @@ Proof.
   { destruct (to_val (K _)); auto. }
 Qed.
 
+Lemma wpc_crash_borrow_init_ctx' s k e Φ Φc P Pc K `{!LanguageCtx K} :
+  language.to_val e = None →
+  P -∗
+  □ (P -∗ Pc) -∗
+  Φc ∧ (crash_borrow P Pc -∗
+        WPC e @ s; k; (⊤ ∖ (↑borrowN : coPset))
+                 {{ λ v, WPC K (of_val v) @ s; k ; ⊤ {{ Φ }} {{ Φc }} }}
+                 {{ Φc }}) -∗
+  WPC K e @ s; k; ⊤ {{ Φ }} {{ Φc ∗ Pc }}.
+Proof.
+  iIntros (Hnv) "HP HPC Hwpc".
+  iApply (wpc_crash_borrow_init_ctx'' with "HP HPC"); auto.
+  iSplit.
+  - iIntros. iApply wpc_crash_modality_intro. iLeft in "Hwpc". eauto.
+  - iRight in "Hwpc". eauto.
+Qed.
+
 Lemma wpc_crash_borrow_init_ctx s k e Φ Φc P Pc K `{!LanguageCtx K} :
   language.to_val e = None →
   P -∗
@@ -332,7 +354,10 @@ Lemma wpc_crash_borrow_init_ctx s k e Φ Φc P Pc K `{!LanguageCtx K} :
   WPC K e @ s; k; ⊤ {{ Φ }} {{ Φc }}.
 Proof.
   iIntros (Hnv) "HP HPC Hwpc".
-  iPoseProof (wpc_crash_borrow_init_ctx' _ _ e Φ (Pc -∗ Φc) with "HP HPC [Hwpc]") as "H"; auto.
+  iPoseProof (wpc_crash_borrow_init_ctx'' _ _ e Φ (Pc -∗ Φc) with "HP HPC [Hwpc]") as "H"; auto.
+  {  iSplit.
+     - iIntros. iApply wpc_crash_modality_intro. iLeft in "Hwpc". eauto.
+     - iRight in "Hwpc". eauto. }
   iApply (wpc_mono with "H"); auto.
   iIntros "(H1&HP)". iApply "H1". eauto.
 Qed.

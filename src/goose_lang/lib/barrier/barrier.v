@@ -127,6 +127,7 @@ Proof.
   - iExists γ. eauto.
 Qed.
 
+(* TODO: this extra Φc can be removed. *)
 Lemma signal_spec l P Pc Φ Φc k K `{!LanguageCtx K}:
   send l P Pc -∗
   P -∗
@@ -138,7 +139,7 @@ Proof.
   { iDestruct "Hs" as (?) "($&_)". }
   iApply (wpc_crash_borrow_init_ctx' with "HP"); auto.
   iSplit.
-  { by iLeft in "HK". }
+  { iIntros. iDestruct "HK" as "($&_)". }
   iIntros "Hcb".
   iCache with "HK".
   { by iLeft in "HK". }
