@@ -1,6 +1,6 @@
 From iris.algebra Require Import auth gset.
 From Perennial.program_logic Require Export weakestpre crash_weakestpre.
-From Perennial.base_logic Require Import invariants lib.saved_prop.
+From Perennial.base_logic Require Import invariants lib.saved_prop lib.ghost_map.
 From Perennial.goose_lang Require Export lang.
 From Perennial.goose_lang Require Export lang typing.
 From Perennial.goose_lang Require Import proofmode wpc_proofmode notation crash_borrow.
@@ -183,10 +183,7 @@ Proof.
     { iExists false, γsps, γcsps, fprop, fcprop. iFrame. }
     wp_pures. by wp_apply ("IH" with "[$] [$] [$] [$]"). }
   iDestruct "HRs" as "(>Hc●&#Hsaved&#Hsavedc&Hcb)".
-  (*
-  iSpecialize ("HRs" with "[//]").
-  iApply (wp_load with "[$]").
-   *)
+
   iDestruct (own_valid_2 with "H● H◯")
     as %[Hvalid%gset_disj_included%elem_of_subseteq_singleton _]%auth_both_valid_discrete.
   iDestruct (own_valid_2 with "Hc● Hc◯")
@@ -203,6 +200,22 @@ Proof.
     iDestruct (big_sepS_delete with "Hsaved") as "[Hthis _]"; first done.
     iDestruct (saved_prop_agree with "Hthis Hsp") as "Hequiv". eauto. }
 
+  iApply (wpc_wp _ 0 _ _ _ True%I).
+  iApply (wpc_crash_borrow_split' _ _ _ _ _ _ _
+            ([∗ set] γsp ∈ γsps ∖ {[ γsp ]}, (fprop γsp))
+            R
+            ([∗ set] γsp ∈ γcsps ∖ {[ γspc ]}, (fcprop γsp))
+            Rc
+            with "[$Hcb] [HR] [] [] []"); first done.
+  { do 2 iNext. iIntros "HRs".
+    iDestruct (big_sepS_delete with "HRs") as "[HR'' HRs]"; first done.
+    iFrame. iApply "HR". iRewrite -"Hequiv". eauto. }
+  { do 2 iNext. iIntros "HRs".
+    iDestruct (big_sepS_delete with "HRs") as "[HR'' HRs]"; first done.
+    iFrame. iApply "HR". iRewrite -"Hequiv". eauto. }
+    i
+
+  iApply (crash+_
 
   iDestruct (big_sepS_delete with "HRs") as "[HR'' HRs]"; first done.
   iDestruct "HR''" as (R'') "[#Hsp' HR'']".

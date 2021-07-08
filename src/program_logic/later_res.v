@@ -40,6 +40,11 @@ Proof using LT.
   intros ?? ?%num_laters_per_step_exp. lia.
 Qed.
 
+Lemma num_laters_per_step_lt2 : ∀ n1 n2, n1 < n2 → S (num_laters_per_step n1) < num_laters_per_step n2.
+Proof using LT.
+  intros ?? ?%num_laters_per_step_exp. lia.
+Qed.
+
 Lemma later_tok_incrN n g ns mj D κ :
   global_state_interp g ns mj D κ ==∗
   global_state_interp g (n + ns) mj D κ ∗
@@ -51,10 +56,10 @@ Proof.
     by iMod (later_tok_incr with "[$]") as "($&$)".
 Qed.
 
-Lemma wpc_later_tok_use s E e k Φ Φc :
+Lemma wpc_later_tok_use2 s E e k Φ Φc :
   language.to_val e = None →
   later_tok -∗
-  ▷ WPC e @ s; k; E {{ v, later_tok -∗ Φ v }} {{ later_tok -∗ Φc }} -∗
+  ▷▷ WPC e @ s; k; E {{ v, later_tok -∗ Φ v }} {{ later_tok -∗ Φc }} -∗
   WPC e @ s; k; E {{ Φ }} {{ Φc }}.
 Proof.
   iIntros (Hnval) "Htok Hwp".
@@ -65,17 +70,20 @@ Proof.
   - iIntros (q σ1 g1 ns D κ κs nt) "Hσ Hg HNC".
     iMod (later_tok_decr with "[$]") as (ns' Heq) "Hg".
     iMod (fupd2_mask_subseteq ∅ ∅) as "H"; [ set_solver+ | set_solver+ |].
-    iModIntro. simpl. iModIntro. iNext. iMod "H" as "_".
+    iApply (step_fupd_extra.step_fupd2N_le (S (S (S (num_laters_per_step ns')))) (S (num_laters_per_step ns))).
+    { assert (Hlt: ns' < ns) by lia.
+      apply num_laters_per_step_lt2 in Hlt. lia.
+    }
+    iModIntro. simpl. iModIntro. iNext.
+    iModIntro. simpl. iModIntro. iNext.
+    iMod "H" as "_".
     iDestruct ("Hwp" $! _) as "(Hwp&_)".
     iSpecialize ("Hwp" $! _ _ _ _ _ _ _ with "Hσ Hg HNC").
     iMod "Hwp".
-    iApply (step_fupd_extra.step_fupd2N_le (S (num_laters_per_step ns')) (num_laters_per_step ns)
-              with "[Hwp]").
-    { assert (Hlt: ns' < ns) by lia.
-      apply num_laters_per_step_lt in Hlt. lia.
-    }
+    iMod "Hwp". iModIntro. iModIntro.
+    iNext.
     iApply (step_fupd_extra.step_fupd2N_wand with "Hwp").
-    iNext. iIntros "($&H)".
+    iIntros "($&H)".
     iIntros. iMod ("H" with "[//]") as "(Hσ&Hg&Hwp&$)".
     iMod (later_tok_incr with "[$]") as "(Hg&Htok')".
     iFrame.
@@ -89,10 +97,11 @@ Proof.
   - iIntros (g ns D κs) "Hg HC".
     iMod (later_tok_decr with "[$]") as (ns' Heq) "Hg".
     iMod (fupd2_mask_subseteq ∅ ∅) as "H"; [ set_solver+ | set_solver+ |].
-    iApply (step_fupd_extra.step_fupd2N_le (S (num_laters_per_step ns')) (num_laters_per_step ns)).
+    iApply (step_fupd_extra.step_fupd2N_le (S (S (num_laters_per_step ns'))) (num_laters_per_step ns)).
     { assert (Hlt: ns' < ns) by lia.
-      apply num_laters_per_step_lt in Hlt. lia.
+      apply num_laters_per_step_lt2 in Hlt. lia.
     }
+    rewrite Nat_iter_S. iModIntro. iModIntro. iNext.
     rewrite Nat_iter_S. iModIntro. iModIntro. iNext.
     iMod "H". iDestruct ("Hwp" $! _) as "(_&Hwp)".
     iMod ("Hwp" with "[$] [$]") as "Hwp".
@@ -104,6 +113,16 @@ Proof.
     { lia. }
     iFrame.
     iModIntro. by iApply "HΦc".
+Qed.
+
+Lemma wpc_later_tok_use s E e k Φ Φc :
+  language.to_val e = None →
+  later_tok -∗
+  ▷ WPC e @ s; k; E {{ v, later_tok -∗ Φ v }} {{ later_tok -∗ Φc }} -∗
+  WPC e @ s; k; E {{ Φ }} {{ Φc }}.
+Proof.
+  iIntros (Hnval) "Htok Hwp".
+  iApply (wpc_later_tok_use2 with "[$]"); auto.
 Qed.
 
 Lemma wpc_later_tok_invest s E e k Φ Φc :
