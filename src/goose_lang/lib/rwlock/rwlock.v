@@ -271,7 +271,7 @@ Section proof.
         }
         {
           iDestruct ("Hwand2" $! _ _) as "(_&H)".
-          iIntros. iDestruct ("H" with "[$]") as "Hcomb".
+          iIntros "!>". iIntros. iDestruct ("H" with "[$]") as "Hcomb".
           iExactEq "Hcomb".
           f_equal. rewrite -remaining_frac_read_acquire //; try naive_solver.
         }
@@ -344,7 +344,7 @@ Section proof.
         }
         {
           iDestruct ("Hwand1" $! _ _) as "(_&H)".
-          iIntros. iModIntro. iDestruct ("H" with "[$]") as "Hcomb".
+          iIntros "!>". iIntros. iModIntro. iDestruct ("H" with "[$]") as "Hcomb".
           iExactEq "Hcomb".
           f_equal. rewrite -remaining_frac_read_release; auto.
         }

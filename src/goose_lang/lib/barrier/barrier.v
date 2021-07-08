@@ -29,64 +29,117 @@ Context {ext_tys: ext_types ext}.
 
 Local Coercion Var' (s:string): expr := Var s.
 Section proof.
-  Context `{!heapGS Σ} (N : namespace).
+  Context `{!heapGS Σ}.
   Context `{!stagedG Σ, !barrierG Σ}.
 
-Definition barrier_inv (l : loc) (γ : gname) (P : iProp Σ) : iProp Σ :=
-  (∃ (b : bool) (γsps : gset gname),
+Definition N := nroot.@"mynamespace".
+
+Definition barrier_inv (l : loc) (γ γc : gname) (P : iProp Σ) (Pc : iProp Σ) : iProp Σ :=
+  (∃ (b : bool) (γsps : gset gname) (γcsps : gset gname) Q Qc,
     l ↦ #b ∗
     own γ (● (GSet γsps)) ∗
-    ((if b then True else P) -∗
-      ([∗ set] γsp ∈ γsps, ∃ R, saved_prop_own γsp R ∗ ▷ R)))%I.
+    own γc (● (GSet γcsps)) ∗
+    crash_borrow Q Qc ∗
+    □ (Q ∗-∗ ((if b then True else P) -∗
+      ([∗ set] γsp ∈ γsps, ∃ R, saved_prop_own γsp R ∗ ▷ R))) ∗
+    □ (Qc ∗-∗ ((if b then True else Pc) -∗
+      ([∗ set] γsp ∈ γcsps, ∃ Rc, saved_prop_own γsp Rc ∗ ▷ Rc))))%I.
 
-Definition recv (l : loc) (R : iProp Σ) : iProp Σ :=
-  (∃ γ P R' γsp,
-    inv N (barrier_inv l γ P) ∗
+Definition recv (l : loc) (R Rc : iProp Σ) : iProp Σ :=
+  (∃ γ γc P Pc R' Rc' γsp γspc,
+    inv N (barrier_inv l γ γc P Pc) ∗
     ▷ (R' -∗ R) ∗
+    ▷ (Rc -∗ Rc') ∗
     own γ (◯ GSet {[ γsp ]}) ∗
-    saved_prop_own γsp R')%I.
+    own γc (◯ GSet {[ γspc ]}) ∗
+    saved_prop_own γsp R' ∗
+    saved_prop_own γspc Rc')%I.
 
-Definition send (l : loc) (P : iProp Σ) : iProp Σ :=
-  (∃ γ, inv N (barrier_inv l γ P))%I.
+Definition send (l : loc) (P Pc : iProp Σ) : iProp Σ :=
+  (∃ γ γc, inv N (barrier_inv l γ γc P Pc))%I.
 
 (** Setoids *)
-Instance barrier_inv_ne l γ : NonExpansive (barrier_inv l γ).
+Instance barrier_inv_ne l γ γc : NonExpansive2 (barrier_inv l γ γc).
 Proof. solve_proper. Qed.
-Global Instance send_ne l : NonExpansive (send l).
+Global Instance send_ne l : NonExpansive2 (send l).
 Proof. solve_proper. Qed.
-Global Instance recv_ne l : NonExpansive (recv l).
+Global Instance recv_ne l : NonExpansive2 (recv l).
 Proof. solve_proper. Qed.
 
 (** Actual proofs *)
-Lemma newbarrier_spec (P : iProp Σ) :
-  {{{ True }}} barrier.newbarrier #() {{{ l, RET #l; recv l P ∗ send l P }}}.
+Lemma newbarrier_spec (P Pc : iProp Σ) :
+  {{{ True }}} barrier.newbarrier #() {{{ l, RET #l; recv l P Pc ∗ send l P Pc }}}.
 Proof.
   iIntros (Φ) "_ HΦ". wp_lam.
   iApply wp_fupd.
-    wp_apply wp_alloc_untyped; auto.
-    iIntros (l) "Hl".
+  iApply (wpc_wp _ 0 _ _ _ True%I).
+  iApply (wpc_crash_borrow_init_ctx _ _ _ _ _ True%I True%I id); auto.
+  iSplit; first done.
+  iIntros "Hc".
+  iApply (wpc_crash_mono _ _ _ _ _ _ True%I); first eauto.
+  iApply wp_wpc.
+  wp_apply wp_alloc_untyped; auto.
+  iIntros (l) "Hl". simpl.
+  iApply (wpc_crash_mono _ _ _ _ _ _ True%I); first eauto.
+  iApply wp_wpc.
+  wp_pures.
   iApply ("HΦ" with "[> -]").
   iMod (saved_prop_alloc P) as (γsp) "#Hsp".
+  iMod (saved_prop_alloc Pc) as (γspc) "#Hspc".
   iMod (own_alloc (● GSet {[ γsp ]} ⋅ ◯ GSet {[ γsp ]})) as (γ) "[H● H◯]".
   { by apply auth_both_valid_discrete. }
-  iMod (inv_alloc N _ (barrier_inv l γ P) with "[Hl H●]") as "#Hinv".
-  { iExists false, {[ γsp ]}. iIntros "{$Hl $H●} !> HP".
-    rewrite big_sepS_singleton; eauto. }
-  iModIntro; iSplitL "H◯".
-  - iExists γ, P, P, γsp. iFrame; auto.
-  - by iExists γ.
+  iMod (own_alloc (● GSet {[ γspc ]} ⋅ ◯ GSet {[ γspc ]})) as (γc) "[Hc● Hc◯]".
+  { by apply auth_both_valid_discrete. }
+  iMod (inv_alloc N _ (barrier_inv l γ γc P Pc) with "[Hl H● Hc● Hc]") as "#Hinv".
+  { iExists false, {[ γsp ]}, {[ γspc ]}, True%I, True%I.
+    iFrame "Hl H● Hc● Hc".
+    iNext.
+    iSplit.
+    * iModIntro. iSplit.
+      { iIntros. rewrite big_sepS_singleton; eauto. }
+      { auto. }
+    * iModIntro. iSplit.
+      { iIntros. rewrite big_sepS_singleton; eauto. }
+      { auto. }
+  }
+  iModIntro; iSplitL "H◯ Hc◯".
+  - iExists γ, γc, P, Pc, P, Pc, γsp, γspc. iFrame "∗ #".
+    iSplitL; eauto.
+  - iExists γ, γc. eauto.
 Qed.
 
-Lemma signal_spec l P :
-  {{{ send l P ∗ P }}} barrier.signal #l {{{ b, RET #b; True }}}.
+Lemma signal_spec l P Pc Φ Φc k K `{!LanguageCtx K}:
+  send l P Pc -∗
+  P -∗
+  □ (P -∗ Pc) -∗
+  Φc ∧ (∀ (b: bool), WPC K (of_val #b) @ NotStuck; k; ⊤ {{ Φ }} {{ Φc }}) -∗
+  WPC K (barrier.signal #l) @ NotStuck ; k ; ⊤ {{ Φ }} {{ Φc ∗ Pc }}.
 Proof.
-  iIntros (Φ) "[Hs HP] HΦ". iDestruct "Hs" as (γ) "#Hinv". wp_lam.
+  iIntros "Hs HP #Hwand HK".
+  iApply (wpc_crash_borrow_init_ctx' with "HP"); auto.
+  iSplit.
+  { by iLeft in "HK". }
+  iIntros "Hcb".
+  iCache with "HK".
+  { by iLeft in "HK". }
+  wpc_frame.
+  iDestruct "Hs" as (γ γc) "#Hinv". wp_lam.
   wp_bind (CmpXchg _ _ _).
-  iInv N as ([] γsps) "(>Hl & H● & HRs)".
-  { wp_cmpxchg_fail. iModIntro. iSplitR "HΦ".
-    { iExists true, γsps. iFrame. }
-    wp_pures. iModIntro. by iApply "HΦ".
+  iInv N as ([] γsps γcsps Q Qc) "(>Hl & H● & HRs)".
+  { wp_cmpxchg_fail. iModIntro. iSplitR "".
+    { iExists true, γsps, γcsps, Q, Qc. iFrame. }
+    wp_pures. iModIntro. iIntros "(_&HK)". by iApply "HK".
   }
+  iDestruct "HRs" as "(Hc●&Hcb'&#HQ&#HQc)".
+  iApply (wpc_wp _ 0 _ _ _ True%I).
+  iApply (wpc_crash_borrow_combine _ _ _ _ _
+            ([∗ set] γsp ∈ γsps, ∃ R : iProp Σ, saved_prop_own γsp R ∗ ▷ R)
+            ([∗ set] γsp ∈ γcsps, ∃ Rc : iProp Σ, saved_prop_own γsp Rc ∗ ▷ Rc)
+            with "[$Hcb] [$Hcb'] [] [] []").
+  { auto. }
+  { admit. (* need to change barrier inv *) }
+  { iNext.
+
   wp_cmpxchg_suc. iDestruct ("HRs" with "HP") as "HRs".
   iModIntro. iSplitR "HΦ".
   { iExists true, γsps. iFrame; eauto. }

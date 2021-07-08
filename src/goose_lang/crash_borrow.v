@@ -356,10 +356,10 @@ Qed.
 Lemma wpc_crash_borrow_split k E e Φ Φc P Pc P1 P2 Pc1 Pc2 :
   language.to_val e = None →
   ▷ crash_borrow P Pc -∗
-  (P -∗ P1 ∗ P2) -∗
-  □ (P1 -∗ Pc1) -∗
-  □ (P2 -∗ Pc2) -∗
-  (Pc1 ∗ Pc2 -∗ Pc) -∗
+  ▷ (P -∗ P1 ∗ P2) -∗
+  ▷ □ (P1 -∗ Pc1) -∗
+  ▷ □ (P2 -∗ Pc2) -∗
+  ▷ (Pc1 ∗ Pc2 -∗ Pc) -∗
   WPC e @ NotStuck; k; E {{ λ v, (crash_borrow P1 Pc1 ∗ crash_borrow P2 Pc2) -∗  (Φc ∧ Φ v) }} {{ Φc }} -∗
   WPC e @ NotStuck; k; E {{ Φ }} {{ Φc }}.
 Proof.
@@ -409,7 +409,7 @@ Proof.
   iDestruct ("Htok") as "(Htok3&Htok)".
   iDestruct ("Htok") as "(Htok4&Htok)".
   iSpecialize ("Hc" with "[Htok1 Htok2 Htok3 Htok4 Hval1 Hval2]").
-  { iSplitL "Htok1 Htok2 Hval1". 
+  { iSplitL "Htok1 Htok2 Hval1".
     - iExists P1, Pc1. iFrame "Hval1". iFrame "#". iFrame. iSplit; eauto.
     - iExists P2, Pc2. iFrame "Hval2". iFrame "#". iFrame. iSplit; eauto.
   }
@@ -433,9 +433,9 @@ Lemma wpc_crash_borrow_combine k E e Φ Φc P Pc P1 P2 Pc1 Pc2 :
   language.to_val e = None →
   ▷ crash_borrow P1 Pc1 -∗
   ▷ crash_borrow P2 Pc2 -∗
-  □ (P -∗ Pc) -∗
-  (Pc -∗ (Pc1 ∗ Pc2)) -∗
-  (P1 ∗ P2 ==∗ P) -∗
+  ▷ □ (P -∗ Pc) -∗
+  ▷ (Pc -∗ (Pc1 ∗ Pc2)) -∗
+  ▷ (P1 ∗ P2 ==∗ P) -∗
   WPC e @ NotStuck; k; E {{ λ v, (crash_borrow P Pc) -∗ (Φc ∧ Φ v) }} {{ Φc }} -∗
   WPC e @ NotStuck; k; E {{ Φ }} {{ Φc }}.
 Proof.
