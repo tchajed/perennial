@@ -8,15 +8,13 @@ From Perennial.goose_lang Require Export notation typing.
 From Perennial.goose_lang.lib Require Export barrier.impl.
 Set Default Proof Using "Type".
 
-
-
 (** The CMRAs/functors we need. *)
 Class barrierG Σ := BarrierG {
-  barrier_inG :> inG Σ (authR (gset_disjUR gname));
+  barrier_inG :> ghost_mapG Σ nat (gname * gname);
   barrier_savedPropG :> savedPropG Σ;
 }.
 Definition barrierΣ : gFunctors :=
-  #[ GFunctor (authRF (gset_disjUR gname)); savedPropΣ ].
+  #[ ghost_mapΣ nat (gname * gname); savedPropΣ ].
 
 Instance subG_barrierΣ {Σ} : subG barrierΣ Σ → barrierG Σ.
 Proof. solve_inG. Qed.
@@ -39,37 +37,37 @@ Lemma crash_borrow_crash_wand P Pc:
   crash_borrow P Pc -∗ □ (P -∗ Pc).
 Proof. iDestruct 1 as (??) "($&_)". Qed.
 
-Definition barrier_inv (l : loc) (γ γc : gname) (P : iProp Σ) (Pc : iProp Σ) : iProp Σ :=
-  (∃ (b : bool) (γsps : gset gname) (γcsps : gset gname) (fprop fcprop : gname → iProp Σ),
+Definition barrier_inv (l : loc) (γ : gname) (P : iProp Σ) (Pc : iProp Σ) : iProp Σ :=
+  (∃ (b : bool) (gmm : gmap nat (gname * gname)) (fprop fcprop : gname → iProp Σ),
     l ↦ #b ∗
-    own γ (● (GSet γsps)) ∗
-    own γc (● (GSet γcsps)) ∗
-    ([∗ set] γsp ∈ γsps, saved_prop_own γsp (fprop γsp)) ∗
-    ([∗ set] γsp ∈ γcsps, saved_prop_own γsp (fcprop γsp)) ∗
+    ghost_map_auth γ 1 gmm ∗
+    ([∗ map] i ↦ γsp ∈ fst <$> gmm, saved_prop_own γsp (fprop γsp)) ∗
+    ([∗ map] i ↦ γsp ∈ snd <$> gmm, saved_prop_own γsp (fcprop γsp)) ∗
+     (([∗ map] i ↦ γspp ∈ gmm, □ (fprop (fst γspp) -∗ fcprop (snd γspp)))) ∗
     if b then
-      crash_borrow ([∗ set] γsp ∈ γsps, fprop γsp) (([∗ set] γsp ∈ γcsps, fcprop γsp))
+      crash_borrow ([∗ map] i ↦ γsp ∈ fst <$> gmm, fprop γsp)
+                   ([∗ map] i ↦ γsp ∈ snd <$> gmm, fcprop γsp)
     else
       crash_borrow True%I True%I ∗
-      □ (P -∗ ([∗ set] γsp ∈ γsps, fprop γsp)) ∗
-      □ (([∗ set] γsp ∈ γcsps, fcprop γsp) -∗ Pc) ∗
-      □ (([∗ set] γsp ∈ γsps, fprop γsp) -∗ ([∗ set] γsp ∈ γcsps, fcprop γsp))).
+      □ (P -∗ ([∗ map] i ↦ γsp ∈ fst <$> gmm, fprop γsp)) ∗
+      □ (([∗ map] i ↦ γsp ∈ snd <$> gmm, fcprop γsp) -∗ Pc)).
 
 
 Definition recv (l : loc) (R Rc : iProp Σ) : iProp Σ :=
-  (∃ γ γc P Pc R' Rc' γsp γspc,
-    inv N (barrier_inv l γ γc P Pc) ∗
+  (∃ γ i P Pc R' Rc' γsp γspc,
+    inv N (barrier_inv l γ P Pc) ∗
     ▷ (R' -∗ R) ∗
     ▷ (Rc -∗ Rc') ∗
-    own γ (◯ GSet {[ γsp ]}) ∗
-    own γc (◯ GSet {[ γspc ]}) ∗
+    ▷ □ (R -∗ Rc) ∗
+    i  ↪[γ] (γsp, γspc) ∗
     saved_prop_own γsp R' ∗
     saved_prop_own γspc Rc')%I.
 
 Definition send (l : loc) (P Pc : iProp Σ) : iProp Σ :=
-  (∃ γ γc, □ (P -∗ Pc) ∗ inv N (barrier_inv l γ γc P Pc))%I.
+  (∃ γ, □ (P -∗ Pc) ∗ inv N (barrier_inv l γ P Pc))%I.
 
 (** Setoids *)
-Instance barrier_inv_ne l γ γc : NonExpansive2 (barrier_inv l γ γc).
+Instance barrier_inv_ne l γ : NonExpansive2 (barrier_inv l γ).
 Proof. solve_proper. Qed.
 Global Instance send_ne l : NonExpansive2 (send l).
 Proof. solve_proper. Qed.
@@ -96,30 +94,28 @@ Proof.
   iApply ("HΦ" with "[> -]").
   iMod (saved_prop_alloc P) as (γsp) "#Hsp".
   iMod (saved_prop_alloc Pc) as (γspc) "#Hspc".
-  iMod (own_alloc (● GSet {[ γsp ]} ⋅ ◯ GSet {[ γsp ]})) as (γ) "[H● H◯]".
-  { by apply auth_both_valid_discrete. }
-  iMod (own_alloc (● GSet {[ γspc ]} ⋅ ◯ GSet {[ γspc ]})) as (γc) "[Hc● Hc◯]".
-  { by apply auth_both_valid_discrete. }
-  iMod (inv_alloc N _ (barrier_inv l γ γc P Pc) with "[Hl H● Hc● Hc]") as "#Hinv".
-  { iExists false, {[ γsp ]}, {[ γspc ]},
+  iMod (ghost_map_alloc ({[O := (γsp, γspc)]})) as (γ) "[Hauth Hkeys]".
+  iMod (inv_alloc N _ (barrier_inv l γ P Pc) with "[Hl Hauth Hc]") as "#Hinv".
+  { iExists false,({[O := (γsp, γspc)]}),
             (λ x, if decide (x = γsp) then P else True%I),
             (λ x, if decide (x = γspc) then Pc else True%I).
-    iFrame "Hl H● Hc● Hc".
+    iFrame "Hl Hauth Hc".
     iNext.
     iSplit.
-    { rewrite ?big_sepS_singleton; eauto. rewrite decide_True //. }
+    { rewrite big_sepM_fmap big_sepM_singleton. rewrite decide_True //. }
     iSplit.
-    { rewrite ?big_sepS_singleton; eauto. rewrite decide_True //. }
+    { rewrite big_sepM_fmap big_sepM_singleton. rewrite decide_True //. }
     iSplit.
-    { rewrite ?big_sepS_singleton. rewrite decide_True //. eauto. }
+    { rewrite big_sepM_singleton. rewrite ?decide_True //. }
     iSplit.
-    { rewrite ?big_sepS_singleton. rewrite decide_True //. eauto. }
-    { rewrite ?big_sepS_singleton. rewrite ?decide_True //. }
+    { rewrite big_sepM_fmap big_sepM_singleton. rewrite decide_True //. auto. }
+    { rewrite big_sepM_fmap big_sepM_singleton. rewrite decide_True //. auto. }
   }
-  iModIntro; iSplitL "H◯ Hc◯".
-  - iExists γ, γc, P, Pc, P, Pc, γsp, γspc. iFrame "∗ #".
+  iModIntro; iSplitL "Hkeys".
+  - iExists γ, O, P, Pc, P, Pc, γsp, γspc. iFrame "∗ #".
+    rewrite big_sepM_singleton. iFrame.
     iSplitL; eauto.
-  - iExists γ, γc. eauto.
+  - iExists γ. eauto.
 Qed.
 
 Lemma signal_spec l P Pc Φ Φc k K `{!LanguageCtx K}:
@@ -130,7 +126,7 @@ Lemma signal_spec l P Pc Φ Φc k K `{!LanguageCtx K}:
 Proof.
   iIntros "Hs HP HK".
   iAssert (□ (P -∗ Pc))%I with "[Hs]" as "#Hcwand".
-  { iDestruct "Hs" as (??) "($&_)". }
+  { iDestruct "Hs" as (?) "($&_)". }
   iApply (wpc_crash_borrow_init_ctx' with "HP"); auto.
   iSplit.
   { by iLeft in "HK". }
@@ -138,21 +134,25 @@ Proof.
   iCache with "HK".
   { by iLeft in "HK". }
   wpc_frame.
-  iDestruct "Hs" as (γ γc) "(_&#Hinv)". wp_lam.
+  iDestruct "Hs" as (γ) "(_&#Hinv)". wp_lam.
   wp_bind (CmpXchg _ _ _).
-  iInv N as ([] γsps γcsps fprop fcprop) "(>Hl & H● & Hc● & Hfprop & Hfcprop & HRs)".
+  iInv N as ([] gmm fprop fcprop) "(>Hl & H● & Hfprop & Hfcprop & HRs)".
   { wp_cmpxchg_fail. iModIntro. iSplitR "".
-    { iExists true, γsps, γcsps, fprop, fcprop. iFrame. }
+    { iExists true, gmm, fprop, fcprop. iFrame. }
     wp_pures. iModIntro. iIntros "(_&HK)". by iApply "HK".
   }
-  iDestruct "HRs" as "(Hcb'&#HP&#HPc&#Hcrash)".
+  iDestruct "HRs" as "(#Hcrash&Hcb'&#HP&#HPc)".
   iApply (wpc_wp _ 0 _ _ _ True%I).
   iApply (wpc_crash_borrow_combine _ _ _ _ _
-            ([∗ set] γsp ∈ γsps, (fprop γsp))
-            ([∗ set] γsp ∈ γcsps, (fcprop γsp))
+            ([∗ map] _ ↦ γsp ∈ fst <$> gmm, (fprop γsp))
+            ([∗ map] _ ↦ γsp ∈ snd <$> gmm, (fcprop γsp))
             with "[$Hcb] [$Hcb'] [] [] []").
   { auto. }
-  { eauto. }
+  { iNext. iModIntro. iIntros "H".
+    rewrite ?big_sepM_fmap.
+    iApply (big_sepM_wand with "H []").
+    { simpl. iApply (big_sepM_mono with "Hcrash"). iIntros (???) "H". iApply "H". }
+  }
   { iNext. iIntros "H"; iSplit; last done.
     by iApply "HPc".
   }
@@ -163,7 +163,7 @@ Proof.
   iModIntro. iIntros "Hcb". iSplit; first eauto.
   iModIntro.
   iSplitR "".
-  { iNext. iExists _, γsps, γcsps, _, _. iFrame. eauto. }
+  { iNext. iExists _, gmm, _, _. iFrame. eauto. }
   wp_pures. iModIntro. iIntros "(_&HK)". iApply "HK".
 Qed.
 
@@ -173,94 +173,184 @@ Proof.
   rename P into R.
   rename Pc into Rc.
   iIntros (Φ) "HR HΦ".
-  iDestruct "HR" as (γ γc P Pc R' Rc' γsp γspc) "(#Hinv & HR & HRc & H◯ & Hc◯ & #Hsp & #Hspc)".
+  iDestruct "HR" as (γ i P Pc R' Rc' γsp γspc) "(#Hinv & HR & HRc & #HcrashR & H◯ & #Hsp & #Hspc)".
   iLöb as "IH". wp_rec. wp_bind (! _)%E.
-  iInv N as ([] γsps γcsps fprop fcprop) "(>Hl & >H● & HRs)"; last first.
+  iInv N as ([] gmm fprop fcprop) "(>Hl & >H● & HRs)"; last first.
   {
     iApply (wp_load with "[$]").
     iNext. iIntros "Hl".
     iModIntro. iSplitL "Hl H● HRs".
-    { iExists false, γsps, γcsps, fprop, fcprop. iFrame. }
+    { iExists false, gmm, fprop, fcprop. iFrame. }
     wp_pures. by wp_apply ("IH" with "[$] [$] [$] [$]"). }
-  iDestruct "HRs" as "(>Hc●&#Hsaved&#Hsavedc&Hcb)".
-
-  iDestruct (own_valid_2 with "H● H◯")
-    as %[Hvalid%gset_disj_included%elem_of_subseteq_singleton _]%auth_both_valid_discrete.
-  iDestruct (own_valid_2 with "Hc● Hc◯")
-    as %[Hvalidc%gset_disj_included%elem_of_subseteq_singleton _]%auth_both_valid_discrete.
-  iMod (own_update_2 with "H● H◯") as "H●".
-  { apply (auth_update_dealloc _ _ (GSet (γsps ∖ {[ γsp ]}))).
-    apply gset_disj_dealloc_local_update. }
+  iDestruct "HRs" as "(#Hsaved&#Hsavedc&#Hcrash&Hcb)".
+  iDestruct (ghost_map_lookup with "[$] [$]") as %Hin.
+  iMod (ghost_map_delete with "[$] [$]") as "H●".
   iAssert (▷▷ (fcprop γspc ≡ Rc'))%I as "Hcequiv".
   { iNext.
-    iDestruct (big_sepS_delete with "Hsavedc") as "[Hthis _]"; first done.
+    iDestruct (big_sepM_delete _ _ i with "Hsavedc") as "[Hthis _]".
+    { rewrite lookup_fmap Hin //. }
     iDestruct (saved_prop_agree with "Hthis Hspc") as "Hequiv". eauto. }
   iAssert (▷▷ (fprop γsp ≡ R'))%I as "Hequiv".
   { iNext.
-    iDestruct (big_sepS_delete with "Hsaved") as "[Hthis _]"; first done.
+    iDestruct (big_sepM_delete _ _ i with "Hsaved") as "[Hthis _]".
+    { rewrite lookup_fmap Hin //. }
     iDestruct (saved_prop_agree with "Hthis Hsp") as "Hequiv". eauto. }
 
   iApply (wpc_wp _ 0 _ _ _ True%I).
   iApply (wpc_crash_borrow_split' _ _ _ _ _ _ _
-            ([∗ set] γsp ∈ γsps ∖ {[ γsp ]}, (fprop γsp))
+            ([∗ map] _ ↦ γsp ∈ fst <$> delete i gmm, (fprop γsp))
             R
-            ([∗ set] γsp ∈ γcsps ∖ {[ γspc ]}, (fcprop γsp))
+            ([∗ map] _ ↦ γsp ∈ snd <$> delete i gmm, (fcprop γsp))
             Rc
-            with "[$Hcb] [HR] [] [] []"); first done.
+            with "[$Hcb] [HR] [] [] [HRc]"); first done.
   { do 2 iNext. iIntros "HRs".
-    iDestruct (big_sepS_delete with "HRs") as "[HR'' HRs]"; first done.
+    iDestruct (big_sepM_delete _ _ i with "HRs") as "[HR'' HRs]".
+    { rewrite lookup_fmap Hin //. }
+    rewrite fmap_delete.
     iFrame. iApply "HR". iRewrite -"Hequiv". eauto. }
-  { do 2 iNext. iIntros "HRs".
-    iDestruct (big_sepS_delete with "HRs") as "[HR'' HRs]"; first done.
-    iFrame. iApply "HR". iRewrite -"Hequiv". eauto. }
-    i
+  { do 2 iNext. iModIntro.
+    rewrite ?big_sepM_fmap.
+    iIntros "H".
+    iApply (big_sepM_wand with "H []").
+    iDestruct (big_sepM_delete _ _ i with "Hcrash") as "[_ Hcrash']"; eauto.
+    iApply (big_sepM_mono with "Hcrash'"). iIntros (???) "H". iApply "H".
+  }
+  { eauto. }
+  { do 2 iNext. iIntros "(HRs&HRc')".
+    rewrite ?big_sepM_fmap.
+    iApply big_sepM_delete; eauto; iFrame.
+    simpl. iRewrite "Hcequiv". iApply "HRc". eauto. }
 
-  iApply (crash+_
+  iApply wp_wpc.
+  iApply (wp_load with "[$]").
+  iNext. iIntros "Hl (Hcb1&Hcb2)".
+  iSplit; first done.
+  iModIntro.
+  iSplitR "HΦ Hcb2".
+  { iNext. iExists true, (delete i gmm), fprop, fcprop. iFrame.
+    iDestruct (big_sepM_delete _ _ i with "Hcrash") as "[_ $]"; eauto.
+    rewrite ?big_sepM_fmap.
+    iDestruct (big_sepM_delete _ _ i with "Hsaved") as "[_ $]"; eauto.
+    iDestruct (big_sepM_delete _ _ i with "Hsavedc") as "[_ $]"; eauto.
+ }
 
-  iDestruct (big_sepS_delete with "HRs") as "[HR'' HRs]"; first done.
-  iDestruct "HR''" as (R'') "[#Hsp' HR'']".
-  iDestruct (saved_prop_agree with "Hsp Hsp'") as "#Heq".
-  iNext. iIntros "Hl".
-  iIntros "!>". iSplitL "Hl H● HRs".
-  { iDestruct (bi.later_intro with "HRs") as "HRs".
-    iModIntro. iExists true, (γsps ∖ {[ γsp ]}). iFrame; eauto. }
-  wp_if. iApply "HΦ". iApply "HR". by iRewrite "Heq".
+  wp_pures. iModIntro. iApply "HΦ". eauto.
 Qed.
 
-Lemma recv_split E l P1 P2 :
-  ↑N ⊆ E → recv l (P1 ∗ P2) ={E}=∗ recv l P1 ∗ recv l P2.
+Lemma recv_split E l P1 P2 Pc1 Pc2 :
+  ↑N ⊆ E →
+  □ (P1 -∗ Pc1) -∗
+  □ (P2 -∗ Pc2) -∗
+  recv l (P1 ∗ P2) (Pc1 ∗ Pc2) ={E}=∗ recv l P1 Pc1 ∗ recv l P2 Pc2.
 Proof.
   rename P1 into R1; rename P2 into R2.
-  iIntros (?). iDestruct 1 as (γ P R' γsp) "(#Hinv & HR & H◯ & #Hsp)".
-  iInv N as (b γsps) "(>Hl & >H● & HRs)".
-  iDestruct (own_valid_2 with "H● H◯")
-    as %[Hvalid%gset_disj_included%elem_of_subseteq_singleton _]%auth_both_valid_discrete.
-  iMod (own_update_2 with "H● H◯") as "H●".
-  { apply (auth_update_dealloc _ _ (GSet (γsps ∖ {[ γsp ]}))).
-    apply gset_disj_dealloc_local_update. }
-  set (γsps' := γsps ∖ {[γsp]}).
-  iMod (saved_prop_alloc_cofinite γsps' R1) as (γsp1 Hγsp1) "#Hsp1".
-  iMod (saved_prop_alloc_cofinite (γsps' ∪ {[ γsp1 ]}) R2)
-    as (γsp2 [? ?%not_elem_of_singleton_1]%not_elem_of_union) "#Hsp2".
-  iMod (own_update _ _ (● _ ⋅ (◯ GSet {[ γsp1 ]} ⋅ ◯ (GSet {[ γsp2 ]})))
-    with "H●") as "(H● & H◯1 & H◯2)".
-  { rewrite -auth_frag_op gset_disj_union; last set_solver.
-    apply auth_update_alloc, (gset_disj_alloc_empty_local_update _ {[ γsp1; γsp2 ]}).
-    set_solver. }
+  rename Pc1 into Rc1; rename Pc2 into Rc2.
+  iIntros (?) "#Hw1 #Hw2".
+  iDestruct 1 as (γ i P Pc R' Rc' γsp γspc) "(#Hinv & HR & HRc & Hcrash & H◯ & #Hsp & #Hspc)".
+  iInv N as (b gmm fprop fcprop) "(>Hl & >H● & HRs)".
+  iDestruct (ghost_map_lookup with "[$] [$]") as %Hin.
+  iMod (ghost_map_delete with "[$] [$]") as "H●".
+  iMod (saved_prop_alloc R1) as (γsp1) "#Hsp1".
+  iMod (saved_prop_alloc_cofinite ({[ γsp1 ]}) R2)
+    as (γsp2 ?%not_elem_of_singleton) "#Hsp2".
+  iMod (saved_prop_alloc Rc1) as (γspc1) "#Hspc1".
+  iMod (saved_prop_alloc_cofinite ({[ γspc1 ]}) Rc2)
+    as (γspc2 ?%not_elem_of_singleton) "#Hspc2".
+  assert (∃ i1, i1 ∉ dom (gset _) (delete i gmm)) as (i1&Hnotin1).
+  { exists (fresh (dom (gset _) (delete i gmm))). apply is_fresh. }
+  assert (∃ i2, i2 ∉ {[i1]} ∪ (dom (gset _) (delete i gmm))) as (i2&Hnotin2).
+  { exists (fresh ({[i1]} ∪ (dom (gset _) (delete i gmm)))). apply is_fresh. }
+  iMod (ghost_map_insert i1 (γsp1, γspc1) with "[$]") as "(H●&Hkey1)".
+  { apply not_elem_of_dom. auto. }
+  iMod (ghost_map_insert i2 (γsp2, γspc2) with "[$]") as "(H●&Hkey2)".
+  { apply not_elem_of_dom. rewrite dom_insert_L. auto. }
   iModIntro. iSplitL "HR Hl HRs H●".
-  { iModIntro. iExists b, ({[γsp1; γsp2]} ∪ γsps').
-    iIntros "{$Hl $H●} HP". iSpecialize ("HRs" with "HP").
-    iDestruct (big_sepS_delete with "HRs") as "[HR'' HRs]"; first done.
-    iDestruct "HR''" as (R'') "[#Hsp' HR'']".
-    iDestruct (saved_prop_agree with "Hsp Hsp'") as "#Heq".
-    iAssert (▷ R')%I with "[HR'']" as "HR'"; [iNext; by iRewrite "Heq"|].
-    iDestruct ("HR" with "HR'") as "[HR1 HR2]".
-    iApply big_sepS_union; first set_solver. iFrame "HRs".
-    iApply big_sepS_union; first set_solver.
-    iSplitL "HR1"; rewrite big_sepS_singleton; eauto. }
-  iModIntro; iSplitL "H◯1".
-  - iExists γ, P, R1, γsp1. iFrame; auto.
-  - iExists γ, P, R2, γsp2. iFrame; auto.
+  { iModIntro.
+    iExists b, _, (λ x, if (decide (x = γsp1)) then R1 else
+                        if (decide (x = γsp2)) then R2 else
+                          fprop x),
+                  (λ x, if (decide (x = γspc1)) then Rc1 else
+                        if (decide (x = γspc2)) then Rc2 else
+                          fcprop x).
+    iFrame.
+    iDestruct "HRs" as "(#Hs1&#Hs2&#Hc1&HRs)".
+    iSplit.
+    { iEval (rewrite big_sepM_fmap).
+      rewrite big_sepM_insert //=; last first.
+      { apply not_elem_of_dom. rewrite dom_insert_L. auto. }
+      rewrite big_sepM_insert //=; last first.
+      { apply not_elem_of_dom. auto. }
+      iSplit.
+      { repeat (destruct (decide _)); subst; eauto; try congruence. }
+      iSplit.
+      { repeat (destruct (decide _)); subst; eauto; try congruence. }
+      rewrite big_sepM_fmap.
+      iDestruct (big_sepM_delete _ _ i with "Hs1") as "[_ Hs1']"; eauto.
+      rewrite ?big_sepM_forall.
+      iIntros.
+      repeat (destruct (decide _)); subst; eauto; try congruence.
+      { iApply "Hs1'". eauto. }
+    }
+    iSplit.
+    { iEval (rewrite big_sepM_fmap).
+      rewrite big_sepM_insert //=; last first.
+      { apply not_elem_of_dom. rewrite dom_insert_L. auto. }
+      rewrite big_sepM_insert //=; last first.
+      { apply not_elem_of_dom. auto. }
+      iSplit.
+      { repeat (destruct (decide _)); subst; eauto; try congruence. }
+      iSplit.
+      { repeat (destruct (decide _)); subst; eauto; try congruence. }
+      rewrite ?big_sepM_fmap.
+      iDestruct (big_sepM_delete _ _ i with "Hs2") as "[_ Hs2']"; eauto.
+      rewrite ?big_sepM_forall.
+      iIntros.
+      repeat (destruct (decide _)); subst; eauto; try congruence.
+      { iApply "Hs2'". eauto. }
+    }
+    iSplit.
+    {
+      rewrite big_sepM_insert //=; last first.
+      { apply not_elem_of_dom. rewrite dom_insert_L. auto. }
+      rewrite big_sepM_insert //=; last first.
+      { apply not_elem_of_dom. auto. }
+      iSplit.
+      { repeat (destruct (decide _)); subst; eauto; try congruence. }
+      iSplit.
+      { repeat (destruct (decide _)); subst; eauto; try congruence. }
+      rewrite ?big_sepM_fmap.
+      iDestruct (big_sepM_delete _ _ i with "Hc1") as "[_ Hc1']"; eauto.
+      rewrite ?big_sepM_forall.
+      iIntros.
+      admit.
+      (* Need to pick saved prop names freshly with codomain of gmm *)
+      (*
+      repeat (destruct (decide _)); subst; eauto; try congruence.
+      { admit.  }
+      { admit.  }
+       *)
+    }
+    destruct b.
+    - iApply (crash_borrow_conseq with "[HR] [] [] HRs").
+      { iEval (rewrite ?big_sepM_fmap).
+      rewrite ?big_sepM_insert //=; last first.
+      { apply not_elem_of_dom. rewrite dom_insert_L. auto. }
+      { apply not_elem_of_dom. auto. }
+      { apply not_elem_of_dom. rewrite dom_insert_L. auto. }
+      { apply not_elem_of_dom. auto. }
+
+      iModIntro.
+      repeat (destruct (decide _)); subst; try congruence.
+      iIntros "(H2&H1&Hm)".
+      iSplitL "H2".
+      { iApply "Hw2". eauto. }
+      iSplitL "H1".
+      { iApply "Hw1". eauto. }
+      iApply (big_sepM_mono with "Hm").
+      iIntros. simpl.
+      (* same issue *)
+      admit.
+      }
 Qed.
 
 Lemma recv_weaken l P1 P2 : (P1 -∗ P2) -∗ recv l P1 -∗ recv l P2.
