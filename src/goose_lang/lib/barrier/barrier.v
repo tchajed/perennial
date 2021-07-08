@@ -33,17 +33,27 @@ Section proof.
   Context `{!stagedG Σ, !barrierG Σ}.
 
 Definition N := nroot.@"mynamespace".
+Search crash_borrow.
+
+Lemma crash_borrow_crash_wand P Pc:
+  crash_borrow P Pc -∗ □ (P -∗ Pc).
+Proof. iDestruct 1 as (??) "($&_)". Qed.
 
 Definition barrier_inv (l : loc) (γ γc : gname) (P : iProp Σ) (Pc : iProp Σ) : iProp Σ :=
-  (∃ (b : bool) (γsps : gset gname) (γcsps : gset gname) Q Qc,
+  (∃ (b : bool) (γsps : gset gname) (γcsps : gset gname) (fprop fcprop : gname → iProp Σ),
     l ↦ #b ∗
     own γ (● (GSet γsps)) ∗
     own γc (● (GSet γcsps)) ∗
-    crash_borrow Q Qc ∗
-    □ (Q ∗-∗ ((if b then True else P) -∗
-      ([∗ set] γsp ∈ γsps, ∃ R, saved_prop_own γsp R ∗ ▷ R))) ∗
-    □ (Qc ∗-∗ ((if b then True else Pc) -∗
-      ([∗ set] γsp ∈ γcsps, ∃ Rc, saved_prop_own γsp Rc ∗ ▷ Rc))))%I.
+    ([∗ set] γsp ∈ γsps, saved_prop_own γsp (fprop γsp)) ∗
+    ([∗ set] γsp ∈ γcsps, saved_prop_own γsp (fcprop γsp)) ∗
+    if b then
+      crash_borrow ([∗ set] γsp ∈ γsps, fprop γsp) (([∗ set] γsp ∈ γcsps, fcprop γsp))
+    else
+      crash_borrow True%I True%I ∗
+      □ (P -∗ ([∗ set] γsp ∈ γsps, fprop γsp)) ∗
+      □ (([∗ set] γsp ∈ γcsps, fcprop γsp) -∗ Pc) ∗
+      □ (([∗ set] γsp ∈ γsps, fprop γsp) -∗ ([∗ set] γsp ∈ γcsps, fcprop γsp))).
+
 
 Definition recv (l : loc) (R Rc : iProp Σ) : iProp Σ :=
   (∃ γ γc P Pc R' Rc' γsp γspc,
@@ -56,7 +66,7 @@ Definition recv (l : loc) (R Rc : iProp Σ) : iProp Σ :=
     saved_prop_own γspc Rc')%I.
 
 Definition send (l : loc) (P Pc : iProp Σ) : iProp Σ :=
-  (∃ γ γc, inv N (barrier_inv l γ γc P Pc))%I.
+  (∃ γ γc, □ (P -∗ Pc) ∗ inv N (barrier_inv l γ γc P Pc))%I.
 
 (** Setoids *)
 Instance barrier_inv_ne l γ γc : NonExpansive2 (barrier_inv l γ γc).
@@ -68,9 +78,9 @@ Proof. solve_proper. Qed.
 
 (** Actual proofs *)
 Lemma newbarrier_spec (P Pc : iProp Σ) :
-  {{{ True }}} barrier.newbarrier #() {{{ l, RET #l; recv l P Pc ∗ send l P Pc }}}.
+  {{{ □ (P -∗ Pc) }}} barrier.newbarrier #() {{{ l, RET #l; recv l P Pc ∗ send l P Pc }}}.
 Proof.
-  iIntros (Φ) "_ HΦ". wp_lam.
+  iIntros (Φ) "#Hwand HΦ". wp_lam.
   iApply wp_fupd.
   iApply (wpc_wp _ 0 _ _ _ True%I).
   iApply (wpc_crash_borrow_init_ctx _ _ _ _ _ True%I True%I id); auto.
@@ -91,16 +101,20 @@ Proof.
   iMod (own_alloc (● GSet {[ γspc ]} ⋅ ◯ GSet {[ γspc ]})) as (γc) "[Hc● Hc◯]".
   { by apply auth_both_valid_discrete. }
   iMod (inv_alloc N _ (barrier_inv l γ γc P Pc) with "[Hl H● Hc● Hc]") as "#Hinv".
-  { iExists false, {[ γsp ]}, {[ γspc ]}, True%I, True%I.
+  { iExists false, {[ γsp ]}, {[ γspc ]},
+            (λ x, if decide (x = γsp) then P else True%I),
+            (λ x, if decide (x = γspc) then Pc else True%I).
     iFrame "Hl H● Hc● Hc".
     iNext.
     iSplit.
-    * iModIntro. iSplit.
-      { iIntros. rewrite big_sepS_singleton; eauto. }
-      { auto. }
-    * iModIntro. iSplit.
-      { iIntros. rewrite big_sepS_singleton; eauto. }
-      { auto. }
+    { rewrite ?big_sepS_singleton; eauto. rewrite decide_True //. }
+    iSplit.
+    { rewrite ?big_sepS_singleton; eauto. rewrite decide_True //. }
+    iSplit.
+    { rewrite ?big_sepS_singleton. rewrite decide_True //. eauto. }
+    iSplit.
+    { rewrite ?big_sepS_singleton. rewrite decide_True //. eauto. }
+    { rewrite ?big_sepS_singleton. rewrite ?decide_True //. }
   }
   iModIntro; iSplitL "H◯ Hc◯".
   - iExists γ, γc, P, Pc, P, Pc, γsp, γspc. iFrame "∗ #".
@@ -111,11 +125,12 @@ Qed.
 Lemma signal_spec l P Pc Φ Φc k K `{!LanguageCtx K}:
   send l P Pc -∗
   P -∗
-  □ (P -∗ Pc) -∗
   Φc ∧ (∀ (b: bool), WPC K (of_val #b) @ NotStuck; k; ⊤ {{ Φ }} {{ Φc }}) -∗
   WPC K (barrier.signal #l) @ NotStuck ; k ; ⊤ {{ Φ }} {{ Φc ∗ Pc }}.
 Proof.
-  iIntros "Hs HP #Hwand HK".
+  iIntros "Hs HP HK".
+  iAssert (□ (P -∗ Pc))%I with "[Hs]" as "#Hcwand".
+  { iDestruct "Hs" as (??) "($&_)". }
   iApply (wpc_crash_borrow_init_ctx' with "HP"); auto.
   iSplit.
   { by iLeft in "HK". }
@@ -123,53 +138,76 @@ Proof.
   iCache with "HK".
   { by iLeft in "HK". }
   wpc_frame.
-  iDestruct "Hs" as (γ γc) "#Hinv". wp_lam.
+  iDestruct "Hs" as (γ γc) "(_&#Hinv)". wp_lam.
   wp_bind (CmpXchg _ _ _).
-  iInv N as ([] γsps γcsps Q Qc) "(>Hl & H● & HRs)".
+  iInv N as ([] γsps γcsps fprop fcprop) "(>Hl & H● & Hc● & Hfprop & Hfcprop & HRs)".
   { wp_cmpxchg_fail. iModIntro. iSplitR "".
-    { iExists true, γsps, γcsps, Q, Qc. iFrame. }
+    { iExists true, γsps, γcsps, fprop, fcprop. iFrame. }
     wp_pures. iModIntro. iIntros "(_&HK)". by iApply "HK".
   }
-  iDestruct "HRs" as "(Hc●&Hcb'&#HQ&#HQc)".
+  iDestruct "HRs" as "(Hcb'&#HP&#HPc&#Hcrash)".
   iApply (wpc_wp _ 0 _ _ _ True%I).
   iApply (wpc_crash_borrow_combine _ _ _ _ _
-            ([∗ set] γsp ∈ γsps, ∃ R : iProp Σ, saved_prop_own γsp R ∗ ▷ R)
-            ([∗ set] γsp ∈ γcsps, ∃ Rc : iProp Σ, saved_prop_own γsp Rc ∗ ▷ Rc)
+            ([∗ set] γsp ∈ γsps, (fprop γsp))
+            ([∗ set] γsp ∈ γcsps, (fcprop γsp))
             with "[$Hcb] [$Hcb'] [] [] []").
   { auto. }
-  { admit. (* need to change barrier inv *) }
-  { iNext.
-
-  wp_cmpxchg_suc. iDestruct ("HRs" with "HP") as "HRs".
-  iModIntro. iSplitR "HΦ".
-  { iExists true, γsps. iFrame; eauto. }
-  wp_pures. iModIntro. by iApply "HΦ".
+  { eauto. }
+  { iNext. iIntros "H"; iSplit; last done.
+    by iApply "HPc".
+  }
+  { iNext. iIntros "(HP'&HQ')".
+    iApply "HP". eauto. }
+  iApply wp_wpc.
+  wp_cmpxchg_suc.
+  iModIntro. iIntros "Hcb". iSplit; first eauto.
+  iModIntro.
+  iSplitR "".
+  { iNext. iExists _, γsps, γcsps, _, _. iFrame. eauto. }
+  wp_pures. iModIntro. iIntros "(_&HK)". iApply "HK".
 Qed.
 
-Lemma wait_spec l P:
-  {{{ recv l P }}} barrier.wait #l {{{ RET #(); P }}}.
+Lemma wait_spec l P Pc:
+  {{{ recv l P Pc }}} barrier.wait #l {{{ RET #(); crash_borrow P Pc }}}.
 Proof.
   rename P into R.
-  iIntros (Φ) "HR HΦ". iDestruct "HR" as (γ P R' γsp) "(#Hinv & HR & H◯ & #Hsp)".
+  rename Pc into Rc.
+  iIntros (Φ) "HR HΦ".
+  iDestruct "HR" as (γ γc P Pc R' Rc' γsp γspc) "(#Hinv & HR & HRc & H◯ & Hc◯ & #Hsp & #Hspc)".
   iLöb as "IH". wp_rec. wp_bind (! _)%E.
-  iInv N as ([] γsps) "(>Hl & >H● & HRs)"; last first.
+  iInv N as ([] γsps γcsps fprop fcprop) "(>Hl & >H● & HRs)"; last first.
   {
     iApply (wp_load with "[$]").
     iNext. iIntros "Hl".
     iModIntro. iSplitL "Hl H● HRs".
-    { iExists false, γsps. iFrame. }
-    wp_pures. by wp_apply ("IH" with "[$] [$]"). }
+    { iExists false, γsps, γcsps, fprop, fcprop. iFrame. }
+    wp_pures. by wp_apply ("IH" with "[$] [$] [$] [$]"). }
+  iDestruct "HRs" as "(>Hc●&#Hsaved&#Hsavedc&Hcb)".
+  (*
   iSpecialize ("HRs" with "[//]").
   iApply (wp_load with "[$]").
+   *)
   iDestruct (own_valid_2 with "H● H◯")
     as %[Hvalid%gset_disj_included%elem_of_subseteq_singleton _]%auth_both_valid_discrete.
+  iDestruct (own_valid_2 with "Hc● Hc◯")
+    as %[Hvalidc%gset_disj_included%elem_of_subseteq_singleton _]%auth_both_valid_discrete.
+  iMod (own_update_2 with "H● H◯") as "H●".
+  { apply (auth_update_dealloc _ _ (GSet (γsps ∖ {[ γsp ]}))).
+    apply gset_disj_dealloc_local_update. }
+  iAssert (▷▷ (fcprop γspc ≡ Rc'))%I as "Hcequiv".
+  { iNext.
+    iDestruct (big_sepS_delete with "Hsavedc") as "[Hthis _]"; first done.
+    iDestruct (saved_prop_agree with "Hthis Hspc") as "Hequiv". eauto. }
+  iAssert (▷▷ (fprop γsp ≡ R'))%I as "Hequiv".
+  { iNext.
+    iDestruct (big_sepS_delete with "Hsaved") as "[Hthis _]"; first done.
+    iDestruct (saved_prop_agree with "Hthis Hsp") as "Hequiv". eauto. }
+
+
   iDestruct (big_sepS_delete with "HRs") as "[HR'' HRs]"; first done.
   iDestruct "HR''" as (R'') "[#Hsp' HR'']".
   iDestruct (saved_prop_agree with "Hsp Hsp'") as "#Heq".
   iNext. iIntros "Hl".
-  iMod (own_update_2 with "H● H◯") as "H●".
-  { apply (auth_update_dealloc _ _ (GSet (γsps ∖ {[ γsp ]}))).
-    apply gset_disj_dealloc_local_update. }
   iIntros "!>". iSplitL "Hl H● HRs".
   { iDestruct (bi.later_intro with "HRs") as "HRs".
     iModIntro. iExists true, (γsps ∖ {[ γsp ]}). iFrame; eauto. }
