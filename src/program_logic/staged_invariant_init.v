@@ -58,7 +58,8 @@ Proof.
   iMod (pri_inv_alloc Einv _ _ (staged_inv_inner E Einv mj' mj_ishare γ γ' γstatus Pc) with "[HP H1 Hitok_ishare Hstat1]") as
       "#Hpri_inv"; auto.
   { iNext. rewrite staged_inv_inner_unfold. iExists _, _, idle, P, True%I. iFrame "∗ #".
-    iLeft. iFrame. iModIntro. iIntros "HP HC". iModIntro. iDestruct ("Hwand" with "[$]") as "$"; eauto.
+    iLeft. iSplit; first iFrame.
+   iIntros "HC". iModIntro. iDestruct ("Hwand" with "[$]") as "$"; eauto.
   }
   iModIntro.
   iSplitL "Htok1 H2 Hstat2 Hitok_u".
@@ -250,8 +251,8 @@ Proof.
     iIntros "(?&$)". iMod (global_state_interp_le with "[$]") as "$"; eauto. lia.
   }
   {
-    iDestruct "Hs" as "(HPs&#Hwand')".
-    iMod ("Hwand'" with "[$] [$]") as "(HPc&HPr)".
+    iDestruct "Hs" as "(_&Hs)".
+    iMod ("Hs" with "[$]") as "(HPc&HPr)".
     iMod (pending_upd_done with "H") as "H".
     iMod ("Hclo" with "[HPr Hown1 Hitok_ishare H Hstat]").
     { iNext. iEval (rewrite staged_inv_inner_unfold).
@@ -388,8 +389,8 @@ Proof.
       iIntros "(?&$&$)". iMod (global_state_interp_le with "[$]") as "$"; eauto. lia.
     }
     {
-      iDestruct "Hs" as "(HPs&#Hwand')".
-      iMod ("Hwand'" with "[$] [$]") as "(HPc&HPr)".
+      iDestruct "Hs" as "(_&Hs)".
+      iMod ("Hs" with "[$]") as "(HPc&HPr)".
       iMod (pending_upd_done with "H") as "H".
       iMod ("Hclo" with "[HPr Hown1 Hitok_ishare H Hstat]").
       { iNext. iEval (rewrite staged_inv_inner_unfold).

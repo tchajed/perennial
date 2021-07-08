@@ -95,7 +95,7 @@ Definition staged_inv_inner_pre
                                   pri_inv_tok mj_ikeep Einv ∗
                                   pri_inv Einv (staged_inv_inner E1' Einv mj' mj_ishare γ γfinish γstatus P)) ∨
                                   staged_done γfinished
-              | idle => (Ps ∗ □ (Ps -∗ C ==∗ P ∗ Pr))
+              | idle => (Ps ∧ (C ==∗ P ∗ Pr))
               end)
               ∨
              (Pr ∗ C ∗ (P ∨ staged_done γfinished)))))%I.

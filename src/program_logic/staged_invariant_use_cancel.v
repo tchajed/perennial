@@ -323,10 +323,11 @@ Proof.
   iDestruct (saved_prop_agree with "Hsaved1 Hsaved1'") as "Hequiv1".
   iDestruct (saved_prop_agree with "Hsaved2 Hsaved2'") as "Hequiv2".
   iModIntro. iModIntro. iModIntro.
-  iDestruct "Hinner" as "[(HPs&Hs)|Hfin]"; last first.
+  iDestruct "Hinner" as "[HPs|Hfin]"; last first.
   { (* Impossible, since we have NC token. *)
     iDestruct "Hfin" as "(_&HC&_)". iDestruct (NC_C with "[$] [$]") as %[]. }
   iRewrite -"Hequiv1" in "HPs".
+  iDestruct "HPs" as "(HPs&_)".
   iDestruct "Hwp" as "(_&Hwp)".
   iSpecialize ("Hwp" with "[$]").
 

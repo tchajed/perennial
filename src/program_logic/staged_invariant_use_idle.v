@@ -27,7 +27,7 @@ Definition staged_value_inuse k e E1' E1 mj mj_wp mj_ukeep Φ Φc P :=
       own γstatus (◯ Excl' (inuse mj_wp mj_ushare)) ∗
       saved_prop_own γprop (wpc0 NotStuck k mj_wp E1 e
                      (λ v : val Λ,
-                        ∃ Qnew : iPropI Σ, Qnew ∗ □ (Qnew -∗ C ==∗ P) ∗ (staged_value E1' Qnew P -∗ Φc ∧ Φ v))
+                        ∃ Qnew : iPropI Σ, Qnew ∗ (Qnew -∗ C ==∗ P) ∗ (staged_value E1' Qnew P -∗ Φc ∧ Φ v))
                      (Φc ∗ P)) ∗
       saved_prop_own γprop' Φc ∗
       later_tok ∗
@@ -185,7 +185,7 @@ Proof.
       rewrite Heq_val.
       iMod ("H" with "[$] [$]") as "H".
       iDestruct "H" as "(Hv&Hg&HNC)".
-      iDestruct "Hv" as (Qnew) "(HQnew&#Hwand_new&Hpost)".
+      iDestruct "Hv" as (Qnew) "(HQnew&Hwand_new&Hpost)".
       iMod (saved_prop_alloc Qnew) as (γprop_stored') "#Hsaved1''".
       iMod (saved_prop_alloc True%I) as (γprop_remainder') "#Hsaved2''".
       iMod (own_update_2 _ _ _ (● Excl' (γprop_stored', γprop_remainder') ⋅
@@ -198,12 +198,12 @@ Proof.
       iMod ("Hreenable" with "[$Hg]") as "(Hitok&Hg)".
       iDestruct ("Hitok_inv_clo" with "[$]") as "Hitok".
       iDestruct (pri_inv_tok_split with "[$Hitok]") as "(Hitok_u&Hitok_ishare)".
-      iMod ("Hclo" with "[Hown' Hstatus' HQnew Hitok_ishare]").
+      iMod ("Hclo" with "[Hown' Hstatus' HQnew Hwand_new Hitok_ishare]").
       { iNext.
         iEval (rewrite staged_inv_inner_unfold).
         iExists _, _, _, _, _. iFrame "∗ #".
-        iLeft. iFrame "∗".
-        iModIntro. iIntros. iMod ("Hwand_new" with "[$] [$]") as "$"; eauto.
+        iLeft. iSplit. iFrame "∗".
+        iIntros. iMod ("Hwand_new" with "[$] [$]") as "$"; eauto.
       }
       iMod (later_tok_incr with "[$]") as "(Hg&Hltok)".
       iDestruct ("Hg_inv_clo" with "Hg") as "Hg".
@@ -231,7 +231,7 @@ Proof.
     iFrame "HNC".
     iMod (saved_prop_alloc
             (wpc0 NotStuck k mj_wp ⊤ e2
-              (λ v : val Λ, ∃ Qnew : iPropI Σ, Qnew ∗ □ (Qnew -∗ C ==∗ P) ∗ (staged_value E1' Qnew P -∗ Φc ∧ Φ v))
+              (λ v : val Λ, ∃ Qnew : iPropI Σ, Qnew ∗ (Qnew -∗ C ==∗ P) ∗ (staged_value E1' Qnew P -∗ Φc ∧ Φ v))
               (Φc ∗ P))%I) as (γprop_stored') "#Hsaved1''".
     iMod (saved_prop_alloc Φc) as (γprop_remainder') "#Hsaved2''".
     iMod (own_update_2 _ _ _ (● Excl' (γprop_stored', γprop_remainder') ⋅
@@ -288,7 +288,7 @@ Qed.
 Lemma wpc_staged_inv k E1 e Φ Φc Qs P :
   to_val e = None →
   staged_value ⊤ Qs P ∗
-  (Φc ∧ (Qs -∗ WPC e @ NotStuck; k; E1 {{λ v, ∃ Qnew, Qnew ∗ □ (Qnew -∗ C ==∗ P) ∗
+  (Φc ∧ (Qs -∗ WPC e @ NotStuck; k; E1 {{λ v, ∃ Qnew, Qnew ∗ (Qnew -∗ C ==∗ P) ∗
                                        (staged_value ⊤ Qnew P -∗ Φc ∧ Φ v)}}
                                  {{ Φc ∗ P }}))
   ⊢ WPC e @ NotStuck; k; E1 {{ Φ }} {{ Φc }}.
@@ -330,11 +330,12 @@ Proof.
   iDestruct (saved_prop_agree with "Hsaved1 Hsaved1'") as "Hequiv1".
   iDestruct (saved_prop_agree with "Hsaved2 Hsaved2'") as "Hequiv2".
   iModIntro. iModIntro. iModIntro.
-  iDestruct "Hinner" as "[(HPs&Hs)|Hfin]"; last first.
+  iDestruct "Hinner" as "[HPs|Hfin]"; last first.
   { (* Impossible, since we have NC token. *)
     iDestruct "Hfin" as "(_&HC&_)". iDestruct (NC_C with "[$] [$]") as %[]. }
   iRewrite -"Hequiv1" in "HPs".
   iDestruct "Hwp" as "(_&Hwp)".
+  iDestruct "HPs" as "(HPs&_)".
   iSpecialize ("Hwp" with "[$]").
 
   iDestruct (pri_inv_tok_global_valid with "Hg") as %(Hmin&Hvalid).
@@ -384,7 +385,7 @@ Proof.
     rewrite Heq_val.
     iMod ("H" with "[$] [$]") as "H".
     iDestruct "H" as "(Hv&Hg&HNC)".
-    iDestruct "Hv" as (Qnew) "(HQnew&#Hwand_new&Hpost)".
+    iDestruct "Hv" as (Qnew) "(HQnew&Hwand_new&Hpost)".
     iMod (saved_prop_alloc Qnew) as (γprop_stored') "#Hsaved1''".
     iMod (saved_prop_alloc True%I) as (γprop_remainder') "#Hsaved2''".
     iMod (own_update_2 _ _ _ (● Excl' (γprop_stored', γprop_remainder') ⋅
@@ -397,12 +398,12 @@ Proof.
     iMod ("Hreenable" with "[$Hg //]") as "(Hitok&Hg)".
     iDestruct ("Hitok_inv_clo" with "[$]") as "Hitok".
     iDestruct (pri_inv_tok_split with "[$Hitok]") as "(Hitok_u&Hitok_ishare)".
-    iMod ("Hclo" with "[Hown' Hstatus' HQnew Hitok_ishare]").
+    iMod ("Hclo" with "[Hown' Hstatus' HQnew Hwand_new Hitok_ishare]").
     { iNext.
       iEval (rewrite staged_inv_inner_unfold).
       iExists _, _, _, _, _. iFrame "∗ #".
-      iLeft. iFrame "∗".
-      iModIntro. iIntros. iMod ("Hwand_new" with "[$] [$]") as "$"; eauto.
+      iLeft. iSplit; first by iFrame "∗".
+      iIntros. iMod ("Hwand_new" with "[$] [$]") as "$"; eauto.
     }
     iDestruct ("Hg_inv_clo" with "Hg") as "Hg".
     iMod (global_state_interp_le with "Hg") as "$".
@@ -432,7 +433,7 @@ Proof.
   iFrame "HNC".
   iMod (saved_prop_alloc
           (wpc0 NotStuck k mj_wp ⊤ e2
-            (λ v : val Λ, ∃ Qnew : iPropI Σ, Qnew ∗ □ (Qnew -∗ C ==∗ P) ∗ (staged_value ⊤ Qnew P -∗ Φc ∧ Φ v))
+            (λ v : val Λ, ∃ Qnew : iPropI Σ, Qnew ∗ (Qnew -∗ C ==∗ P) ∗ (staged_value ⊤ Qnew P -∗ Φc ∧ Φ v))
             (Φc ∗ P))%I) as (γprop_stored') "#Hsaved1''".
   iMod (saved_prop_alloc Φc) as (γprop_remainder') "#Hsaved2''".
   iMod (own_update_2 _ _ _ (● Excl' (γprop_stored', γprop_remainder') ⋅
@@ -461,7 +462,8 @@ Proof.
         eapply Qp_le_min_l.
     }
     iFrame.
-    iModIntro. iIntros "Hwpc".
+    iModIntro.
+    iIntros "Hwpc".
     iEval (rewrite wpc0_unfold) in "Hwpc". iDestruct "Hwpc" as "(_&Hwpc)".
     rewrite /wpc_crash_modality.
     iIntros (????) "Hg HC".

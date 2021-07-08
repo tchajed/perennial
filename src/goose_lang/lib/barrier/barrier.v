@@ -31,11 +31,22 @@ Section proof.
   Context `{!stagedG Σ, !barrierG Σ}.
 
 Definition N := nroot.@"mynamespace".
-Search crash_borrow.
 
 Lemma crash_borrow_crash_wand P Pc:
   crash_borrow P Pc -∗ □ (P -∗ Pc).
 Proof. iDestruct 1 as (??) "($&_)". Qed.
+
+Lemma gmap_gname_codomain_set (gmm : gmap nat (gname * gname)) :
+  ∃ (s : gset gname), ∀ k γs, gmm !! k = Some γs → γs.1 ∈ s ∧ γs.2 ∈ s.
+Proof.
+  induction gmm as [| k γs m Hin IH] using map_ind.
+  - exists ∅. intros ??. rewrite lookup_empty. congruence.
+  - destruct IH as (s&Hins).
+    exists ({[ fst γs]} ∪ {[ snd γs ]} ∪ s).
+    intros k' γs' Hlookup.
+    apply lookup_insert_Some in Hlookup.
+    set_unfold. naive_solver.
+Qed.
 
 Definition barrier_inv (l : loc) (γ : gname) (P : iProp Σ) (Pc : iProp Σ) : iProp Σ :=
   (∃ (b : bool) (gmm : gmap nat (gname * gname)) (fprop fcprop : gname → iProp Σ),
@@ -57,7 +68,7 @@ Definition recv (l : loc) (R Rc : iProp Σ) : iProp Σ :=
   (∃ γ i P Pc R' Rc' γsp γspc,
     inv N (barrier_inv l γ P Pc) ∗
     ▷ (R' -∗ R) ∗
-    ▷ (Rc -∗ Rc') ∗
+    ▷ □ (Rc -∗ Rc') ∗
     ▷ □ (R -∗ Rc) ∗
     i  ↪[γ] (γsp, γspc) ∗
     saved_prop_own γsp R' ∗
@@ -250,12 +261,16 @@ Proof.
   iInv N as (b gmm fprop fcprop) "(>Hl & >H● & HRs)".
   iDestruct (ghost_map_lookup with "[$] [$]") as %Hin.
   iMod (ghost_map_delete with "[$] [$]") as "H●".
-  iMod (saved_prop_alloc R1) as (γsp1) "#Hsp1".
-  iMod (saved_prop_alloc_cofinite ({[ γsp1 ]}) R2)
-    as (γsp2 ?%not_elem_of_singleton) "#Hsp2".
-  iMod (saved_prop_alloc Rc1) as (γspc1) "#Hspc1".
+  destruct (gmap_gname_codomain_set (delete i gmm)) as (s&Hins).
+  iMod (saved_prop_alloc_cofinite s R1) as (γsp1 Hnotin1s) "#Hsp1".
+  iMod (saved_prop_alloc_cofinite (s ∪ {[ γsp1 ]}) R2)
+    as (γsp2 [? ?%not_elem_of_singleton_1]%not_elem_of_union) "#Hsp2".
+  iMod (saved_prop_alloc_cofinite (s ∪ {[ γsp1; γsp2]}) Rc1) as (γspc1 Hnotin1c) "#Hspc1".
+  iMod (saved_prop_alloc_cofinite (s ∪ {[ γsp1; γsp2; γspc1]}) Rc2) as (γspc2 Hnotin2c) "#Hspc2".
+  (*
   iMod (saved_prop_alloc_cofinite ({[ γspc1 ]}) Rc2)
     as (γspc2 ?%not_elem_of_singleton) "#Hspc2".
+   *)
   assert (∃ i1, i1 ∉ dom (gset _) (delete i gmm)) as (i1&Hnotin1).
   { exists (fresh (dom (gset _) (delete i gmm))). apply is_fresh. }
   assert (∃ i2, i2 ∉ {[i1]} ∪ (dom (gset _) (delete i gmm))) as (i2&Hnotin2).
@@ -315,39 +330,104 @@ Proof.
       rewrite big_sepM_insert //=; last first.
       { apply not_elem_of_dom. auto. }
       iSplit.
-      { repeat (destruct (decide _)); subst; eauto; try congruence. }
+      { rewrite decide_False //.
+        rewrite decide_True //.
+        rewrite decide_False; last first.
+        { set_solver. }
+        rewrite decide_True //. }
       iSplit.
-      { repeat (destruct (decide _)); subst; eauto; try congruence. }
+      {
+        rewrite decide_True //.
+        rewrite decide_True //. }
       rewrite ?big_sepM_fmap.
       iDestruct (big_sepM_delete _ _ i with "Hc1") as "[_ Hc1']"; eauto.
       rewrite ?big_sepM_forall.
       iIntros.
-      admit.
-      (* Need to pick saved prop names freshly with codomain of gmm *)
-      (*
-      repeat (destruct (decide _)); subst; eauto; try congruence.
-      { admit.  }
-      { admit.  }
-       *)
+      rewrite ?decide_False; try (intros ?; subst; set_solver).
+      iApply "Hc1'". eauto.
     }
     destruct b.
-    - iApply (crash_borrow_conseq with "[HR] [] [] HRs").
+    - iApply (crash_borrow_conseq with "[] [HR] [] HRs").
       { iEval (rewrite ?big_sepM_fmap).
-      rewrite ?big_sepM_insert //=; last first.
-      { apply not_elem_of_dom. rewrite dom_insert_L. auto. }
-      { apply not_elem_of_dom. auto. }
-      { apply not_elem_of_dom. rewrite dom_insert_L. auto. }
-      { apply not_elem_of_dom. auto. }
+        rewrite ?big_sepM_insert //=; last first.
+        { apply not_elem_of_dom. rewrite dom_insert_L. auto. }
+        { apply not_elem_of_dom. auto. }
+        { apply not_elem_of_dom. rewrite dom_insert_L. auto. }
+        { apply not_elem_of_dom. auto. }
 
-      iModIntro.
-      repeat (destruct (decide _)); subst; try congruence.
-      iIntros "(H2&H1&Hm)".
-      iSplitL "H2".
-      { iApply "Hw2". eauto. }
-      iSplitL "H1".
-      { iApply "Hw1". eauto. }
-      iApply (big_sepM_mono with "Hm").
-      iIntros. simpl.
+        iModIntro.
+        (* TODO: this is not robust at all. *)
+        rewrite decide_False; last by set_solver.
+        rewrite decide_True; last by set_solver.
+        rewrite decide_True; last by set_solver.
+        rewrite decide_False; last by set_solver.
+        rewrite decide_True; last by set_solver.
+        rewrite decide_True; last by set_solver.
+        iIntros "(H2&H1&Hm)".
+        iSplitL "H2".
+        { iApply "Hw2". eauto. }
+        iSplitL "H1".
+        { iApply "Hw1". eauto. }
+        iApply (big_sepM_wand with "Hm").
+        iDestruct (big_sepM_delete _ _ i with "Hc1") as "[_ Hc1']"; eauto.
+        iApply (big_sepM_mono with "Hc1'").
+        iIntros (???) "H1 H2". simpl.
+        rewrite decide_False; last by set_solver.
+        rewrite decide_False; last by set_solver.
+        rewrite decide_False; last by set_solver.
+        rewrite decide_False; last by set_solver.
+        iApply "H1". eauto.
+      }
+      { iEval (rewrite ?big_sepM_fmap).
+        rewrite ?big_sepM_insert //=; last first.
+        { apply not_elem_of_dom. rewrite dom_insert_L. auto. }
+        { apply not_elem_of_dom. auto. }
+        (* TODO: this is not robust at all. *)
+        rewrite decide_False; last by set_solver.
+        rewrite decide_True; last by set_solver.
+        rewrite decide_True; last by set_solver.
+        iIntros "H".
+        iDestruct (big_sepM_delete _ _ i with "H") as "[H HRs]"; eauto.
+        rewrite assoc.
+        iSplitL "HR H".
+
+        rewrite decide_False; last by set_solver.
+        rewrite decide_True; last by set_solver.
+        rewrite decide_True; last by set_solver.
+        iIntros "(H2&H1&Hm)".
+        iSplitL "H2".
+        { iApply "Hw2". eauto. }
+        iSplitL "H1".
+        { iApply "Hw1". eauto. }
+        iApply (big_sepM_wand with "Hm").
+        iDestruct (big_sepM_delete _ _ i with "Hc1") as "[_ Hc1']"; eauto.
+        iApply (big_sepM_mono with "Hc1'").
+        iIntros (???) "H1 H2". simpl.
+        rewrite decide_False; last by set_solver.
+        rewrite decide_False; last by set_solver.
+        rewrite decide_False; last by set_solver.
+        rewrite decide_False; last by set_solver.
+        iApply "H1". eauto.
+      }
+    { iEval (rewrite big_sepM_fmap).
+      rewrite big_sepM_insert //=; last first.
+      { apply not_elem_of_dom. rewrite dom_insert_L. auto. }
+      rewrite big_sepM_insert //=; last first.
+      { apply not_elem_of_dom. auto. }
+      iSplit.
+      { repeat (destruct (decide _)); subst; eauto; try congruence. }
+      iSplit.
+      { repeat (destruct (decide _)); subst; eauto; try congruence. }
+      rewrite ?big_sepM_fmap.
+      iDestruct (big_sepM_delete _ _ i with "Hs2") as "[_ Hs2']"; eauto.
+      rewrite ?big_sepM_forall.
+      iIntros.
+      repeat (destruct (decide _)); subst; eauto; try congruence.
+      { iApply "Hs2'". eauto. }
+    }
+
+    -
+      eauto.
       (* same issue *)
       admit.
       }
