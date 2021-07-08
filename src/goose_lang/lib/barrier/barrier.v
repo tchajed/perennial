@@ -32,10 +32,6 @@ Section proof.
 
 Definition N := nroot.@"mynamespace".
 
-Lemma crash_borrow_crash_wand P Pc:
-  crash_borrow P Pc -∗ □ (P -∗ Pc).
-Proof. iDestruct 1 as (??) "($&_)". Qed.
-
 Lemma gmap_gname_codomain_set (gmm : gmap nat (gname * gname)) :
   ∃ (s : gset gname), ∀ k γs, gmm !! k = Some γs → γs.1 ∈ s ∧ γs.2 ∈ s.
 Proof.
@@ -85,6 +81,8 @@ Proof. solve_proper. Qed.
 Global Instance recv_ne l : NonExpansive2 (recv l).
 Proof. solve_proper. Qed.
 
+Opaque crash_borrow.
+
 (** Actual proofs *)
 Lemma newbarrier_spec (P Pc : iProp Σ) :
   {{{ □ (P -∗ Pc) }}} barrier.newbarrier #() {{{ l, RET #l; recv l P Pc ∗ send l P Pc }}}.
@@ -110,8 +108,8 @@ Proof.
   { iExists false,({[O := (γsp, γspc)]}),
             (λ x, if decide (x = γsp) then P else True%I),
             (λ x, if decide (x = γspc) then Pc else True%I).
-    iFrame "Hl Hauth Hc".
     iNext.
+    iFrame "Hl Hauth Hc".
     iSplit.
     { rewrite big_sepM_fmap big_sepM_singleton. rewrite decide_True //. }
     iSplit.
@@ -257,7 +255,7 @@ Proof.
   rename P1 into R1; rename P2 into R2.
   rename Pc1 into Rc1; rename Pc2 into Rc2.
   iIntros (?) "#Hw1 #Hw2".
-  iDestruct 1 as (γ i P Pc R' Rc' γsp γspc) "(#Hinv & HR & HRc & Hcrash & H◯ & #Hsp & #Hspc)".
+  iDestruct 1 as (γ i P Pc R' Rc' γsp γspc) "(#Hinv & HR & #HRc & Hcrash & H◯ & #Hsp & #Hspc)".
   iInv N as (b gmm fprop fcprop) "(>Hl & >H● & HRs)".
   iDestruct (ghost_map_lookup with "[$] [$]") as %Hin.
   iMod (ghost_map_delete with "[$] [$]") as "H●".
@@ -347,7 +345,7 @@ Proof.
       iApply "Hc1'". eauto.
     }
     destruct b.
-    - iApply (crash_borrow_conseq with "[] [HR] [] HRs").
+    - iApply (crash_borrow_later_conseq with "[] [HR] [] HRs").
       { iEval (rewrite ?big_sepM_fmap).
         rewrite ?big_sepM_insert //=; last first.
         { apply not_elem_of_dom. rewrite dom_insert_L. auto. }
@@ -386,10 +384,51 @@ Proof.
         rewrite decide_False; last by set_solver.
         rewrite decide_True; last by set_solver.
         rewrite decide_True; last by set_solver.
+        iAssert (▷ (fprop γsp ≡ R'))%I as "Hequiv".
+        {
+          iDestruct (big_sepM_delete _ _ i with "Hs1") as "[Hthis _]".
+          { rewrite lookup_fmap Hin //. }
+          iDestruct (saved_prop_agree with "Hthis Hsp") as "Hequiv". eauto. }
+        iNext.
         iIntros "H".
         iDestruct (big_sepM_delete _ _ i with "H") as "[H HRs]"; eauto.
         rewrite assoc.
         iSplitL "HR H".
+        { iEval (rewrite comm). iApply "HR". iRewrite -"Hequiv". eauto. }
+        iApply (big_sepM_mono with "HRs").
+        iIntros (???) "H1". simpl.
+        rewrite decide_False; last by set_solver.
+        rewrite decide_False; last by set_solver.
+        eauto.
+      }
+      { iEval (rewrite ?big_sepM_fmap).
+        rewrite ?big_sepM_insert //=; last first.
+        { apply not_elem_of_dom. rewrite dom_insert_L. auto. }
+        { apply not_elem_of_dom. auto. }
+        (* TODO: this is not robust at all. *)
+        rewrite decide_False; last by set_solver.
+        rewrite decide_True; last by set_solver.
+        rewrite decide_True; last by set_solver.
+        iAssert (▷ (fcprop γspc ≡ Rc'))%I as "Hequiv".
+        {
+          iDestruct (big_sepM_delete _ _ i with "Hs2") as "[Hthis _]".
+          { rewrite lookup_fmap Hin //. }
+          iDestruct (saved_prop_agree with "Hthis Hspc") as "Hequiv". eauto. }
+        iNext.
+        iModIntro.
+        rewrite assoc.
+        iIntros "(H1&HRs)".
+        iApply (big_sepM_delete _ _ i); eauto.
+        iSplitL "H1".
+        { simpl. iRewrite "Hequiv". iApply "HRc". iEval (rewrite comm); eauto. }
+        iApply (big_sepM_mono with "HRs").
+        iIntros (???) "H1". simpl.
+        rewrite decide_False; last by set_solver.
+        rewrite decide_False; last by set_solver.
+        eauto.
+      }
+    -
+        rewrite decide_False; last by set_solver.
 
         rewrite decide_False; last by set_solver.
         rewrite decide_True; last by set_solver.

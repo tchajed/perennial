@@ -125,8 +125,8 @@ Definition pre_borrow : iProp Σ :=
 
 Definition crash_borrow Ps Pc : iProp Σ :=
  (∃ Ps' Pc', □ (Ps -∗ Pc) ∗
-             (Ps' -∗ Ps) ∗
-             □ (Pc -∗ Pc') ∗
+             ▷ (Ps' -∗ Ps) ∗
+             ▷ □ (Pc -∗ Pc') ∗
              staged_value_idle ⊤ Ps' True%I Pc' ∗ later_tok ∗ later_tok).
 
 Lemma wpc_crash_borrow_inits s k e Φ Φc P Pc :
@@ -337,6 +337,22 @@ Proof.
   iIntros "(H1&HP)". iApply "H1". eauto.
 Qed.
 
+Lemma crash_borrow_later_conseq P Pc P' Pc' :
+  □ (P' -∗ Pc') -∗
+  ▷ (P -∗ P') -∗
+  ▷ □ (Pc' -∗ Pc) -∗
+  crash_borrow P Pc -∗ crash_borrow P' Pc'.
+Proof.
+  iIntros "#Hw1' Hw2' #Hw3'".
+  iIntros "Hborrow".
+  iDestruct "Hborrow" as (P0 Pc0) "(#Hw1&Hw2&#H3&Hinv&Htok&Htok')".
+  rewrite /crash_borrow.
+  iExists P0, Pc0. iSplit; first eauto. iFrame "Hinv Htok Htok'".
+  iSplitL "Hw2 Hw2'".
+  - iNext. iIntros. iApply "Hw2'". iApply "Hw2". done.
+  - iNext. iIntros. iModIntro. iIntros. iApply "H3". iApply "Hw3'". done.
+Qed.
+
 Lemma crash_borrow_conseq P Pc P' Pc' :
   □ (P' -∗ Pc') -∗
   (P -∗ P') -∗
@@ -349,8 +365,8 @@ Proof.
   rewrite /crash_borrow.
   iExists P0, Pc0. iSplit; first eauto. iFrame "Hinv Htok Htok'".
   iSplitL "Hw2 Hw2'".
-  - iIntros. iApply "Hw2'". iApply "Hw2". done.
-  - iIntros. iModIntro. iIntros. iApply "H3". iApply "Hw3'". done.
+  - iNext. iIntros. iApply "Hw2'". iApply "Hw2". done.
+  - iNext. iIntros. iModIntro. iIntros. iApply "H3". iApply "Hw3'". done.
 Qed.
 
 Lemma wpc_crash_borrow_split' k E e Φ Φc P Pc P1 P2 Pc1 Pc2 :
@@ -456,7 +472,8 @@ Proof.
   iIntros (Hnval) "Hborrow1 Hborrow2 #Hc Hwandc12 HwandP Hwpc".
 
   iDestruct "Hborrow1" as (??) "(#Hw1&Hw2&Hw3&Hinv1&Htok1&>Htok2)".
-  iApply (wpc_later_tok_use with "[$]"); first done.
+  iApply (wpc_later_tok_use2 with "[$]"); first done.
+  iNext.
   iNext.
   iApply (wpc_staged_inv_inuse2); first done.
   iFrame "Htok1 Hinv1".
@@ -570,26 +587,38 @@ Lemma wpc_crash_borrow_open_modify k E1 e Φ Φc P Pc:
   WPC e @ k; E1 {{ Φ }} {{ Φc }}.
 Proof.
   iIntros (Hnv) "H1 Hwp".
-  iDestruct "H1" as (??) "(#Hw1&Hw2&#Hw3&Hval&Hltok)".
-  iApply (wpc_staged_inv with "[$Hval Hwp Hltok Hw2]").
+  iDestruct "H1" as (??) "(#Hw1&Hw2&#Hw3&Hval&Hltok1&Hltok2)".
+  iApply (wpc_later_tok_use2 with "[$]"); first done.
+  iNext. iNext.
+  iApply (wpc_staged_inv with "[$Hval Hwp Hltok1 Hw2]").
   { auto. }
   iSplit.
-  { iDestruct "Hwp" as "($&_)". }
+  { iDestruct "Hwp" as "($&_)". eauto. }
   iIntros "HP".
   iDestruct "Hwp" as "(_&Hwp)".
   iSpecialize ("Hwp" with "[HP Hw2]").
   { iApply "Hw2". eauto. }
   iApply (wpc_strong_mono with "Hwp"); auto.
   { iSplit; last first.
-    { iIntros "($&?) !>". iApply "Hw3". eauto. }
+    { iIntros "($&?) !>". iSplitR; first eauto. iApply "Hw3". eauto. }
     iIntros (?). iDestruct 1 as (P') "(HP&#Hwand&H)". iModIntro.
     iExists (P' ∧ Pc')%I. iSplitL "HP Hw3".
     { iSplit; iFrame. iApply "Hw3". iApply "Hwand". eauto. }
     iSplitL "".
     { iIntros "(_&$)". eauto. }
     iIntros "Hs".
-    iApply "H". iExists _, _. iFrame "Hs # ∗". iIntros "($&_)". }
+    iSplit.
+    * iIntros "Hltok". iDestruct ("H" with "[-]") as "($&_)".
+      iExists _, _. iFrame "Hs # ∗". iNext. iIntros "($&_)".
+    * iIntros "Hltok". iDestruct ("H" with "[-]") as "(_&$)".
+      iExists _, _. iFrame "Hs # ∗". iNext. iIntros "($&_)".
+  }
 Qed.
+
+Lemma crash_borrow_crash_wand P Pc:
+  crash_borrow P Pc -∗ □ (P -∗ Pc).
+Proof. iDestruct 1 as (??) "($&_)". Qed.
+
 
 Lemma wpc_crash_borrow_open k E1 e Φ Φc P Pc:
   to_val e = None →
@@ -600,23 +629,17 @@ Lemma wpc_crash_borrow_open k E1 e Φ Φc P Pc:
   WPC e @ k; E1 {{ Φ }} {{ Φc }}.
 Proof.
   iIntros (Hnv) "H1 Hwp".
-  iDestruct "H1" as (??) "(#Hw1&Hw2&#Hw3&Hval&Hltok)".
-  iApply (wpc_staged_inv with "[$Hval Hwp Hltok Hw2]").
-  { auto. }
-  iSplit.
-  { iDestruct "Hwp" as "($&_)". }
+  iDestruct (crash_borrow_crash_wand with "[$]") as "#Hw".
+  iApply (wpc_crash_borrow_open_modify with "[$] [Hwp]"); auto.
+  iSplit; first by iDestruct "Hwp" as "($&_)".
   iIntros "HP".
   iDestruct "Hwp" as "(_&Hwp)".
-  iSpecialize ("Hwp" with "[Hw2 HP]").
-  { iApply "Hw2". eauto. }
+  iSpecialize ("Hwp" with "[$]").
   iApply (wpc_strong_mono with "Hwp"); auto.
   { iSplit; last first.
-    { iIntros "($&?) !>". iApply "Hw3". eauto. }
+    { eauto. }
     iIntros (?) "(HP&H)". iModIntro.
-    iExists P. iFrame. iSplitL "".
-    { iIntros. iApply "Hw3". by iApply "Hw1". }
-    iIntros "Hs".
-    iApply "H". iExists _, _. iFrame "Hs # ∗". eauto. }
+    iExists P. iFrame. eauto. }
 Qed.
 
 End crash_borrow_def.
