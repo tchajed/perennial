@@ -459,13 +459,13 @@ Proof.
   iApply (wpc_crash_borrow_split' with "[$] [$] [$] [$] [$]"); eauto.
 Qed.
 
-Lemma wpc_crash_borrow_combine k E e Φ Φc P Pc P1 P2 Pc1 Pc2 :
+Lemma wpc_crash_borrow_combine' k E e Φ Φc P Pc P1 P2 Pc1 Pc2 :
   language.to_val e = None →
   ▷ crash_borrow P1 Pc1 -∗
   ▷ crash_borrow P2 Pc2 -∗
-  ▷ □ (P -∗ Pc) -∗
-  ▷ (Pc -∗ (Pc1 ∗ Pc2)) -∗
-  ▷ (P1 ∗ P2 ==∗ P) -∗
+  ▷▷ □ (P -∗ Pc) -∗
+  ▷▷ (Pc -∗ (Pc1 ∗ Pc2)) -∗
+  ▷▷ (P1 ∗ P2 ==∗ P) -∗
   WPC e @ NotStuck; k; E {{ λ v, (crash_borrow P Pc) -∗ (Φc ∧ Φ v) }} {{ Φc }} -∗
   WPC e @ NotStuck; k; E {{ Φ }} {{ Φc }}.
 Proof.
@@ -578,6 +578,20 @@ Proof.
  - iDestruct "Hc'" as "(_&$)". eauto.
 Qed.
 
+Lemma wpc_crash_borrow_combine k E e Φ Φc P Pc P1 P2 Pc1 Pc2 :
+  language.to_val e = None →
+  ▷ crash_borrow P1 Pc1 -∗
+  ▷ crash_borrow P2 Pc2 -∗
+  ▷ □ (P -∗ Pc) -∗
+  ▷ (Pc -∗ (Pc1 ∗ Pc2)) -∗
+  ▷ (P1 ∗ P2 ==∗ P) -∗
+  WPC e @ NotStuck; k; E {{ λ v, (crash_borrow P Pc) -∗ (Φc ∧ Φ v) }} {{ Φc }} -∗
+  WPC e @ NotStuck; k; E {{ Φ }} {{ Φc }}.
+Proof.
+  iIntros (Hnval) "Hborrow1 Hborrow2 #Hc Hwandc12 HwandP Hwpc".
+  iApply (wpc_crash_borrow_combine' with "[$Hborrow1] [$Hborrow2] [$] [$Hwandc12] [$HwandP]"); eauto.
+Qed.
+
 Lemma wpc_crash_borrow_open_modify k E1 e Φ Φc P Pc:
   to_val e = None →
   crash_borrow P Pc -∗
@@ -643,3 +657,5 @@ Proof.
 Qed.
 
 End crash_borrow_def.
+
+Opaque crash_borrow.

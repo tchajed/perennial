@@ -11,6 +11,7 @@ From Perennial.goose_lang Require Import proofmode wpc_proofmode notation crash_
 From Perennial.goose_lang.lib Require Import typed_mem.
 From Perennial.goose_lang.lib Require Import lock.
 
+Opaque crash_borrow.
 
 Set Default Proof Using "Type".
 Section goose_lang.

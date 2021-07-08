@@ -7,8 +7,10 @@ From Perennial.program_logic Require
      dist_adequacy.  *)
 From Perennial.goose_lang Require
      adequacy recovery_adequacy (* dist_adequacy *)
-     (* refinement refinement_adequacy
      crash_lock
+     rwlock
+     barrier
+     (* refinement refinement_adequacy
      logical_reln_adeq *).
 (*
 From Perennial.program_proof Require
@@ -24,8 +26,10 @@ From Perennial.program_proof Require
      simple.proofs simple.example
      (* wp_to_wpc *).
 *)
+(*
 From Perennial.program_proof.examples Require
      all_examples.
+*)
 
 (* TODO: refactoring in progress
 From Perennial.program_proof.lockservice Require
@@ -64,4 +68,6 @@ From Perennial.goose_lang.interpreter Require
 
 (* ensures this file itself works for Coq's CI and catches any oversight where
 something in the lite build isn't listed here *)
+(*
 From Perennial Require LiteBuild.
+*)

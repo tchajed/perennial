@@ -56,8 +56,8 @@ Definition barrier_inv (l : loc) (γ : gname) (P : iProp Σ) (Pc : iProp Σ) : i
                    ([∗ map] i ↦ γsp ∈ snd <$> gmm, fcprop γsp)
     else
       crash_borrow True%I True%I ∗
-      □ (P -∗ ([∗ map] i ↦ γsp ∈ fst <$> gmm, fprop γsp)) ∗
-      □ (([∗ map] i ↦ γsp ∈ snd <$> gmm, fcprop γsp) -∗ Pc)).
+      ▷ (P -∗ ([∗ map] i ↦ γsp ∈ fst <$> gmm, fprop γsp)) ∗
+      □ ▷ (([∗ map] i ↦ γsp ∈ snd <$> gmm, fcprop γsp) -∗ Pc)).
 
 
 Definition recv (l : loc) (R Rc : iProp Σ) : iProp Σ :=
@@ -150,22 +150,22 @@ Proof.
     { iExists true, gmm, fprop, fcprop. iFrame. }
     wp_pures. iModIntro. iIntros "(_&HK)". by iApply "HK".
   }
-  iDestruct "HRs" as "(#Hcrash&Hcb'&#HP&#HPc)".
+  iDestruct "HRs" as "(#Hcrash&Hcb'&HP&#HPc)".
   iApply (wpc_wp _ 0 _ _ _ True%I).
-  iApply (wpc_crash_borrow_combine _ _ _ _ _
+  iApply (wpc_crash_borrow_combine' _ _ _ _ _
             ([∗ map] _ ↦ γsp ∈ fst <$> gmm, (fprop γsp))
             ([∗ map] _ ↦ γsp ∈ snd <$> gmm, (fcprop γsp))
-            with "[$Hcb] [$Hcb'] [] [] []").
+            with "[$Hcb] [$Hcb'] [] [] [HP]").
   { auto. }
-  { iNext. iModIntro. iIntros "H".
+  { iNext. iNext. iModIntro. iIntros "H".
     rewrite ?big_sepM_fmap.
     iApply (big_sepM_wand with "H []").
     { simpl. iApply (big_sepM_mono with "Hcrash"). iIntros (???) "H". iApply "H". }
   }
-  { iNext. iIntros "H"; iSplit; last done.
+  { iNext. iNext. iIntros "H"; iSplit; last done.
     by iApply "HPc".
   }
-  { iNext. iIntros "(HP'&HQ')".
+  { iNext. iNext. iIntros "(HP'&HQ')".
     iApply "HP". eauto. }
   iApply wp_wpc.
   wp_cmpxchg_suc.
@@ -427,55 +427,82 @@ Proof.
         rewrite decide_False; last by set_solver.
         eauto.
       }
-    -
-        rewrite decide_False; last by set_solver.
-
+    - iDestruct "HRs" as "($&H1&H2)".
+      iSplitL "H1 HR".
+      {
+        iAssert (▷ (fprop γsp ≡ R'))%I as "Hequiv".
+        {
+          iDestruct (big_sepM_delete _ _ i with "Hs1") as "[Hthis _]".
+          { rewrite lookup_fmap Hin //. }
+          iDestruct (saved_prop_agree with "Hthis Hsp") as "Hequiv". eauto. }
+        iNext.
+        iIntros "HP". iDestruct ("H1" with "[$]") as "H1".
+        iEval (rewrite ?big_sepM_fmap).
+        rewrite ?big_sepM_insert //=; last first.
+        { apply not_elem_of_dom. rewrite dom_insert_L. auto. }
+        { apply not_elem_of_dom. auto. }
         rewrite decide_False; last by set_solver.
         rewrite decide_True; last by set_solver.
         rewrite decide_True; last by set_solver.
-        iIntros "(H2&H1&Hm)".
-        iSplitL "H2".
-        { iApply "Hw2". eauto. }
-        iSplitL "H1".
-        { iApply "Hw1". eauto. }
-        iApply (big_sepM_wand with "Hm").
-        iDestruct (big_sepM_delete _ _ i with "Hc1") as "[_ Hc1']"; eauto.
-        iApply (big_sepM_mono with "Hc1'").
-        iIntros (???) "H1 H2". simpl.
+        rewrite assoc.
+        iEval (rewrite big_sepM_fmap) in "H1".
+        iDestruct (big_sepM_delete _ _ i with "H1") as "[HR' H1]"; eauto.
+        iSplitL "HR HR'".
+        { iEval (rewrite comm). iApply "HR".
+          simpl. iRewrite -"Hequiv". eauto. }
+        iApply (big_sepM_mono with "H1").
+        iIntros (???) "H1". simpl.
         rewrite decide_False; last by set_solver.
         rewrite decide_False; last by set_solver.
-        rewrite decide_False; last by set_solver.
-        rewrite decide_False; last by set_solver.
-        iApply "H1". eauto.
+        eauto.
       }
-    { iEval (rewrite big_sepM_fmap).
-      rewrite big_sepM_insert //=; last first.
-      { apply not_elem_of_dom. rewrite dom_insert_L. auto. }
-      rewrite big_sepM_insert //=; last first.
-      { apply not_elem_of_dom. auto. }
-      iSplit.
-      { repeat (destruct (decide _)); subst; eauto; try congruence. }
-      iSplit.
-      { repeat (destruct (decide _)); subst; eauto; try congruence. }
-      rewrite ?big_sepM_fmap.
-      iDestruct (big_sepM_delete _ _ i with "Hs2") as "[_ Hs2']"; eauto.
-      rewrite ?big_sepM_forall.
-      iIntros.
-      repeat (destruct (decide _)); subst; eauto; try congruence.
-      { iApply "Hs2'". eauto. }
-    }
-
-    -
-      eauto.
-      (* same issue *)
-      admit.
+      {
+        iAssert (▷ (fcprop γspc ≡ Rc'))%I as "Hequiv".
+        {
+          iDestruct (big_sepM_delete _ _ i with "Hs2") as "[Hthis _]".
+          { rewrite lookup_fmap Hin //. }
+          iDestruct (saved_prop_agree with "Hthis Hspc") as "Hequiv". eauto. }
+        iDestruct "H2" as "#H2".
+        iModIntro.
+        iNext.
+        iIntros "HP". iApply "H2".
+        iEval (rewrite ?big_sepM_fmap).
+        iEval (rewrite big_sepM_fmap) in "HP".
+        rewrite ?big_sepM_insert //=; last first.
+        { apply not_elem_of_dom. rewrite dom_insert_L. auto. }
+        { apply not_elem_of_dom. auto. }
+        rewrite decide_False; last by set_solver.
+        rewrite decide_True; last by set_solver.
+        rewrite decide_True; last by set_solver.
+        iEval (rewrite assoc) in "HP".
+        iDestruct "HP" as "(HRc'&HP)".
+        iApply (big_sepM_delete _ _ i); eauto.
+        iSplitL "HRc'".
+        { simpl. iRewrite "Hequiv". iApply "HRc". iEval (rewrite comm). auto. }
+        iApply (big_sepM_mono with "HP").
+        iIntros (???) "H1". simpl.
+        rewrite decide_False; last by set_solver.
+        rewrite decide_False; last by set_solver.
+        eauto.
       }
+  }
+  iModIntro. iSplitL "Hkey1".
+  { iExists _, _, _, _, _, _, _, _.
+    iFrame "∗". iFrame "Hinv". iFrame "#". iSplit; eauto. }
+  { iExists _, _, _, _, _, _, _, _.
+    iFrame "∗". iFrame "Hinv". iFrame "#". iSplit; eauto. }
 Qed.
 
-Lemma recv_weaken l P1 P2 : (P1 -∗ P2) -∗ recv l P1 -∗ recv l P2.
+Lemma recv_weaken l P1 P2 Pc1 Pc2 :
+  (P1 -∗ P2) -∗ □ (Pc2 -∗ Pc1) -∗ □ (P2 -∗ Pc2) -∗ recv l P1 Pc1 -∗ recv l P2 Pc2.
 Proof.
-  iIntros "HP". iDestruct 1 as (γ P R' i) "(#Hinv & HR & H◯)".
-  iExists γ, P, R', i. iIntros "{$Hinv $H◯} !> HQ". iApply "HP". by iApply "HR".
+  iIntros "HP #HPc #Hwn".
+  iDestruct 1 as (γ i P Pc R' Rc' γ1 γ2) "(#Hinv & HR & #HRc & #Hw & H◯ & Hs & Hs')".
+  iExists γ, i, P, Pc, R', Rc', γ1, γ2.
+  iIntros "{$Hinv $H◯}". iFrame "# ∗".
+  iSplitL "HP HR".
+  { iIntros "!> HQ". iApply "HP". by iApply "HR". }
+  { iIntros "!> !> HQ". iApply "HRc". by iApply "HPc". }
 Qed.
 
 End proof.
