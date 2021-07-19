@@ -13,8 +13,8 @@ From Perennial.goose_lang Require
      (* refinement refinement_adequacy
      logical_reln_adeq *).
 From Perennial.program_proof Require
-(*
      wal.circ_proof_crash
+(*
      append_log_proof
      (* append_log_refinement *)
 *)
