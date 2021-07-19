@@ -33,6 +33,15 @@ Section proof.
      is_lock Nlock lk (crash_borrow R Rcrash) ∗
      locked lk)%I.
 
+  Definition partial_crash_locked lk R Rcrash : iProp Σ :=
+    (∃ R' Rcrash',
+     □ (R' -∗ Rcrash') ∗
+     □ (Rcrash' -∗ Rcrash ∗ (Rcrash -∗ Rcrash')) ∗
+     crash_borrow R Rcrash ∗
+     crash_borrow ((R -∗ R') ∧ (Rcrash -∗ Rcrash')) (Rcrash -∗ Rcrash') ∗
+     is_lock Nlock lk (crash_borrow R' Rcrash') ∗
+     locked lk)%I.
+
   Lemma wp_new_free_crash_lock :
     {{{ True }}} lock.new #() {{{ lk, RET #lk; is_free_crash_lock lk }}}.
   Proof.
@@ -95,6 +104,66 @@ Section proof.
     iIntros "(?&?)". iApply "HΦ". iFrame. iFrame "#".
   Qed.
 
+  Lemma partial_try_acquire_spec E lk R Rcrash R' Rcrash':
+    ↑Nlock ⊆ E →
+    □ (R' -∗ R ∗ (R -∗ R') ∧ (Rcrash -∗ Rcrash')) -∗
+    □ (R -∗ Rcrash) -∗
+    □ (Rcrash' -∗ Rcrash ∗ (Rcrash -∗ Rcrash')) -∗
+    {{{ is_crash_lock lk R' Rcrash' }}} lock.try_acquire lk @ E
+    {{{ b, RET #b; if b is true then partial_crash_locked lk R Rcrash else True }}}.
+  Proof.
+    iIntros (?) "#Hw1 #Hw2 #Hw3".
+    iIntros (Φ) "!> Hl HΦ".
+    rewrite /is_crash_lock/is_lock.
+    iDestruct "Hl" as (l ->) "#Hinv".
+    wp_rec. wp_bind (CmpXchg _ _ _). iInv Nlock as ([]) "[Hl HR]".
+    - wp_cmpxchg_fail. iModIntro. iSplitL "Hl"; first (iNext; iExists true; eauto).
+      wp_pures. iApply ("HΦ" $! false). done.
+    - iDestruct "HR" as "[Hl2 HR]".
+      iCombine "Hl Hl2" as "Hl".
+      rewrite Qp_quarter_three_quarter.
+      iApply (wpc_wp NotStuck 0 _ _ _ True).
+      iAssert (▷ □ (R' -∗ Rcrash'))%I with "[HR]" as "#Hwand".
+      { iNext. by iApply crash_borrow_crash_wand. }
+      iApply (wpc_crash_borrow_split _ _ _ _ _ _ _
+                                     R
+                                     ((R -∗ R') ∧ (Rcrash -∗ Rcrash'))
+                                     Rcrash
+                                     (Rcrash -∗ Rcrash')
+                with "HR"); auto.
+      { iNext. iModIntro. iIntros "H". iDestruct "H" as "(_&$)". }
+      { iNext. iIntros "(HR1&HR2)". iApply "HR2"; eauto. }
+      iApply wp_wpc.
+      wp_cmpxchg_suc.
+      iModIntro.
+      iEval (rewrite -Qp_quarter_three_quarter) in "Hl".
+      iDestruct (fractional.fractional_split_1 with "Hl") as "[Hl1 Hl2]".
+      iIntros "(Hc1&Hc2)".
+      iSplit; first done. iModIntro.
+      iSplitL "Hl1".
+      { iNext; iExists true; eauto. }
+      wp_pures. iApply "HΦ". iModIntro.
+      rewrite /partial_crash_locked.
+      iExists _, _. iFrame "∗ #".
+      rewrite /is_lock/locked.
+      iSplitL ""; eauto.
+  Qed.
+
+  Lemma partial_acquire_spec E lk R Rcrash R' Rcrash':
+    ↑Nlock ⊆ E →
+    □ (R' -∗ R ∗ (R -∗ R') ∧ (Rcrash -∗ Rcrash')) -∗
+    □ (R -∗ Rcrash) -∗
+    □ (Rcrash' -∗ Rcrash ∗ (Rcrash -∗ Rcrash')) -∗
+    {{{ is_crash_lock lk R' Rcrash' }}} lock.acquire lk @ E {{{ RET #(); partial_crash_locked lk R Rcrash }}}.
+  Proof.
+    iIntros (?) "#H1 #H2 #H3". iIntros (Φ) "!> #Hl HΦ". iLöb as "IH". wp_rec.
+    iPoseProof (partial_try_acquire_spec E with "H1 H2") as "H"; first done.
+    wp_apply "H"; auto.
+    iIntros ([]).
+    - iIntros "Hlked". wp_if. iApply "HΦ"; by iFrame.
+    - iIntros "_". wp_if. iApply ("IH" with "[HΦ]"). auto.
+  Qed.
+
   Lemma use_crash_locked E1 k e lk R Rcrash Φ Φc :
     to_val e = None →
     crash_locked lk R Rcrash -∗
@@ -128,6 +197,39 @@ Section proof.
     { iFrame "His_lock". iFrame. }
     { auto. }
     by iApply "HΦ".
+  Qed.
+
+  Lemma partial_release_spec E (R Rcrash : iProp Σ) lk:
+    ↑Nlock ⊆ E →
+    {{{ partial_crash_locked lk R Rcrash }}}
+    lock.release lk @ E
+    {{{ RET #(); True }}}.
+  Proof.
+    iIntros (? Φ) "Hcrash_locked HΦ".
+    iDestruct "Hcrash_locked" as (??) "(#Hw1&#Hw2&Hc1&Hc2&His_lock&Hlocked)".
+    rewrite /is_lock.
+    iDestruct "His_lock" as (l ->) "#Hinv".
+    rewrite /lock.release /=. wp_lam.
+    wp_bind (CmpXchg _ _ _).
+    iInv Nlock as (b) "[>Hl _]".
+
+    iDestruct (locked_loc with "Hlocked") as "Hl2".
+    iDestruct (heap_mapsto_agree with "[$Hl $Hl2]") as %->.
+    iCombine "Hl Hl2" as "Hl".
+    rewrite Qp_quarter_three_quarter.
+    iApply (wpc_wp NotStuck 0 _ _ _ True).
+    iApply (wpc_crash_borrow_combine _ _ _ _ _ R' Rcrash'
+                  with "Hc1 Hc2"); auto.
+    { iNext. iIntros "(HR&Hw)". iDestruct "Hw" as "(H&_)". iApply "H". eauto. }
+    iApply wp_wpc.
+    wp_cmpxchg_suc.
+    iModIntro.
+    iIntros "Hb". iSplit; first done.
+    iModIntro.
+    iSplitR "HΦ"; last by wp_seq; iApply "HΦ".
+    iEval (rewrite -Qp_quarter_three_quarter) in "Hl".
+    iDestruct (fractional.fractional_split_1 with "Hl") as "[Hl1 Hl2]".
+    iNext. iExists false. iFrame.
   Qed.
 
   Definition with_lock lk e :=
