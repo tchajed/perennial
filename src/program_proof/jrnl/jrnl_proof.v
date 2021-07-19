@@ -10,7 +10,9 @@ From Goose.github_com.mit_pdos.go_journal Require Import addr jrnl.
 From Perennial.program_proof Require Import wal.specs wal.heapspec obj.obj_proof buf.buf_proof addr.addr_proof.
 
 From Perennial.program_logic Require Import invariants_mutable.
+(*
 From Perennial.program_proof Require wp_to_wpc.
+*)
 
 Definition mkVersioned {K:bufDataKind} (c m: bufDataT K) : versioned_object :=
   existT K (c, m).
