@@ -1832,13 +1832,24 @@ Proof.
   iApply (wpc_strong_crash_frame' with "[$]"); auto.
 Qed.
 
+(* This is mainly for compatibility reasons *)
 Lemma wpc_crash_frame_wand_bdisc s k1 k2 E1 E2 e Φ Φc Ψc :
   k1 ≤ k2 →
   E1 ⊆ E2 →
-  WPC e @ s; k2; E2 {{ λ v, (|C={E1}_k1=> Ψc) -∗ Φ v }} {{ Ψc -∗ Φc }} -∗
-  (|C={E1}_k1=> Ψc) -∗
+  WPC e @ s; k2; E2 {{ λ v, <bdisc> (|C={E1}_k1=> Ψc) -∗ Φ v }} {{ Ψc -∗ Φc }} -∗
+  <bdisc> (|C={E1}_k1=> Ψc) -∗
   WPC e @ s; k2; E2 {{ Φ }} {{ Φc }}.
-Proof. apply wpc_crash_frame_wand'. Qed.
+Proof.
+  iIntros (??) "H Hbdisc".
+  iApply (wpc_strong_mono with "H"); auto.
+  iSplit.
+  { iIntros (?) "H !>". iApply "H". eauto. }
+  iIntros "H".
+  iDestruct (own_discrete_elim with "Hbdisc") as "Hbdisc".
+  iIntros "HC". iSpecialize ("Hbdisc" with "[$]").
+  iMod (fupd_mask_subseteq E1) as "Hclo"; eauto.
+  iMod "Hbdisc". iMod "Hclo". iModIntro. iApply "H"; eauto.
+Qed.
 
 Lemma fupd_level_later_to_disc k E P:
   ▷ P -∗ |k={E}=> <disc> ▷ P.

@@ -90,6 +90,7 @@ Proof using Hrpre Hcpre.
   { iNext. subst. rewrite /trace_inv. iExists _, _, _, _. iFrame; eauto. }
   iModIntro. iFrame "Hinv Hcfupd2".
   { iModIntro. iMod (cfupd_weaken_all with "[$]") as "H"; auto. iDestruct "H" as ">$". eauto. }
+  Unshelve. exact O.
 Qed.
 
 Lemma goose_spec_init2 {hG: heapGS Σ} r tp σ g tr or P:
@@ -156,6 +157,7 @@ Proof using Hrpre Hcpre.
   { iNext. subst. rewrite /trace_inv. iExists _, _, _, _. iFrame; eauto. }
   iModIntro. iFrame "Hinv Hcfupd2".
   { iModIntro. iMod (cfupd_weaken_all with "[$]") as "H"; auto. iDestruct "H" as ">$". eauto. }
+  Unshelve. exact O.
 Qed.
 
 Lemma trace_inv_open {hG: heapGS Σ} {hrG: refinement_heapG Σ}  rs es σgs σ:
@@ -319,7 +321,7 @@ Lemma wpc_trace_inv_open k es σs gs e Hheap Href Φ Φc
   spec_ctx' es ([es], (σs,gs)) -∗
   trace_ctx -∗
   spec_crash_ctx' es ([es], (σs,gs)) (P Hheap Href) -∗
-  <disc> (|C={⊤}_0=> trace_inv) -∗
+  (|C={⊤}_0=> trace_inv) -∗
   WPC e @ k; ⊤ {{ v, Φ Hheap Href v }}{{Φc Hheap Href ∗ P Hheap Href}} -∗
   WPC e @ k; ⊤ {{ _, True }}{{∃ (hC : crashG Σ) (hRef : refinement_heapG Σ)
                         (es' : list expr) (σs' : state) (gs' : global_state) (stat : status),
@@ -334,7 +336,7 @@ Proof.
   iIntros "#Hexcl #Hspec #Htrace #Hcfupd1 Hcfupd2 H".
   iApply (@wpc_strong_mono with "H"); eauto.
   iSplit; first eauto.
-  iModIntro. iIntros "(HΦc&HP)".
+  iIntros "(HΦc&HP)".
   iMod ("Hcfupd2") as "Htrace_open"; first lia.
   iDestruct "Hcfupd1" as "(#Hcinv1&#Hcinv2)".
   rewrite /source_crash_ctx'.
@@ -456,10 +458,12 @@ Proof using Hrpre Hhpre Hcpre.
     }
     rewrite /perennial_irisG. simpl.
     rewrite heap_get_update'.
+    iMod (own_disc_fupd_elim with "Hcfupd3") as "Hcfupd3".
     iApply (wpc_trace_inv_open with "[] Hspec Htrace Hcfupd1 Hcfupd3 H").
     { iApply Hexcl. }
   - iModIntro. iClear "Hspec Htrace".
     iIntros (?? σ_pre_crash g_pre_crash σ_post_crash Hcrash ns κs ?).
+    iIntros (??).
     iIntros "H". iDestruct "H" as (?? es' σs' gs' stat Hexec Hsafe)
                                     "(Hspec_ffi&Hspec_gffi&Htrace_frag&Horacle_frag&HΦc)".
     iIntros "(_&Hffi_old&Htrace_auth&Horacle_auth) Hg".
@@ -469,7 +473,8 @@ Proof using Hrpre Hhpre Hcpre.
     iPoseProof (@Hwp_crash $! _ _ with "HΦc") as "H".
     iNext. iIntros.
     iMod (na_heap.na_heap_reinit _ tls σ_post_crash.(heap)) as (name_na_heap) "Hh".
-    iMod (ffi_crash _ σ_pre_crash.(world) σ_post_crash.(world) g_pre_crash with "Hffi_old Hg") as (ffi_names) "(Hw&Hg&Hcrel&Hc)".
+    iDestruct "Hg" as "(Hffig&Hg)".
+    iMod (ffi_crash _ σ_pre_crash.(world) σ_post_crash.(world) g_pre_crash with "Hffi_old Hffig") as (ffi_names) "(Hw&Hffig&Hcrel&Hc)".
     { inversion Hcrash; subst; eauto. }
     iMod (trace_reinit _ σ_post_crash.(trace) σ_post_crash.(oracle)) as (name_trace) "(Htr&Htrfrag&Hor&Hofrag)".
     set (hnames := {| heap_local_heap_names := name_na_heap;
@@ -508,6 +513,8 @@ Proof using Hrpre Hhpre Hcpre.
       eauto.
     { eapply trace_equiv_preserve_crash; eauto. }
     { eapply oracle_equiv_preserve_crash; eauto. }
+    iDestruct "Hg" as "(Hb_ginv&Hc&Hp)".
+    iMod (cred_interp_incr_k _ (9 * ns) with "Hc") as "(Hc&_)".
     iModIntro.
     rewrite /state_interp//=.
     rewrite ffi_update_update. iFrame.
@@ -526,6 +533,7 @@ Proof using Hrpre Hhpre Hcpre.
           iExists _, _. iDestruct "Hcfupd1'" as "($&_)". }
         iDestruct "Hcfupd1'" as "(_&$)".
       }
+      iMod (own_disc_fupd_elim with "Hcfupd3") as "Hcfupd3".
       iPoseProof (wpc_trace_inv_open k _ _ _ e _ _ Φ Φc with "[] Hspec Htrace Hcfupd1' Hcfupd3 H") as "H".
       { iApply Hexcl. }
       rewrite /hG//=.

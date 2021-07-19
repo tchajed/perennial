@@ -19,9 +19,9 @@ From Perennial.program_proof Require
      (* append_log_refinement *)
 *)
      lockmap_proof
-     crash_lockmap_proof.
+     crash_lockmap_proof
+     wal.proof.
 (*
-     wal.proof
      jrnl.sep_jrnl_recovery_proof
      jrnl_replication.jrnl_replication_proof
      txn.twophase_refinement_thm
