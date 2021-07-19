@@ -129,6 +129,18 @@ Definition crash_borrow Ps Pc : iProp Σ :=
              ▷ □ (Pc -∗ Pc') ∗
              staged_value_idle ⊤ Ps' True%I Pc' ∗ later_tok ∗ later_tok).
 
+Lemma crash_borrow_init_cancel P Pc :
+  pre_borrow -∗ P -∗ □ (P -∗ Pc) -∗ init_cancel (crash_borrow P Pc) Pc.
+Proof.
+  iIntros "H HP #Hwand".
+  iDestruct "H" as "(Hlt1&H)".
+  iDestruct "H" as "(Hlt2&Hlt3)".
+  iDestruct (staged_value_init_cancel P Pc with "[$]") as "H".
+  iApply (init_cancel_wand with "H [-] []").
+  { iIntros "H". iExists _, _. iFrame "# ∗". iSplitL; eauto. }
+  eauto.
+Qed.
+
 Lemma wpc_crash_borrow_inits s k e Φ Φc P Pc :
   pre_borrow -∗
   P -∗
@@ -137,13 +149,8 @@ Lemma wpc_crash_borrow_inits s k e Φ Φc P Pc :
   WPC e @ s; k; ⊤ {{ Φ }} {{ Φc }}.
 Proof.
   iIntros "H HP #Hwand Hwpc".
-  iDestruct "H" as "(Hlt1&H)".
-  iDestruct "H" as "(Hlt2&Hlt3)".
-  iPoseProof (wpc_staged_inv_init _ _ _ _ _ _ P Pc) as "H".
-  iSpecialize ("H" with "[$Hlt1 $Hlt2 $HP $Hwand Hwpc Hlt3]").
-  { iIntros. iApply "Hwpc". iExists P, Pc. iFrame "# ∗". iSplitL; eauto. }
-  iApply (wpc_mono with "H"); eauto.
-  iIntros "(H1&H2)". by iApply "H1".
+  iDestruct (crash_borrow_init_cancel with "[$] HP [$]") as "Hcb".
+  iApply (init_cancel_elim with "[$]"). eauto.
 Qed.
 
 Lemma wpc_crash_borrow_generate_pre s k e Φ Φc :

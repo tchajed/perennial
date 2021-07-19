@@ -5,7 +5,7 @@ From Perennial.base_logic.lib Require Import wsat invariants ae_invariants saved
 From Perennial.Helpers Require Import Qextra.
 From iris.algebra Require Import gmap.
 From iris.proofmode Require Import tactics.
-From Perennial.program_logic Require Export step_fupd_extra crash_weakestpre ae_invariants_mutable later_res private_invariants staged_invariant_alt.
+From Perennial.program_logic Require Export step_fupd_extra crash_weakestpre ae_invariants_mutable later_res private_invariants staged_invariant_alt init_cancel.
 
 Existing Instances pri_inv_tok_timeless later_tok_timeless.
 
@@ -418,6 +418,29 @@ Proof.
   iApply ("IH" with "[] [$] [$] [$]").
   { iPureIntro. destruct (to_val); set_solver. }
   eauto.
+Qed.
+
+Lemma staged_value_init_cancel P Pc :
+  later_tok ∗
+  later_tok ∗
+  P ∗
+  □ (P -∗ Pc) -∗
+  init_cancel (staged_value ⊤ P Pc) Pc.
+Proof.
+  iIntros "(Htok1&Htok2&HP&#Hwand)".
+  rewrite /init_cancel.
+  iIntros (?????) "Hwp".
+  rewrite wpc_eq /wpc_def. iIntros (mj).
+  iApply (wpc0_mj_valid). iIntros (Hlt).
+  iPoseProof (wpc0_staged_inv_create _ _ _ _ _ _ Φ ((Pc -∗ Φc)) P Pc) as "H"; first eassumption.
+  iSpecialize ("H" with "[$HP $Htok1 $Htok2 $Hwand Hwp]").
+  { iIntros "(Hval&Hcancel)".
+    iApply (wpc0_staged_inv_cancel with "Hcancel"); eauto.
+    iSpecialize ("Hwp" with "[$]"). iSpecialize ("Hwp" $! _).
+    iApply (wpc0_strong_mono with "Hwp"); eauto.
+    iSplit. iIntros (?) "H !> ?". iFrame. eauto. }
+  iApply (wpc0_strong_mono with "H"); eauto.
+  iSplit; first eauto. iIntros "(Hw&HP) !>". by iApply "Hw".
 Qed.
 
 Lemma wpc_staged_inv_init s k E e Φ Φc P Pc:

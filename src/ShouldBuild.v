@@ -12,13 +12,15 @@ From Perennial.goose_lang Require
      barrier
      (* refinement refinement_adequacy
      logical_reln_adeq *).
-(*
 From Perennial.program_proof Require
+(*
      wal.circ_proof_crash
      append_log_proof
      (* append_log_refinement *)
+*)
      lockmap_proof
-     crash_lockmap_proof
+     crash_lockmap_proof.
+(*
      wal.proof
      jrnl.sep_jrnl_recovery_proof
      jrnl_replication.jrnl_replication_proof
@@ -26,6 +28,7 @@ From Perennial.program_proof Require
      simple.proofs simple.example
      (* wp_to_wpc *).
 *)
+
 (*
 From Perennial.program_proof.examples Require
      all_examples.
