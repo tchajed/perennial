@@ -22,6 +22,7 @@ From Perennial.program_proof Require
      crash_lockmap_proof
      wal.proof
      obj.obj_proof
+     jrnl.jrnl_proof
 (*
      jrnl.sep_jrnl_recovery_proof
      jrnl_replication.jrnl_replication_proof

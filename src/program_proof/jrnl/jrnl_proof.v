@@ -10,9 +10,7 @@ From Goose.github_com.mit_pdos.go_journal Require Import addr jrnl.
 From Perennial.program_proof Require Import wal.specs wal.heapspec obj.obj_proof buf.buf_proof addr.addr_proof.
 
 From Perennial.program_logic Require Import invariants_mutable.
-(*
 From Perennial.program_proof Require wp_to_wpc.
-*)
 
 Definition mkVersioned {K:bufDataKind} (c m: bufDataT K) : versioned_object :=
   existT K (c, m).
@@ -1132,10 +1130,9 @@ Proof using stagedG0.
     iSplit.
     * iNext. iIntros (?) "Hwand". iDestruct "Hwand" as (ok ->) "Hwand". iModIntro. iRight in "HΦc".
       iApply "HΦc". iApply "Hwand". by iFrame.
-    * iLeft in "HΦc". iIntros "!> _". iIntros "HC".
+    * iLeft in "HΦc". iIntros "_". iIntros "HC".
       {
-        iPoseProof (fupd_level_le _ _ _ (S k) with "HΦc") as "HΦc".
-        { lia. }
+        iApply (fupd_level_fupd _ _ _ (S k)).
         iMod (fupd_level_mask_mono with "HΦc") as "HΦc"; first by set_solver+.
         iMod (inv_mut_acc with "Hinv") as (Qs) "(H&Hclo)"; first auto.
         rewrite wp_to_wpc.mysch_interp_weak /=.
