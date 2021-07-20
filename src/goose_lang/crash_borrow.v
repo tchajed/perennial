@@ -39,6 +39,7 @@ Proof.
     etransitivity; last eapply (Nat.pow_le_mono_r _ 1); try (simpl; lia).
   - intros n1 n2 Hlt => /=. lia.
   - intros n1 n2 Hlt => /=. lia.
+  - intros n1 => /=. lia.
 Defined.
 
 Lemma ownfCP_inf_le1 γ (q : Qp) (E : coPset) :

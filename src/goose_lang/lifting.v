@@ -484,7 +484,7 @@ Global Program Instance heapG_irisG `{!heapGS Σ}:
   iris_invG := heapG_invG;
   iris_crashG := heapG_crashG;
   num_laters_per_step := (λ n, 3 ^ (n + 1))%nat;
-  step_count_next := (λ n, 10 * n)%nat;
+  step_count_next := (λ n, 10 * (n + 1))%nat;
   state_interp σ nt :=
     (na_heap_ctx tls σ.(heap) ∗ ffi_ctx heapG_ffiG σ.(world)
       ∗ trace_auth σ.(trace) ∗ oracle_auth σ.(oracle))%I;

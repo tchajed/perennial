@@ -1,7 +1,7 @@
 From iris.proofmode Require Import base tactics classes.
 From Perennial.Helpers Require Import ipm.
 From Perennial.base_logic Require Export invariants.
-From Perennial.program_logic Require Import crash_weakestpre.
+From Perennial.program_logic Require Import crash_weakestpre weakestpre.
 Set Default Proof Using "Type".
 
 
@@ -19,6 +19,7 @@ Class later_tokG {Λ Σ} (IRISG : irisGS Λ Σ) := {
               ∀ n1 n2, n1 < n2 → 2 + num_laters_per_step n1 + num_laters_per_step n1 ≤ num_laters_per_step n2;
   step_count_next_mono : ∀ n1 n2, n1 < n2 → step_count_next n1 < step_count_next n2;
   step_count_next_add : ∀ n1 n2, n1 < n2 → 10 + step_count_next n1 ≤ step_count_next n2;
+  step_count_next_iter : ∀ n1, 10 + n1 ≤ step_count_next n1;
 }.
 
 
@@ -178,6 +179,39 @@ Proof.
     { lia. }
     iFrame.
     iModIntro. eauto.
+Qed.
+
+Lemma wp_later_tok_pure_step `{!Inhabited (state Λ)} `{!Inhabited (global_state Λ)} φ s E e1 e2 Φ:
+  PureExec φ 1 e1 e2 →
+  φ →
+  ((later_tok ∗ later_tok) -∗ WP e2 @ s; E {{ Φ }}) -∗
+  WP e1 @ s; E {{ Φ }}.
+Proof.
+  iIntros (Hexec Hφ) "H".
+  rewrite wp_eq /wp_def.
+  specialize (Hexec Hφ).
+  inversion Hexec as [|? e1' e2' e3' [Hsafe ?] Hrest]. subst.
+  inversion Hrest; subst.
+  assert (∀ σ1 g1, reducible e1 σ1 g1).
+  { intros. apply reducible_no_obs_reducible. eauto. }
+  iApply wpc_lift_step.
+  { unshelve (eapply reducible_not_val; eauto).
+    { eapply inhabitant. }
+    { eapply inhabitant. }
+  }
+  iSplit; last done.
+  iIntros (????????) "Hs Hg".
+  iMod fupd_mask_subseteq as "Hclose"; last iModIntro; first by set_solver. iSplit.
+  { iPureIntro. destruct s; eauto. }
+  iNext. iIntros (e2' σ2' g2' efs Hstep).
+  iMod (later_tok_incrN 2 with "[$]") as "(Hg&Htok)".
+  iSpecialize ("H" with "[Htok]").
+  { iDestruct "Htok" as "($&$&_)". }
+  edestruct (pure_step_det _ _ _ _ _ _ _ Hstep) as (->&->&->&->&->).
+  iFrame. iMod "Hclose".
+  iMod (global_state_interp_le with "[$]") as "$".
+  { etransitivity; last eapply step_count_next_iter. lia. }
+  eauto.
 Qed.
 
 End res.
