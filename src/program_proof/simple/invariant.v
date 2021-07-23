@@ -114,7 +114,7 @@ Definition is_fs γ (nfs: loc) dinit : iProp Σ :=
     "#Hfs_txn" ∷ readonly (nfs ↦[Nfs :: "t"] #txn) ∗
     "#Hfs_lm" ∷ readonly (nfs ↦[Nfs :: "l"] #lm) ∗
     "#Histxn" ∷ is_txn txn γ.(simple_jrnl).(jrnl_txn_names) dinit ∗
-    "#Hislm" ∷ is_crash_lockMap 10 lm γ.(simple_lockmapghs) covered_inodes
+    "#Hislm" ∷ is_lockMap lm γ.(simple_lockmapghs) covered_inodes
                                 (is_inode_stable γ.(simple_src) γ.(simple_jrnl))
                                 (is_inode_stable γ.(simple_src) γ.(simple_jrnl_next)) ∗
     "#Hsrc" ∷ inv N (is_source γ.(simple_src)) ∗

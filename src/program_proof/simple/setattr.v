@@ -57,7 +57,6 @@ Qed.
 Theorem wp_NFSPROC3_SETATTR γ (nfs : loc) (fh : u64) (fhslice : Slice.t) (sattr: SimpleNFS.sattr) (Q : SimpleNFS.res unit -> iProp Σ) dinit :
   {{{ is_fs P γ nfs dinit ∗
       is_fh fhslice fh ∗
-      <disc>
       ( ∀ σ σ' (r : SimpleNFS.res unit) E,
         ⌜relation.denote (SimpleNFS.wrapper fh (SimpleNFS.setattr fh sattr)) σ σ' r⌝ -∗
         ( P σ -∗ |8={E}=> P σ' ∗ Q r ) )
@@ -110,9 +109,6 @@ Proof using Ptimeless.
     iInv "Hsrc" as ">Hopen" "Hclose".
     iNamed "Hopen".
 
-    iDestruct (own_disc_fupd_level_elim with "Hfupd") as "Hfupd".
-    iMod "Hfupd" as "Hfupd".
-
     iDestruct ("Hfupd" with "[] HP") as "Hfupd".
     {
       iPureIntro.
@@ -150,13 +146,12 @@ Proof using Ptimeless.
   wp_bind (NFSPROC3_SETATTR_internal _ _ _ _).
 
   iApply (wpc_wp _ _ _ _ _ True).
-  iApply (use_CrashLocked _ 8 with "Hcrashlocked"); first by lia.
+  iApply (use_CrashLocked _ with "Hcrashlocked"); first by eauto.
   iSplit.
-  { iModIntro. done. }
-  iIntros ">Hstable".
+  { done. }
+  iIntros "Hstable".
   iApply ncfupd_wpc; iSplit.
   {
-    iModIntro.
     iMod (is_inode_stable_crash with "Htxncrash Hstable") as "H".
     iModIntro.
     iSplit; done.
@@ -174,7 +169,6 @@ Proof using Ptimeless.
   iCache with "Hinode_state Hjrnl_durable".
   { crash_case.
     iDestruct (is_jrnl_durable_to_old_pred with "Hjrnl_durable") as "[Hold _]".
-    iModIntro.
     iMod (is_inode_crash_prev with "Htxncrash [$Hinode_state $Hold]") as "H".
     iModIntro.
     iSplit; done.
@@ -248,8 +242,7 @@ Proof using Ptimeless.
           { typeclasses eauto. }
 
           iSplit.
-          { iModIntro.
-            iIntros "[[H _]|[H0 H1]]".
+          { iIntros "[[H _]|[H0 H1]]".
             { iDestruct (is_inode_crash_next with "[$Hinode_state $H]") as "H".
               iModIntro. iSplit; done. }
 
@@ -271,7 +264,7 @@ Proof using Ptimeless.
               monad_simpl.
             }
             iMod (map_update with "Hsrcheap Hinode_state") as "[Hsrcheap Hinode_state]".
-            iMod (fupd_level_le with "Hfupd") as "[HP HQ]"; first by lia.
+            iMod "Hfupd" as "[HP HQ]".
             iMod ("Hclose" with "[Hsrcheap HP]").
             { iModIntro. iExists _.  iFrame "∗%#". iSplit.
               { iPureIntro. rewrite /= dom_insert_L. set_solver+ Hdom H5. }
@@ -317,9 +310,6 @@ Proof using Ptimeless.
             iDestruct (map_valid with "Hsrcheap Hinode_state") as "%Hsrc_fh".
             iDestruct (big_sepM_lookup with "Hnooverflow") as %Hnooverflow; eauto.
 
-            iDestruct (own_disc_fupd_level_elim with "Hfupd") as "Hfupd".
-            iMod "Hfupd" as "Hfupd".
-
             iDestruct ("Hfupd" with "[] HP") as "Hfupd".
             {
               iPureIntro.
@@ -353,8 +343,7 @@ Proof using Ptimeless.
             iDestruct "Hcommit" as "(Hinode_enc & Hinode_data)".
 
             wpc_frame "Hinode_state Hinode_enc Hinode_data".
-            { iModIntro.
-              iMod (is_inode_crash_prev_own with "Htxncrash [$Hinode_state Hinode_enc Hinode_data]") as "H".
+            { iMod (is_inode_crash_prev_own with "Htxncrash [$Hinode_state Hinode_enc Hinode_data]") as "H".
               2: { iModIntro. iSplit; done. }
 
               iRight.
@@ -383,7 +372,6 @@ Proof using Ptimeless.
             iNamed 1.
             iSplitR "Hinode_state Hinode_enc Hinode_data".
             2: {
-              iModIntro.
               iExists _. iFrame "Hinode_state".
               iExists _.
               assert (length state < int.Z u)%Z by (revert Heqb; word).
@@ -405,7 +393,7 @@ Proof using Ptimeless.
 
             iIntros "Hcrashlocked".
             iSplit.
-            { iModIntro. done. }
+            { done. }
 
             wp_loadField.
             wp_apply (wp_LockMap__Release with "Hcrashlocked").
@@ -427,9 +415,6 @@ Proof using Ptimeless.
             iDestruct (map_valid with "Hsrcheap Hinode_state") as "%Hsrc_fh".
             iDestruct (big_sepM_lookup with "Hnooverflow") as %Hnooverflow; eauto.
 
-            iDestruct (own_disc_fupd_level_elim with "Hfupd") as "Hfupd".
-            iMod "Hfupd" as "Hfupd".
-
             iDestruct ("Hfupd" with "[] HP") as "Hfupd".
             {
               iPureIntro.
@@ -450,8 +435,7 @@ Proof using Ptimeless.
 
             iDestruct "Hcommit" as "[Hcommit _]".
             wpc_frame "Hinode_state Hcommit".
-            { iModIntro.
-              iMod (is_inode_crash_prev_own with "Htxncrash [$Hinode_state $Hcommit]") as "H".
+            { iMod (is_inode_crash_prev_own with "Htxncrash [$Hinode_state $Hcommit]") as "H".
               iModIntro. iSplit; done. }
 
             iDestruct (struct_fields_split with "Hreply") as "Hreply". iNamed "Hreply".
@@ -459,11 +443,10 @@ Proof using Ptimeless.
 
             iNamed 1.
             iSplitR "Hinode_state Hcommit".
-            2: { iModIntro. iExists _; iFrame. }
+            2: { iExists _; iFrame. }
 
             iIntros "Hcrashlocked".
-            iSplit.
-            { iModIntro; done. }
+            iSplit; first done.
 
             wp_loadField.
             wp_apply (wp_LockMap__Release with "Hcrashlocked").
@@ -494,9 +477,6 @@ Proof using Ptimeless.
         iApply fupd_wp.
         iInv "Hsrc" as ">Hopen" "Hclose".
         iNamed "Hopen".
-
-        iDestruct (own_disc_fupd_level_elim with "Hfupd") as "Hfupd".
-        iMod "Hfupd" as "Hfupd".
 
         iDestruct ("Hfupd" with "[] HP") as "Hfupd".
         {
@@ -532,7 +512,7 @@ Proof using Ptimeless.
         2: { iModIntro. iExists _. iFrame. }
         iIntros "!> Hcrashlocked".
         iSplit.
-        { iModIntro. done. }
+        { done. }
 
         wp_loadField.
         wp_apply (wp_LockMap__Release with "Hcrashlocked").
@@ -568,8 +548,7 @@ Proof using Ptimeless.
       { typeclasses eauto. }
 
       iSplit.
-      { iModIntro.
-        iIntros "[[H _]|[H0 H1]]".
+      { iIntros "[[H _]|[H0 H1]]".
         { iDestruct (is_inode_crash_next with "[$Hinode_state $H]") as "H". iModIntro. iSplit; done. }
 
         iIntros "C".
@@ -590,7 +569,7 @@ Proof using Ptimeless.
           monad_simpl.
         }
         iMod (map_update with "Hsrcheap Hinode_state") as "[Hsrcheap Hinode_state]".
-        iMod (fupd_level_le with "Hfupd") as "[HP HQ]"; first by lia.
+        iMod "Hfupd" as "[HP HQ]".
 
         assert (int.nat u - length state = 0).
         1: { revert Heqb. word. }
@@ -630,9 +609,6 @@ Proof using Ptimeless.
         iDestruct (map_valid with "Hsrcheap Hinode_state") as "%Hsrc_fh".
         iDestruct (big_sepM_lookup with "Hnooverflow") as %Hnooverflow; eauto.
 
-        iDestruct (own_disc_fupd_level_elim with "Hfupd") as "Hfupd".
-        iMod "Hfupd" as "Hfupd".
-
         iDestruct ("Hfupd" with "[] HP") as "Hfupd".
         {
           iPureIntro.
@@ -671,8 +647,7 @@ Proof using Ptimeless.
         iDestruct (is_inode_data_shrink _ _ u with "Hinode_data") as "Hinode_data"; first by word.
 
         wpc_frame "Hinode_state Hinode_enc Hinode_data".
-        { iModIntro.
-          iMod (is_inode_crash_prev_own with "Htxncrash [$Hinode_state Hinode_enc Hinode_data]") as "H".
+        { iMod (is_inode_crash_prev_own with "Htxncrash [$Hinode_state Hinode_enc Hinode_data]") as "H".
           2: { iModIntro. iSplit; done. }
           iRight.
           repeat rewrite -> firstn_length_le by word.
@@ -685,14 +660,13 @@ Proof using Ptimeless.
         iNamed 1.
         iSplitR "Hinode_state Hinode_enc Hinode_data".
         2: {
-          iModIntro.
           iExists _. iFrame "Hinode_state". iExists _.
           repeat rewrite -> firstn_length_le by word.
           replace (U64 (Z.of_nat (int.nat u))) with u by word. iFrame. }
 
         iIntros "Hcrashlocked".
         iSplit.
-        { iModIntro; done. }
+        { done. }
 
         wp_loadField.
         wp_apply (wp_LockMap__Release with "Hcrashlocked").
@@ -715,9 +689,6 @@ Proof using Ptimeless.
         iDestruct (map_valid with "Hsrcheap Hinode_state") as "%Hsrc_fh".
         iDestruct (big_sepM_lookup with "Hnooverflow") as %Hnooverflow; eauto.
 
-        iDestruct (own_disc_fupd_level_elim with "Hfupd") as "Hfupd".
-        iMod "Hfupd" as "Hfupd".
-
         iDestruct ("Hfupd" with "[] HP") as "Hfupd".
         {
           iPureIntro.
@@ -739,8 +710,7 @@ Proof using Ptimeless.
         iDestruct "Hcommit" as "[Hcommit _]".
 
         wpc_frame "Hinode_state Hcommit".
-        { iModIntro.
-          iMod (is_inode_crash_prev_own with "Htxncrash [$Hinode_state $Hcommit]") as "H".
+        { iMod (is_inode_crash_prev_own with "Htxncrash [$Hinode_state $Hcommit]") as "H".
           iModIntro; iSplit; done. }
 
         iDestruct (struct_fields_split with "Hreply") as "Hreply". iNamed "Hreply".
@@ -748,11 +718,11 @@ Proof using Ptimeless.
 
         iNamed 1.
         iSplitR "Hinode_state Hcommit".
-        2: { iModIntro. iExists _. iFrame. }
+        2: { iExists _. iFrame. }
 
         iIntros "Hcrashlocked".
         iSplit.
-        { iModIntro; done. }
+        { done. }
 
         wp_loadField.
         wp_apply (wp_LockMap__Release with "Hcrashlocked").
@@ -785,8 +755,7 @@ Proof using Ptimeless.
   all: try solve_ndisj.
 
   iSplit.
-  { iModIntro.
-    iIntros "[[H _]|[H0 H1]]"; iModIntro; iSplit; try done; iModIntro.
+  { iIntros "[[H _]|[H0 H1]]"; iModIntro; iSplit; try done.
     { iApply is_inode_crash_next. iFrame. }
     { iApply is_inode_crash_next. iFrame "Hinode_state". iRight. iFrame. } }
 
@@ -798,9 +767,6 @@ Proof using Ptimeless.
     iApply fupd_wpc.
     iInv "Hsrc" as ">Hopen" "Hclose".
     iNamed "Hopen".
-
-    iDestruct (own_disc_fupd_level_elim with "Hfupd") as "Hfupd".
-    iMod "Hfupd" as "Hfupd".
 
     iDestruct (map_valid with "Hsrcheap Hinode_state") as "%Hsrc_fh".
     iDestruct ("Hfupd" with "[] HP") as "Hfupd".
@@ -822,8 +788,7 @@ Proof using Ptimeless.
     iModIntro.
 
     wpc_frame "Hinode_state Hcommit".
-    { iModIntro.
-      iMod (is_inode_crash_prev_own with "Htxncrash [$Hinode_state $Hcommit]") as "H".
+    { iMod (is_inode_crash_prev_own with "Htxncrash [$Hinode_state $Hcommit]") as "H".
       iModIntro. iSplit; done. }
 
     iDestruct (struct_fields_split with "Hreply") as "Hreply". iNamed "Hreply".
@@ -832,13 +797,11 @@ Proof using Ptimeless.
     iNamed 1.
     iSplitR "Hinode_state Hcommit".
     2: {
-      iModIntro.
       iExists _; iFrame.
       iExists _; iFrame.
     }
     iIntros "Hcrashlocked".
-    iSplit.
-    { iModIntro. done. }
+    iSplit; first done.
 
     wp_loadField.
     wp_apply (wp_LockMap__Release with "Hcrashlocked").
@@ -856,9 +819,6 @@ Proof using Ptimeless.
     iApply fupd_wpc.
     iInv "Hsrc" as ">Hopen" "Hclose".
     iNamed "Hopen".
-
-    iDestruct (own_disc_fupd_level_elim with "Hfupd") as "Hfupd".
-    iMod "Hfupd" as "Hfupd".
 
     iDestruct (map_valid with "Hsrcheap Hinode_state") as "%Hsrc_fh".
     iDestruct ("Hfupd" with "[] HP") as "Hfupd".
@@ -879,10 +839,9 @@ Proof using Ptimeless.
     { iModIntro. iExists _.  iFrame "∗%#". }
     iModIntro.
 
-    iDestruct "Hcommit" as "[Hcommit _]". 
+    iDestruct "Hcommit" as "[Hcommit _]".
     wpc_frame "Hinode_state Hcommit".
-    { iModIntro.
-      iMod (is_inode_crash_prev_own with "Htxncrash [$Hinode_state $Hcommit]") as "H".
+    { iMod (is_inode_crash_prev_own with "Htxncrash [$Hinode_state $Hcommit]") as "H".
       iModIntro. iSplit; done. }
 
     iDestruct (struct_fields_split with "Hreply") as "Hreply". iNamed "Hreply".
@@ -890,13 +849,9 @@ Proof using Ptimeless.
 
     iNamed 1.
     iSplitR "Hinode_state Hcommit".
-    2: {
-      iModIntro.
-      iExists _; iFrame.
-    }
+    2: { iExists _; iFrame. }
     iIntros "Hcrashlocked".
-    iSplit.
-    { iModIntro. done. }
+    iSplit; first done.
 
     wp_loadField.
     wp_apply (wp_LockMap__Release with "Hcrashlocked").

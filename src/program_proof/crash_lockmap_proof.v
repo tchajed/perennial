@@ -1026,4 +1026,26 @@ Proof.
   iApply "HΦ". done.
 Qed.
 
+Lemma use_CrashLocked k E1 e lk ghs addr R Rcrash Φ Φc :
+  language.to_val e = None →
+  CrashLocked lk ghs addr R Rcrash -∗
+  Φc ∧ (R addr -∗
+       WPC e @ k; E1 {{ λ v, (CrashLocked lk ghs addr R Rcrash -∗ (Φc ∧ Φ v)) ∗ R addr }}
+                                       {{ Φc ∗ Rcrash addr }}) -∗
+  WPC e @ k; E1 {{ Φ }} {{ Φc }}.
+Proof.
+  iIntros (?) "Hcrash_locked H".
+  iDestruct "Hcrash_locked" as (?) "(Hfull&#His_lock&Hlocked)".
+  iApply (wpc_crash_borrow_open with "[$]"); auto.
+  iSplit.
+  - iDestruct "H" as "($&_)".
+  - iIntros "HR". iDestruct "H" as "(_&H)".
+    iSpecialize ("H" with "[$]").
+    iApply (wpc_strong_mono with "H"); eauto.
+    iSplit.
+    * iIntros (?) "(Hclose&?)". iModIntro. iFrame. iFrame "#".
+      iIntros. iApply "Hclose". iFrame; eauto.
+    * iIntros. iIntros "!>". eauto.
+Qed.
+
 End heap.

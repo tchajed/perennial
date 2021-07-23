@@ -23,14 +23,14 @@ From Perennial.program_proof Require
      wal.proof
      obj.obj_proof
      jrnl.jrnl_proof
-(*
      jrnl.sep_jrnl_recovery_proof
      jrnl_replication.jrnl_replication_proof
+(*
      txn.twophase_refinement_thm
+*)
      simple.proofs simple.example
-     (* wp_to_wpc *)
-*).
-
+     wp_to_wpc
+.
 
 (*
 From Perennial.program_proof.examples Require

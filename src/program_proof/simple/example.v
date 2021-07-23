@@ -54,7 +54,6 @@ Proof.
   wp_apply (wp_NFSPROC3_WRITE with "[$Hfs $Hfh $Hs]").
   { rewrite !replicate_length. iSplit.
     { iPureIntro. word. }
-    iModIntro.
     iIntros (σ σ' r E) "%Hrel HP".
     iModIntro. iSplit; done. }
   iIntros (v2) "Hv2".
@@ -81,7 +80,7 @@ Proof using All.
   iIntros (Φ Φc) "(Htxndurable & Hsrc & Hstable) HΦ".
   rewrite /RecoverExample.
   wpc_pures.
-  { iDestruct "HΦ" as "[HΦc _]". iModIntro. iApply "HΦc".
+  { iDestruct "HΦ" as "[HΦc _]". iApply "HΦc".
     iExists _, _, _. iFrame. }
 
   iApply wpc_cfupd.
