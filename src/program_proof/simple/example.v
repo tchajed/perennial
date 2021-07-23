@@ -87,14 +87,16 @@ Proof using All.
   wpc_apply (wpc_Recover P P with "[$Htxndurable $Hsrc $Hstable]").
   { eauto. }
   iSplit.
-  { iLeft in "HΦ". iIntros "!> H". iDestruct "H" as (???) "(H1&>H2&H3)".
+  { iLeft in "HΦ". iIntros "H". iDestruct "H" as (???) "(H1&>H2&H3)".
     iModIntro. iApply "HΦ". iExists _, _, _. iFrame.
   }
-  iNext. iIntros (??) "(#Hfs&Hcancel)".
+  iNext. iIntros (?) "Hcancel".
+  iApply (init_cancel_elim with "Hcancel").
+  iDestruct 1 as (γsimp) "#Hfs".
   iApply wp_wpc_frame'.
-  iSplitL "Hcancel HΦ".
+  iSplitL "HΦ".
   { iSplit.
-    { iDestruct "HΦ" as "[HΦc _]". iModIntro.
+    { iDestruct "HΦ" as "[HΦc _]". iIntros "Hcancel".
       iMod "Hcancel" as (???) "(?&>?&?)".
       iModIntro. iApply "HΦc".
       iExists _, _, _. iFrame. }
@@ -112,6 +114,8 @@ Proof using All.
   { wp_apply wp_exampleWorker. { iExact "Hfs". } done. }
 
   iIntros "HΦ". iApply "HΦ". done.
+  Unshelve.
+  all: exact O.
 Qed.
 
 End heap.

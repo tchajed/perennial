@@ -414,7 +414,7 @@ Proof using All.
   rewrite /txn_cfupd_cancel.
   iDestruct (alloc_lockMap_init_cancel covered_inodes lm
                                        (is_inode_stable γsrc γ)
-                                       (λ a, |C={⊤}_10=> is_inode_stable γsrc γ' a)
+                                       (λ a, C -∗ |={⊤}=> is_inode_stable γsrc γ' a)%I
                with "[Hstable] [$]") as "Hcancel".
   {
     iApply (big_sepS_wand with "Hstable").
@@ -426,10 +426,7 @@ Proof using All.
   {
     iDestruct 1 as (ghs) "Hlm".
     iExists (Build_simple_names γ γ' γsrc ghs).
-    { iExists _, _. iFrame "Ht Hl Histxn Htxnsys Htxncrash Hsrc".
-      simpl.
-      admit.
-    }
+    { iExists _, _. iFrame "Ht Hl Histxn Htxnsys Htxncrash Hsrc". eauto. }
   }
 
   iIntros "H".
@@ -452,6 +449,8 @@ Proof using All.
   iDestruct "Hcfupdcancel" as (?) "?".
   iExists γ', γsrc', _. iFrame.
   iModIntro. iNext. iExists _. iFrame "# ∗ %".
-Abort.
+  Unshelve.
+  exact O.
+Qed.
 
 End goose_lang.

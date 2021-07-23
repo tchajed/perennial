@@ -136,7 +136,7 @@ Proof using Ptimeless.
   iApply ncfupd_wpc; iSplit.
   {
     iMod (is_inode_stable_crash with "Htxncrash Hstable") as "Hcrash".
-    iModIntro. iSplit; done.
+    iModIntro. iSplit; try (iIntros "? !>"); done.
   }
   iNamed "Hstable".
 
@@ -152,7 +152,7 @@ Proof using Ptimeless.
   { crash_case.
     iDestruct (is_jrnl_durable_to_old_pred with "Hjrnl_durable") as "[Hold _]".
     iMod (is_inode_crash_prev with "Htxncrash [$Hinode_state $Hold]") as "H".
-    iModIntro. iSplit; done.
+    iModIntro. iSplit; try (iIntros "? !>"); done.
   }
 
   wpc_call.
@@ -230,7 +230,8 @@ Proof using Ptimeless.
 
     iSplit.
     { iIntros "[[H _]|[H0 H1]]".
-      { iModIntro. iSplit; first by done. iApply is_inode_crash_next. iFrame. }
+      { iModIntro. iSplit; first by done. iIntros "? !>".
+        iApply is_inode_crash_next. iFrame. }
 
       iIntros "C".
       iInv "Hsrc" as ">Hopen" "Hclose".
@@ -266,6 +267,7 @@ Proof using Ptimeless.
         lia.
       }
       iModIntro. iSplit; first by done.
+      iIntros "? !>".
       iApply is_inode_crash_next. iFrame "Hinode_state". iRight. iFrame.
     }
 
@@ -311,7 +313,7 @@ Proof using Ptimeless.
 
       wpc_frame "Hinode_state Hcommit".
       { iMod (is_inode_crash_prev_own with "Htxncrash [$Hinode_state $Hcommit]") as "H".
-        iModIntro. iSplit; done. }
+        iModIntro. iSplit; try (iIntros "? !>"); done. }
 
       wp_storeField.
       iNamed 1.
@@ -367,7 +369,7 @@ Proof using Ptimeless.
       iDestruct "Hcommit" as "[Hcommit _]".
       wpc_frame "Hinode_state Hcommit".
       { iMod (is_inode_crash_prev_own with "Htxncrash [$Hinode_state $Hcommit]") as "H".
-        iModIntro. iSplit; done. }
+        iModIntro. iSplit; try (iIntros "? !>"); done. }
 
       wp_storeField.
       iNamed 1.
@@ -430,7 +432,7 @@ Proof using Ptimeless.
 
     wpc_pures.
     { iMod (is_inode_crash_prev_own with "Htxncrash [$Hinode_state $Hold]") as "H".
-      iModIntro. iSplit; done. }
+      iModIntro. iSplit; try (iIntros "? !>"); done. }
 
     iSplitR "Hinode_state Hold".
     2: {

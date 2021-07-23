@@ -136,7 +136,7 @@ Proof using Ptimeless.
   iApply ncfupd_wpc; iSplit.
   {
     iMod (is_inode_stable_crash with "Htxncrash Hstable") as "Hcrash".
-    iModIntro. iSplit; first done. done.
+    iModIntro. iSplit; first done. iIntros "_ !>"; done.
   }
   iNamed "Hstable".
 
@@ -152,8 +152,7 @@ Proof using Ptimeless.
   { crash_case.
     iDestruct (is_jrnl_durable_to_old_pred with "Hjrnl_durable") as "[Hold _]".
     iMod (is_inode_crash_prev with "Htxncrash [$Hinode_state $Hold]") as "Hcrash".
-    iModIntro.
-    iSplit; done.
+    iModIntro. iSplit; first done. iIntros "_ !>"; done.
   }
 
   wpc_call.
@@ -204,7 +203,7 @@ Proof using Ptimeless.
   { typeclasses eauto. }
 
   iSplit.
-  { iIntros "[[H _]|[H0 H1]]"; iModIntro; iSplit; try done.
+  { iIntros "[[H _]|[H0 H1]]"; iModIntro; iSplit; try done; iIntros "_ !>".
     { iApply is_inode_crash_next. iFrame. }
     { iApply is_inode_crash_next. iFrame "Hinode_state". iRight. iFrame. }
   }
@@ -249,7 +248,7 @@ Proof using Ptimeless.
 
     wpc_frame "Hinode_state Hcommit".
     { iMod (is_inode_crash_prev_own with "Htxncrash [$Hinode_state $Hcommit]") as "H".
-      iModIntro. iSplit; done. }
+      iModIntro. iSplit; try done; iIntros "_ !>"; done. }
 
     wp_storeField.
     iNamed 1.
@@ -316,9 +315,7 @@ Transparent nfstypes.READ3res.
     iDestruct "Hcommit" as "[Hcommit _]".
     wpc_frame "Hinode_state Hcommit".
     { iMod (is_inode_crash_prev_own with "Htxncrash [$Hinode_state $Hcommit]") as "H".
-      iModIntro.
-      iSplit; done. }
-
+      iModIntro. iSplit; first done. iIntros "_ !>"; done. }
     wp_storeField.
     iNamed 1.
 
