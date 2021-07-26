@@ -3,7 +3,7 @@ From iris.algebra Require Import auth excl.
 From Perennial.base_logic.lib Require Import proph_map.
 From Perennial.program_logic Require Export weakestpre.
 From Perennial.algebra Require Import proph_map frac_count big_op.
-From Perennial.goose_lang Require Import proofmode notation wpc_proofmode.
+From Perennial.goose_lang Require Import proofmode notation wpc_proofmode crash_borrow.
 From Perennial.program_logic Require Import recovery_weakestpre recovery_adequacy spec_assert language_ctx.
 From Perennial.goose_lang Require Import typing typed_translate adequacy refinement.
 From Perennial.goose_lang Require Export recovery_adequacy spec_assert refinement_adequacy.
@@ -311,6 +311,9 @@ Proof.
   - intros. iIntros "[] H2".
 Qed.
 
+Opaque is_twophase_started.
+Opaque crash_borrow.
+
 Lemma atomically_fundamental_lemma:
   ∀ Γ (es : sexpr) (e : iexpr) τ, atomic_body_expr_transTy Γ (of_val #tph) es e τ →
     ⊢ ctx_has_semTy Γ es e τ.
@@ -334,7 +337,7 @@ Proof.
     rewrite /= ?lookup_fmap H //=.
     iApply wpc_value; iSplit.
     * iModIntro. iExists _; iFrame "H"; iFrame.
-    * iApply disc_crash_true.
+    * eauto.
   - subst.
     simpl.
     iPoseProof (IHHtyping1 with "[//] [$] [$]") as "H"; first done.
@@ -348,7 +351,7 @@ Proof.
     iPoseProof (IHHtyping2 with "[//] [$] [$]") as "H"; first done.
     iSpecialize ("H" $! j _ _ (λ x, K (ectx_language.fill [AppLCtx (vs2)] x)) with "[] Hj").
     { iPureIntro. apply comp_ctx'; last done. apply ectx_lang_ctx'. }
-    iApply (wpc_mono' with "[Hv2] [] H"); last by iModIntro.
+    iApply (wpc_mono' with "[Hv2] [] H"); last by eauto.
     iIntros (v1) "H". iDestruct "H" as (vs1) "(Hj&Hv1)".
     simpl. iDestruct "Hv1" as (?????? (Heq1&Heq2)) "#Hinterp".
     iSpecialize ("Hinterp" $! _ _ with "Hv2").
@@ -960,13 +963,13 @@ Proof.
       spec_bind (subst_map _ e1) as Hctx'.
       iSpecialize ("H" $! j _ _ _ Hctx' with "Hj").
       iApply (wpc_mono' with "[Hv] [] H"); last first.
-      { iModIntro. iIntros "H". iExact "H". }
+      { iIntros "H". iExact "H". }
       iIntros (v1) "H". iDestruct "H" as (vs1) "(Hj&Hv1)".
       simpl. iDestruct "Hv1" as (?????? (Heq1&Heq2)) "#Hinterp".
       iSpecialize ("Hinterp" with "[$]").
       iSpecialize ("Hinterp" $! j _ _ _ Hctx with "Hj").
       iApply (wpc_mono' with "[] [] Hinterp"); last first.
-      { iModIntro. iIntros "H". iExact "H". }
+      { iIntros "H". iExact "H". }
       { iIntros (v'') "H". iDestruct "H" as (vs'') "(Hj&Hv')".
         iExists _. iFrame. }
     }
@@ -985,7 +988,7 @@ Proof.
       spec_bind (subst_map _ e2) as Hctx'.
       iSpecialize ("H" $! j _ _ _ Hctx' with "Hj").
       iApply (wpc_mono' with "[Hv] [] H"); last first.
-      { iModIntro. iIntros "H". iExact "H". }
+      { iIntros "H". iExact "H". }
       iIntros (v1) "H". iDestruct "H" as (vs1) "(Hj&Hv1)".
       simpl. iDestruct "Hv1" as (?????? (Heq1&Heq2)) "#Hinterp".
       iSpecialize ("Hinterp" with "[$]").
@@ -1258,7 +1261,9 @@ Proof.
     wp_apply (wp_AllocNum with "[$]").
     iIntros (n Hlt_max).
     iExists (#n). iSplit; last eauto.
-    iExists _, _, _, _. iFrame "# ∗ %".
+    iExists _, _, _, _. iFrame "Hj". iSplitL "Htwophase".
+    { iExact "Htwophase". }
+    iFrame "# ∗ %".
     iPureIntro.
     eapply always_steps_trans; first by eapply Halways_steps.
     eapply always_steps_bind.
@@ -1289,7 +1294,9 @@ Proof.
     wp_apply (wp_NumFree with "[$]").
     iIntros (n Hle_max).
     iExists (#n). iSplit; last eauto.
-    iExists _, _, _, _. iFrame "# ∗ %".
+    iExists _, _, _, _. iFrame "Hj". iSplitL "Htwophase".
+    { iExact "Htwophase". }
+    iFrame "# ∗ %".
     iPureIntro.
     eapply always_steps_trans; first by eapply Halways_steps.
     eapply always_steps_bind.

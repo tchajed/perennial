@@ -514,10 +514,12 @@ Proof using Hrpre Hhpre Hcpre.
     { eapply trace_equiv_preserve_crash; eauto. }
     { eapply oracle_equiv_preserve_crash; eauto. }
     iDestruct "Hg" as "(Hb_ginv&Hc&Hp)".
-    iMod (cred_interp_incr_k _ (9 * ns) with "Hc") as "(Hc&_)".
+    iMod (cred_interp_incr_k _ (9 * ns + 10) with "Hc") as "(Hc&_)".
     iModIntro.
     rewrite /state_interp//=.
     rewrite ffi_update_update. iFrame.
+    iSplitL "Hc".
+    { iExactEq "Hc". f_equal. lia. }
     iSplit.
     * iClear "∗". eauto.
     * iDestruct (source_pool_singleton with "Hpool") as "Hpool".

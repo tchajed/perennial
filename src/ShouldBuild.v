@@ -10,8 +10,8 @@ From Perennial.goose_lang Require
      crash_lock
      rwlock
      barrier
-     (* refinement refinement_adequacy
-     logical_reln_adeq *).
+     refinement refinement_adequacy
+     logical_reln_adeq.
 From Perennial.program_proof Require
      wal.circ_proof_crash
 (*
@@ -25,9 +25,7 @@ From Perennial.program_proof Require
      jrnl.jrnl_proof
      jrnl.sep_jrnl_recovery_proof
      jrnl_replication.jrnl_replication_proof
-(*
      txn.twophase_refinement_thm
-*)
      simple.proofs simple.example
      wp_to_wpc
 .

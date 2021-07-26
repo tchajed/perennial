@@ -105,9 +105,9 @@ Proof.
   iApply (wpc_strong_mono with "[$]"); eauto.
   iSplit.
   - eauto.
-  - iModIntro.
-    iIntros "(?&?)".
+  - iIntros "(?&?)".
     iIntros "Hc".
+    iApply fupd_level_fupd.
     iMod (fupd_level_mask_subseteq (styN)) as "Hclo"; eauto.
     iMod (Hsty_crash with "[$] [$]") as "H".
     iMod "Hclo".

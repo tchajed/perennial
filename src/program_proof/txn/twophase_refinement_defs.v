@@ -3,7 +3,7 @@ From Perennial.program_proof Require Import disk_prelude.
 From Perennial.program_proof Require Import disk_lib.
 From Perennial.program_proof Require Import txn.typed_translate txn.wrapper_proof.
 From Perennial.goose_lang.ffi Require Import jrnl_ffi.
-From Perennial.goose_lang Require Import logical_reln_defns logical_reln_adeq spec_assert.
+From Perennial.goose_lang Require Import logical_reln_defns logical_reln_adeq spec_assert crash_borrow.
 From Perennial.base_logic Require Import ghost_var.
 From Perennial.program_proof Require Import lockmap_proof.
 From Perennial.program_proof Require jrnl.sep_jrnl_invariant.
@@ -73,7 +73,8 @@ Definition twophase_crash_cond
 
 Definition twophase_na_crash_inv
            {Σ: gFunctors} {hG: heapGS Σ} {rG: refinement_heapG Σ} {aG : twophaseG Σ} : iProp Σ
-  := na_crash_inv (LVL_INIT) (∃ γ dinit logm mt',
+  := crash_borrow (∃ γ dinit logm mt',
+                                  ([∗ map] _ ↦ _ ∈ mt', pre_borrow) ∗
                                   twophase_crash_cond_full γ dinit logm mt')%I
                              (∃ γ dinit logm mt',
                                   twophase_crash_cond_full γ dinit logm mt')%I.

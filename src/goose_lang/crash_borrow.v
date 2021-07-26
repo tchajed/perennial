@@ -142,6 +142,28 @@ Proof.
   eauto.
 Qed.
 
+Lemma big_sepM_crash_borrow_init_cancel `{Countable A} {B} (P: A → B → iProp Σ) Q m:
+  ([∗ map] _ ↦ _ ∈ m, pre_borrow) -∗
+  ([∗ map] a ↦ obj ∈ m, Q a obj) -∗
+  ([∗ map] a ↦ obj ∈ m, □ (Q a obj -∗ P a obj)) -∗
+   init_cancel ([∗ map] a ↦ obj ∈ m, crash_borrow (Q a obj) (P a obj)) ([∗ map] a ↦ obj ∈ m, P a obj).
+Proof.
+  iIntros "Hpres HQs #Hstatuses".
+  iInduction m as [|i x m] "IH" using map_ind.
+  { iApply init_cancel_intro; rewrite !big_sepM_empty; eauto. }
+  iDestruct (big_sepM_insert with "Hpres") as "[Hpre Hpres]";
+    first by assumption.
+  iDestruct (big_sepM_insert with "HQs") as "[HQ HQs]";
+    first by assumption.
+  iDestruct (big_sepM_insert with "Hstatuses") as "[Hstatus Hstatuses']";
+    first by assumption.
+  iDestruct ("IH" with "Hstatuses' Hpres HQs") as "Hcancel".
+  iDestruct (crash_borrow_init_cancel with "Hpre HQ Hstatus")
+    as "Hcrash".
+  iDestruct (init_cancel_sep with "Hcrash Hcancel") as "Hcancel".
+  iApply (init_cancel_wand with "Hcancel"); iIntros "H"; iApply big_sepM_insert; eauto.
+Qed.
+
 Lemma wpc_crash_borrow_inits s k e Φ Φc P Pc :
   pre_borrow -∗
   P -∗
