@@ -252,6 +252,14 @@ Proof.
 Qed.
 *)
 
+Lemma wpc_crash_modality_intro_C E mj P :
+  (C -∗ wpc_crash_modality E mj P) -∗
+  wpc_crash_modality E mj P.
+Proof.
+  iIntros "H". rewrite /wpc_crash_modality.
+  iIntros. iApply ("H" with "[$] [$] [$]").
+Qed.
+
 Lemma wpc_crash_modality_strong_wand E1 E2 mj1 mj2 P Q :
   E1 ⊆ E2 →
   (/2 < mj1 ≤ mj2)%Qp →

@@ -88,7 +88,6 @@ Proof.
   iModIntro. by iApply "Hwp".
 Qed.
 
-
 Lemma wpc0_crash_modality_cancel s k mj' mj E1 E2 e Φ Φc Pc:
   E1 ⊆ E2 →
   (/2 < mj' ≤ mj)%Qp →
@@ -143,11 +142,12 @@ Proof.
   { iPureIntro. destruct (to_val); set_solver. }
 Qed.
 
-Lemma staged_inv_cancel_wpc_crash_modality  E1 mj' Pc :
+Lemma staged_inv_cancel_wpc_crash_modality'  E1 mj' Pc Qc :
   staged_inv_cancel E1 mj' Pc -∗
-  wpc_crash_modality E1 mj' Pc.
+  wpc_crash_modality E1 mj' Qc -∗
+  wpc_crash_modality E1 mj' (Pc ∗ Qc).
 Proof.
-  iIntros "Hsc".
+  iIntros "Hsc Hwpc".
   iDestruct "Hsc" as (mj0 Einv mj_ishare mj_ikeep γ γ' ?) "Hsc".
   iDestruct "Hsc" as (Hlt Hinf Hinvalid Heq_mj) "(Htok2&H&Hitok_ikeep&#Hpri_inv)".
   iAssert (∃ E', ⌜ E' ⊆ E1 ⌝ ∧ pri_inv Einv (staged_inv_inner E' Einv mj0 mj_ishare γ γ' γstatus Pc))%I as "Hpri_inv'".
@@ -176,9 +176,14 @@ Proof.
     do 2 (iModIntro; iModIntro; iNext).
     iMod (pending_upd_done with "H") as "H".
     iMod ("Hclo'").
-    iMod ("Hclo" with "[-Hg HPc]").
+    iMod ("Hclo" with "[-Hg HPc Hwpc]").
     { iNext. iEval (rewrite staged_inv_inner_unfold). iExists _, _, _, _, _. iFrame "∗ #". iRight. iFrame. }
     iApply step_fupd2N_inner_fupd.
+    iApply (step_fupd2N_inner_plus).
+    rewrite /wpc_crash_modality.
+    iSpecialize ("Hwpc" with "[$] [$]").
+    iApply (step_fupd2N_inner_wand with "Hwpc"); auto.
+    iIntros "(Hg&HQc)".
     iApply (step_fupd2N_inner_later); first done.
     { done. }
     iNext.
@@ -224,9 +229,9 @@ Proof.
     { iNext. iEval (rewrite staged_inv_inner_unfold).
       iExists _, _, (inuse _ _), _, _. iFrame "∗ #". iRight. iFrame. }
     iApply step_fupd2N_inner_fupd.
-    iApply (step_fupd2N_inner_later); first done.
-    { done. }
-    iNext.
+    iSpecialize ("Hwpc" with "[$] [$]").
+    iApply (step_fupd2N_inner_wand with "Hwpc"); auto.
+    iIntros "(Hg&HQc)".
     iMod (global_state_interp_le with "[$]") as "$"; first lia.
     by iFrame.
   }
@@ -239,7 +244,7 @@ Proof.
     iMod ("Hclo" with "[Hown1 Hstat Hitok_ishare Hdone]").
     { iNext. iEval (rewrite staged_inv_inner_unfold).
       iExists _, _, _, _, _. iFrame "∗ #". iLeft. iRight. iFrame. }
-    iSpecialize ("IH" $! E1' _ q _ mj_ishare' with "[] [] [] [] [] [$] [$] [$] [$] [$] [$]"); eauto.
+    iSpecialize ("IH" $! E1' _ q _ mj_ishare' with "[] [] [] [] [] [$] [$] [$] [$] [$] [$] [$]"); eauto.
     { iPureIntro; etransitivity; try eassumption. }
     { iPureIntro.
       split.
@@ -258,7 +263,9 @@ Proof.
     { iNext. iEval (rewrite staged_inv_inner_unfold).
       iExists _, _, idle, _, _. iFrame "∗ #". iRight. iFrame. }
     iApply step_fupd2N_inner_plus.
-    iApply step_fupd2N_inner_later; auto. iNext.
+    iSpecialize ("Hwpc" with "[$] [$]").
+    iApply (step_fupd2N_inner_wand with "Hwpc"); auto.
+    iIntros "(Hg&HQc)".
     iApply step_fupd2N_inner_fupd.
     iApply (step_fupd2N_inner_later).
     { done. }
@@ -268,6 +275,18 @@ Proof.
     iApply (global_state_interp_le with "[$]"); eauto.
     lia.
   }
+Qed.
+
+
+
+Lemma staged_inv_cancel_wpc_crash_modality  E1 mj' Pc :
+  staged_inv_cancel E1 mj' Pc -∗
+  wpc_crash_modality E1 mj' Pc.
+Proof.
+  iIntros "Hsc".
+  iDestruct (wpc_crash_modality_intro E1 mj' True%I with "[//]") as "H".
+  iDestruct (staged_inv_cancel_wpc_crash_modality' with "[$] [$]") as "H2".
+  iApply (wpc_crash_modality_wand with "H2"). by iIntros "($&_)".
 Qed.
 
 (* At the cost of weakening this by requiring an extra token, this can be derived from some of the previous lemmas *)
@@ -420,6 +439,21 @@ Proof.
   eauto.
 Qed.
 
+Lemma staged_inv_cancel_mono_mj E mj1 mj2 P :
+  (mj1 ≤ mj2)%Qp →
+  staged_inv_cancel E mj1 P -∗
+  staged_inv_cancel E mj2 P.
+Proof.
+  iIntros (Hle) "H".
+  rewrite /staged_inv_cancel.
+  iDestruct "H" as (mj0 ??????) "(%Hrange&?)".
+  iExists mj0, _, _, _, _, _, _. iFrame.
+  iPureIntro.
+  split.
+  - intuition eauto.
+  - etransitivity; intuition eauto.
+Qed.
+
 Lemma staged_value_init_cancel P Pc :
   later_tok ∗
   later_tok ∗
@@ -429,16 +463,24 @@ Lemma staged_value_init_cancel P Pc :
 Proof.
   iIntros "(Htok1&Htok2&HP&#Hwand)".
   rewrite /init_cancel.
-  iIntros (?????) "Hwp".
-  rewrite wpc_eq /wpc_def. iIntros (mj).
-  iApply (wpc0_mj_valid). iIntros (Hlt).
-  iPoseProof (wpc0_staged_inv_create _ _ _ _ _ _ Φ ((Pc -∗ Φc)) P Pc) as "H"; first eassumption.
+  iIntros (?????? mj1 Hlt1) "Hwp".
+  rewrite wpc_eq /wpc_def. iIntros (mj2).
+  iApply (wpc0_mj_valid). iIntros (Hlt2).
+  iPoseProof (wpc0_staged_inv_create _ _ (mj1 `min` mj2)%Qp mj2 _ _ (λ v, wpc_crash_modality ⊤ mj1 Φc' -∗ Φ v)%I ((Pc -∗ Φc)) P Pc) as "H".
+  { apply Qp_min_glb1_lt; intuition eauto. }
   iSpecialize ("H" with "[$HP $Htok1 $Htok2 $Hwand Hwp]").
   { iIntros "(Hval&Hcancel)".
     iApply (wpc0_staged_inv_cancel with "Hcancel"); eauto.
+    { apply Qp_le_min_r. }
     iSpecialize ("Hwp" with "[$]"). iSpecialize ("Hwp" $! _).
     iApply (wpc0_strong_mono with "Hwp"); eauto.
-    iSplit. iIntros (?) "H !> ?". iFrame. eauto. }
+    iSplit.
+    * iIntros (?) "H !> Hcancel Hcm".
+      iApply "H".
+      iDestruct (staged_inv_cancel_mono_mj _ _ mj1 with "[$]") as "Hcancel".
+      { apply Qp_le_min_l. }
+      iApply (staged_inv_cancel_wpc_crash_modality' with "[$] [$]").
+    * eauto. }
   iApply (wpc0_strong_mono with "H"); eauto.
   iSplit; first eauto. iIntros "(Hw&HP) !>". by iApply "Hw".
 Qed.

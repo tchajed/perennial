@@ -170,7 +170,7 @@ Proof.
   iAssert (jrnl_dom (dom _ mt)) with "[Hcrash_cond]" as "#Hdom".
   { iDestruct "Hcrash_cond" as "(H1&?&?&H2)". iFrame. }
   rewrite /twophase_init/twophase_inv.
-  iMod (na_crash_inv_alloc (pred LVL_INIT) _
+  iMod (crash_borrow_alloc (pred LVL_INIT) _
                            (∃ γ dinit logm mt',
                                   twophase_crash_cond_full γ dinit logm mt')%I
                            (∃ γ dinit logm mt',
