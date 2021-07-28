@@ -91,7 +91,7 @@ Proof.
   - iApply (big_sepM_mono with "H").
     { iIntros (?? Hlookup) "(Hkind&Hmod&Hdurable)".
       iFrame. }
-  - iApply (crash_borrow.pre_borrowN_big_sepM with "[$]").
+  - iFrame "%". iApply (crash_borrow.pre_borrowN_big_sepM with "[$]").
     eauto.
 Qed.
 
@@ -119,7 +119,7 @@ Proof.
     { econstructor. apply head_prim_step_trans. econstructor. eauto. }
     { solve_ndisj. }
     { iDestruct "Hspec" as "(?&?)". eauto. }
-    wp_apply (wp_Init (nroot.@"H") with "[Hj]").
+    wp_apply (wp_Init JRNL_KIND_SIZE (nroot.@"H") with "[Hj]").
     { solve_ndisj. }
     { solve_ndisj. }
     { iFrame "# ∗". }
@@ -184,9 +184,9 @@ Proof.
   iDestruct (crash_borrow.crash_borrow_init_cancel
                            (∃ γ dinit logm mt',
                                ([∗ map] _ ↦ _ ∈ mt', crash_borrow.pre_borrow) ∗
-                                  twophase_crash_cond_full γ dinit logm mt')%I
+                                  twophase_crash_cond_full JRNL_KIND_SIZE γ dinit logm mt')%I
                            (∃ γ dinit logm mt',
-                                  twophase_crash_cond_full γ dinit logm mt')%I
+                                  twophase_crash_cond_full JRNL_KIND_SIZE γ dinit logm mt')%I
           with "[$] [Hcrash_cond HpreM] []") as "Hinit". (* "(Hna_crash_inv&Hcancel)". *)
   { iExists _, _, _, _. iFrame "HpreM". iExact "Hcrash_cond". }
   { iModIntro. iIntros "H".
@@ -198,7 +198,7 @@ Proof.
   iApply (init_cancel_wand with "Hinit [-Htok Hauth]").
   {
     iIntros "Hborrow".
-    iMod (inv_alloc twophaseInitN _ (twophase_inv_inner γghost) with
+    iMod (inv_alloc twophaseInitN _ (twophase_inv_inner JRNL_KIND_SIZE γghost) with
               "[Hclosed_frag Hborrow Hghost]") as "#Hinv".
     { iNext. iLeft. iFrame. }
     iModIntro.
@@ -307,6 +307,7 @@ Proof.
   }
   iSplitL "Hmapstos".
   {
+    iFrame "%".
     iApply (big_sepM_mono with "Hmapstos").
     { iIntros (???) "(($&Hjrnl)&Htok)".
       rewrite /jrnl_mapsto_own.
@@ -325,15 +326,14 @@ Proof.
     f_equal.
     eapply fmap_unit_jrnl_dom_equal; eauto => //=.
     rewrite dom_fmap_L //=. }
-  iApply (crash_borrow.pre_borrowN_big_sepM with "HpreM").
-  
+  iApply (crash_borrow.pre_borrowN_big_sepM with "HpreM"). eauto.
 Qed.
 
 
 Lemma jrnl_inv_twophase_pre {Σ} {hG: heapGS Σ} {hRG: refinement_heapG Σ}
       {hJrnl : twophaseG Σ} vs v:
-    twophase_inv -∗
-    val_interp (smodel := twophaseTy_model) (hS := hJrnl) (@extT jrnl_val_ty JrnlT) vs v -∗
+    twophase_inv JRNL_KIND_SIZE -∗
+    val_interp (smodel := twophaseTy_model JRNL_KIND_SIZE) (hS := hJrnl) (@extT jrnl_val_ty JrnlT) vs v -∗
     ∃ (l : loc) γ γ' objs_dom dinit, ⌜ v = #l ⌝ ∗ is_twophase_pre l γ γ' dinit objs_dom.
 Proof.
   iIntros "H1 H2".
@@ -473,15 +473,15 @@ Qed.
 Notation spec_ty := jrnl_ty.
 Notation sty := (@ty (@val_tys _ spec_ty)).
 
-Global Instance styG_twophaseG Σ: (styG (specTy_model := twophaseTy_model)) Σ → twophaseG Σ.
+Global Instance styG_twophaseG Σ: (styG (specTy_model := twophaseTy_model JRNL_KIND_SIZE)) Σ → twophaseG Σ.
 Proof. rewrite /styG//=. Defined.
 
 Lemma atomic_convertible_val_interp {Σ} {hG: heapGS Σ} {hRG : refinement_heapG Σ}
-     {hS: (styG (specTy_model := twophaseTy_model)) Σ}
+     {hS: (styG (specTy_model := twophaseTy_model JRNL_KIND_SIZE)) Σ}
     (t : sty) es e dinit objs_dom γ γ' tph_val :
   atomic_convertible t →
-  @val_interp _ _ _ _ _ _ _ _ _ _ hG hRG twophaseTy_model hS t es e -∗
-  atomically_val_interp (htpG := hS) dinit objs_dom γ γ' tph_val t es e.
+  @val_interp _ _ _ _ _ _ _ _ _ _ hG hRG (twophaseTy_model JRNL_KIND_SIZE) hS t es e -∗
+  atomically_val_interp (htpG := hS) JRNL_KIND_SIZE dinit objs_dom γ γ' tph_val t es e.
 Proof.
   revert es e.
   rewrite /styG in hS * => //=.
@@ -521,8 +521,8 @@ Qed.
 Lemma atomically_deconvertible_val_interp `{hG: !heapGS Σ} {hRG : refinement_heapG Σ} {hS: styG Σ}
       (t : sty) es e dinit objs_dom γ γ' tph_val :
   atomic_deconvertible t →
-  atomically_val_interp (htpG := (styG_twophaseG _ hS)) dinit objs_dom γ γ' tph_val t es e -∗
-  @val_interp _ _ _ _ _ _ _ _ _ _ hG hRG twophaseTy_model hS t es e.
+  atomically_val_interp (htpG := (styG_twophaseG _ hS)) JRNL_KIND_SIZE dinit objs_dom γ γ' tph_val t es e -∗
+  @val_interp _ _ _ _ _ _ _ _ _ _ hG hRG (twophaseTy_model JRNL_KIND_SIZE) hS t es e.
 Proof.
   revert es e.
   induction t => es e; try (inversion 1; done).
@@ -742,7 +742,7 @@ Qed.
 Local Definition N := nroot.@"tpref".
 
 Lemma jrnl_atomic_obligation:
-  @sty_atomic_obligation _ _ disk_semantics _ _ _ _ _ _ twophaseTy_model jrnl_atomic_transTy.
+  @sty_atomic_obligation _ _ disk_semantics _ _ _ _ _ _ (twophaseTy_model JRNL_KIND_SIZE) jrnl_atomic_transTy.
 Proof.
   rewrite /sty_atomic_obligation//=.
   iIntros (? hG hRG hJrnl el1 el2 tl e1 e2 t Γsubst Htrans) "Hinv #Hspec #Htrace #HΓ HhasTy".
@@ -759,7 +759,7 @@ Proof.
   iDestruct ("HhasTy" with "[//] Hj") as "H".
   rewrite /sty_lvl_ops/=.
   iApply (wpc_strong_mono with "H"); auto.
-  iSplit; last by (iModIntro; eauto).
+  iSplit; last by (eauto).
   iIntros (v) "Hv". iModIntro.
   wpc_bind (txn.Begin v).
   iApply wp_wpc.
@@ -779,7 +779,7 @@ Proof.
   wp_bind (subst _ _ _).
   rewrite subst_map_subst_comm //; last first.
   { rewrite dom_fmap. rewrite dom_fmap in H0 *. eauto. }
-  iDestruct (atomically_fundamental_lemma dinit objs_dom γ γ' tph_val Γ') as "Hhas_semTy".
+  iDestruct (atomically_fundamental_lemma JRNL_KIND_SIZE dinit objs_dom γ γ' tph_val Γ') as "Hhas_semTy".
   { eauto. }
   rewrite /twophase_sub_logical_reln_defs.ctx_has_semTy.
   iDestruct ("Hhas_semTy" $! (filtered_subst Γsubst Γ') with "[] [$] [] [] [Hstarted]") as "H".

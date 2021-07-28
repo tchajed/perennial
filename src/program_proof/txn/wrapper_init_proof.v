@@ -25,6 +25,7 @@ Section proof.
   Context `{hRG: !refinement_heapG Σ}.
   Context `{aG: twophaseG Σ}.
   Existing Instance jrnlG0.
+  Context (JRNL_SIZE : nat).
 
   Notation spec_ext := jrnl_spec_ext.
   Notation sval := (@val (@spec_ffi_op_field spec_ext)).
@@ -37,7 +38,8 @@ Section proof.
        ⌜ map_Forall (mapsto_valid γ') mt' ⌝ ∗
        "Hmapstos" ∷ ([∗ map] a ↦ obj ∈ mt',
          "Hdurable_mapsto" ∷ durable_mapsto_own γ' a obj ∗
-         "Hjrnl_mapsto" ∷ jrnl_mapsto_own a obj)))%I.
+         "Hjrnl_mapsto" ∷ jrnl_mapsto_own a obj) ∗
+      "%Hdomsize" ∷ ⌜ size mt' = JRNL_SIZE ⌝))%I.
 
   Theorem wpc_Init N d γ dinit logm mt mj (Hlt: (/2 < mj)%Qp) :
     N ## invN →
@@ -50,6 +52,7 @@ Section proof.
         "Hdurable_mapsto" ∷ durable_mapsto_own γ a obj ∗
         "Hjrnl_mapsto" ∷ jrnl_mapsto_own a obj
       ) ∗
+      "%Hdomsize" ∷ ⌜ size mt = JRNL_SIZE ⌝ ∗
       "#Hspec_ctx" ∷ spec_ctx ∗
       "#Hspec_crash_ctx" ∷ spec_crash_ctx jrnl_crash_ctx ∗
       "#Hjrnl_open" ∷ jrnl_open ∗
@@ -72,7 +75,8 @@ Section proof.
       "Hmapstos" ∷ ([∗ map] a ↦ obj ∈ mt',
         "Hdurable_mapsto" ∷ durable_mapsto_own γ' a obj ∗
         "Hjrnl_mapsto" ∷ jrnl_mapsto_own a obj
-      )
+      ) ∗
+      "%Hdomsize" ∷ ⌜ size mt' = JRNL_SIZE ⌝
     }}}.
   Proof.
     iIntros (HinvN HwalN Hvalids Φ Φc) "Hpre HΦ".
@@ -98,6 +102,7 @@ Section proof.
       iSplit; first eauto.
       { iPureIntro. eapply map_Forall_impl; try eassumption.
         intros. eapply exchange_mapsto_valid; try eassumption. }
+      iFrame "%".
       iApply big_sepM_sep. iFrame.
     }
     iModIntro.
@@ -125,6 +130,7 @@ Section proof.
       iSplit; first eauto.
       { iPureIntro. eapply map_Forall_impl; try eassumption.
         intros. eapply exchange_mapsto_valid; try eassumption. }
+      iFrame "%".
       iApply big_sepM_sep. iFrame.
     }
     iMod (twophase_init_locks with "Hpre Histxn_system Htxn_cinv Hmapstos") as "Hcrash".
@@ -163,6 +169,8 @@ Section proof.
       iSplit.
       { iIntros (i o Hin).
         iDestruct (big_sepM_lookup with "[$]") as "(?&?&$)"; eauto. }
+      rewrite -Hdomsize. rewrite ?Map.map_size_dom.
+      rewrite Hdom. iSplitR ""; last by eauto.
       iApply (big_sepM_mono with "H").
       iIntros (???) "($&$&_)".
     }
@@ -217,6 +225,8 @@ Section proof.
         iSplit.
         { iIntros (i o Hin).
           iDestruct (big_sepM_lookup with "[$]") as "(?&?&$)"; eauto. }
+        rewrite -Hdomsize. rewrite ?Map.map_size_dom.
+        rewrite Hdom. iSplitR ""; last by eauto.
         iApply (big_sepM_mono with "H").
         iIntros (???) "($&$&_)".
       }
@@ -228,7 +238,7 @@ Section proof.
     N ## invariant.walN →
     {{{
       "#Hspec_ctx" ∷ spec_ctx ∗
-      "#Htwophase_inv" ∷ twophase_inv ∗
+      "#Htwophase_inv" ∷ twophase_inv JRNL_SIZE ∗
       "Hj" ∷ j ⤇ (K (ExternalOp (ext := @spec_ffi_op_field jrnl_spec_ext) OpenOp vs))
     }}}
       Init (disk_val d) @ NotStuck; ⊤
@@ -270,6 +280,7 @@ Section proof.
       { iExact "Htxn_durable". }
       iFrame "Hmapstos".
       iFrame "#".
+      eauto.
     }
     iSplit.
     * iIntros "H".

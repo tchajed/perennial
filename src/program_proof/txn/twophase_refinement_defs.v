@@ -57,7 +57,8 @@ Definition twophase_crash_cond_full
       "#Hjrnl_kinds_lb" ∷ jrnl_kinds γ.(jrnl_txn_names).(txn_kinds) ∗
       "Hmapstos" ∷ ([∗ map] a ↦ obj ∈ mt,
       "Hdurable_mapsto" ∷ durable_mapsto_own γ a obj ∗
-      "Hjrnl_mapsto" ∷ jrnl_mapsto_own a obj))%I.
+      "Hjrnl_mapsto" ∷ jrnl_mapsto_own a obj) ∗
+      "%Hdomsize" ∷ ⌜ size mt = JRNL_SIZE ⌝).
 
 Definition twophase_crash_cond_partial
            {Σ: gFunctors} {hG: heapGS Σ} {rG: refinement_heapG Σ} {aG : twophaseG Σ}  γ dinit logm mt : iProp Σ
@@ -67,7 +68,8 @@ Definition twophase_crash_cond_partial
       "#Hjrnl_kinds_lb" ∷ jrnl_kinds γ.(jrnl_txn_names).(txn_kinds) ∗
       "Hmapstos" ∷ ([∗ map] a ↦ obj ∈ mt,
       "Hdurable_mapsto" ∷ durable_mapsto_own γ a obj ∗
-      "Hjrnl_mapsto" ∷ jrnl_mapsto a 1 (bufObj_to_obj obj)))%I.
+      "Hjrnl_mapsto" ∷ jrnl_mapsto a 1 (bufObj_to_obj obj)) ∗
+      "%Hdomsize" ∷ ⌜ size mt = JRNL_SIZE ⌝).
 
 Definition twophase_crash_cond
            {Σ: gFunctors} {hG: heapGS Σ} {rG: refinement_heapG Σ} {aG : twophaseG Σ} : iProp Σ
