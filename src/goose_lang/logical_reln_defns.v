@@ -6,7 +6,7 @@ From Perennial.goose_lang Require Import proofmode notation wpc_proofmode.
 From Perennial.program_logic Require Import recovery_weakestpre recovery_adequacy spec_assert language_ctx.
 From Perennial.goose_lang Require Import typing typed_translate adequacy refinement.
 From Perennial.goose_lang Require Export recovery_adequacy spec_assert refinement_adequacy.
-From Perennial.goose_lang Require Import metatheory.
+From Perennial.goose_lang Require Import metatheory crash_borrow.
 From Perennial.goose_lang.lib Require Import list.
 From Perennial.Helpers Require Import Qextra.
 From Perennial.Helpers Require List.
@@ -263,6 +263,7 @@ Definition sty_init_obligation1 (sty_initP: istate → sstate → Prop) :=
       (HINIT: sty_initP σ σs),
         ⊢ ffi_local_start (heapG_ffiG) σ.(world) g -∗
          ffi_local_start (refinement_spec_ffiG) σs.(world) gs -∗
+         pre_borrowN (sty_lvl_init) -∗
          |={styN}=> ∃ (names: sty_names), let H0 := sty_update_pre _ hPre names in sty_init H0.
 
 Definition sty_init_obligation2 (sty_initP: istate → sstate → Prop) :=
@@ -282,6 +283,7 @@ Definition sty_crash_obligation :=
       ffi_crash_rel Σ (refinement_spec_ffiG (hRG := hRG)) σs.(world)
                       (refinement_spec_ffiG (hRG := hRG')) σs'.(world) -∗
       ffi_restart (refinement_spec_ffiG) σs'.(world) -∗
+      pre_borrowN (sty_lvl_init) -∗
       |={styN}=> ∃ (new: sty_names), sty_init (sty_update Σ hS new).
 
 Definition sty_rules_obligation :=

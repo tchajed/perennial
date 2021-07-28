@@ -70,6 +70,7 @@ Section reln_defs.
 Context `{hG: !heapGS Σ}.
 Context {hRG: refinement_heapG Σ}.
 Context {htpG: twophaseG Σ}.
+Context (JRNL_SIZE: nat).
 Context (N: namespace).
 Context (dinit : abstraction.disk).
 Context (objs_dom : gset addr_proof.addr).
@@ -83,7 +84,7 @@ Existing Instances spec_ffi_model_field (* spec_ffi_op_field *) spec_ext_semanti
 Definition atomically_has_semTy (es: sexpr) (e: iexpr) (vty: val_semTy) : iProp Σ :=
   (∀ (j: nat) K0 e0 (K: sexpr → sexpr) (CTX: LanguageCtx' K),
       is_twophase_started tph γ γ' dinit objs_dom j K0 e0 (K es) -∗
-      WPC e @ (logical_reln_defns.sty_lvl_ops (specTy_model := twophaseTy_model)); ⊤
+      WPC e @ (logical_reln_defns.sty_lvl_ops (specTy_model := twophaseTy_model JRNL_SIZE)); ⊤
                     {{ v, ∃ vs, is_twophase_started tph γ γ' dinit objs_dom j K0 e0 (K (of_val vs)) ∗
                                 vty vs v }} {{ True }})%I.
 

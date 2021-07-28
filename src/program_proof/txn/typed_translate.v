@@ -260,8 +260,8 @@ Definition bufObj_to_obj bufObj : obj :=
   | buf.defs.bufInode data | buf.defs.bufBlock data => objBytes data
   end.
 
-Definition twophase_initP (σimpl: @goose_lang.state disk_op disk_model) (σspec : @goose_lang.state jrnl_op jrnl_model) : Prop :=
-  ∃ sz kinds,
+Definition twophase_initP sz (σimpl: @goose_lang.state disk_op disk_model) (σspec : @goose_lang.state jrnl_op jrnl_model) : Prop :=
+  ∃ kinds,
     let σj := {| jrnlData := (bufObj_to_obj <$> recovery_proof.kind_heap0 kinds);
                  jrnlKinds := kinds;
                  jrnlAllocs := ∅

@@ -63,6 +63,16 @@ Proof.
     iIntros. by iApply "H".
 Qed.
 
+Lemma fupd_wpr s k E e rec Φ Φinv Φr :
+  (|={E}=> wpr s k E e rec Φ Φinv Φr) -∗
+  wpr s k E e rec Φ Φinv Φr.
+Proof.
+  iIntros "H".
+  rewrite /wpr.
+  rewrite wpr_unfold /wpr_pre.
+  iApply @fupd_wpc. eauto.
+Qed.
+
 Lemma idempotence_wpr `{!ffi_interp_adequacy} s k E1 e rec Φx Φinv Φrx Φcx:
   ⊢ WPC e @ s ; k ; E1 {{ Φx }} {{ Φcx hG }} -∗
    (□ ∀ (hG': heapGS Σ) (Hpf: @heapG_invG _ _ _ _ hG = @heapG_invG _ _ _ _ hG') σ σ'

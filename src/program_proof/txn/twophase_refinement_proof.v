@@ -17,6 +17,7 @@ From Goose Require github_com.mit_pdos.go_journal.obj.
 Existing Instances jrnl_spec_ext jrnl_spec_ffi_model jrnl_spec_ext_semantics jrnl_spec_ffi_interp jrnl_spec_interp_adequacy.
 
 Section refinement.
+Context (JRNL_SIZE : nat).
 
 Definition dinit0 sz : gmap Z Block :=
   gset_to_gmap block0 (list_to_set $ seqZ 513 (sz-513)).
@@ -31,18 +32,20 @@ Proof.
   auto with f_equal lia.
 Qed.
 
-Lemma jrnl_init_obligation1: sty_init_obligation1 twophaseTy_update_model twophase_initP.
+Opaque crash_borrow.pre_borrow.
+
+Lemma jrnl_init_obligation1: sty_init_obligation1 (twophaseTy_update_model JRNL_SIZE) (twophase_initP JRNL_SIZE).
 Proof.
   rewrite /sty_init_obligation1//=.
   iIntros (? hG hRG hJrnl σs gs σi gi Hinit) "Hdisk".
   rewrite /jrnl_start /twophase_init.
-  destruct Hinit as (sz&kinds&Hsize2&Hnn&Heqi&Heqs&Hdom).
+  destruct Hinit as (kinds&Hsize2&Hnn&Heqi&Heqs&Hdom).
   rewrite Heqs Heqi.
   iIntros "(Hclosed_frag&Hjrnl_frag)".
   iDestruct "Hjrnl_frag" as "(Hsmapstos&Hcrashtoks&Hcrash_ctx&Hkinds&Hdom&Hfull)".
   rewrite /twophase_crash_cond_full.
   iMod (sep_jrnl_recovery_proof.is_txn_durable_init
-          (dinit0 (sz + 513)) kinds sz with "[Hdisk]") as "H".
+          (dinit0 (JRNL_SIZE + 513)) kinds JRNL_SIZE with "[Hdisk]") as "H".
   { rewrite dom_dinit0. repeat f_equal. lia. }
   { eauto. }
   { lia. }
@@ -55,10 +58,13 @@ Proof.
     iSplitL "Hlog"; first by iExact "Hlog".
     iExactEq "Hd". f_equal.
   }
+  rewrite /LVL_INIT.
+  iIntros "Hpre".
   iDestruct "H" as (γ) "(%Hγ&His_txn_durable&#Hlb&Himapstos)".
   iExists tt, γ, _, _, (recovery_proof.kind_heap0 kinds).
   iFrame "His_txn_durable".
   iModIntro.
+  iDestruct "Hpre" as "($&Hpre)".
   rewrite -?sep_assoc.
   iSplit.
   {
@@ -81,14 +87,17 @@ Proof.
   iEval (rewrite big_sepM_fmap) in "Hcrashtoks".
   iDestruct (big_sepM_sep with "[$Hsmapstos $Hcrashtoks]") as "H".
   iDestruct (big_sepM_sep with "[$H $Himapstos]") as "H".
-  iApply (big_sepM_mono with "H").
-  { iIntros (?? Hlookup) "(Hkind&Hmod&Hdurable)".
-    iFrame. }
+  iSplitL "H".
+  - iApply (big_sepM_mono with "H").
+    { iIntros (?? Hlookup) "(Hkind&Hmod&Hdurable)".
+      iFrame. }
+  - assert (size (recovery_proof.kind_heap0 kinds) ≤ JRNL_SIZE).
+    { rewrite /recovery_proof.kind_heap0.
 Qed.
 
-Lemma jrnl_init_obligation2: sty_init_obligation2 twophase_initP.
+Lemma jrnl_init_obligation2: sty_init_obligation2 (twophase_initP JRNL_SIZE).
 Proof.
-  intros ???? (?&?&Hsize2&?&?&?&Hdom). rewrite //=. split_and!; eauto.
+  intros ???? (?&Hsize2&?&?&?&Hdom). rewrite //=. split_and!; eauto.
   eexists; split; eauto. eapply wf_jrnl_alt, kind_heap0_ok.
   { intros a Hin. revert Hin. rewrite Hdom elem_of_list_to_set elem_of_list_fmap; intros (?&->&Hin).
     apply elem_of_seqZ in Hin. clear -Hsize2 Hin. rewrite /block_bytes in Hsize2.
@@ -97,7 +106,7 @@ Proof.
 Qed.
 
 Lemma jrnl_rules_obligation:
-  @sty_rules_obligation _ _ disk_semantics _ _ _ _ _ _ twophaseTy_model jrnl_trans.
+  @sty_rules_obligation _ _ disk_semantics _ _ _ _ _ _ (twophaseTy_model JRNL_SIZE) jrnl_trans.
 Proof.
   intros vs0 vs v0 v0' t1 t2 Htype0 Htrans.
   inversion Htype0 as [op Heq|op Heq]; subst.
@@ -162,7 +171,7 @@ Proof.
 Qed.
 
 Lemma jrnl_crash_inv_obligation:
-  @sty_crash_inv_obligation _ _ disk_semantics _ _ _ _ _ _ twophaseTy_model.
+  @sty_crash_inv_obligation _ _ disk_semantics _ _ _ _ _ _ (twophaseTy_model JRNL_SIZE).
 Proof.
   rewrite /sty_crash_inv_obligation//=.
   iIntros (? hG hRG hJrnl e Φ) "H Hspec #Hspec_crash_ctx Hwand".

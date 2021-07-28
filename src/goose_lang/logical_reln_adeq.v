@@ -69,6 +69,7 @@ Definition sty_derived_crash_condition :=
       ffi_crash_rel Σ (refinement_spec_ffiG (hRG := hRG)) σs.(world)
                       (refinement_spec_ffiG (hRG := hRG')) σs'.(world) -∗
       ffi_restart (refinement_spec_ffiG) σs'.(world) -∗
+      crash_borrow.pre_borrowN sty_lvl_init -∗
       |={styN}=> ∃ (new: sty_names), sty_init (sty_update Σ hS new))%I.
 
 Lemma sty_inv_to_wpc hG hRG hS es e τ j:
@@ -144,9 +145,9 @@ Proof.
   { clear dependent σ σs g gs. rewrite /wpc_init. iIntros (hG hRG σ g σs gs Hinit) "Hffi Hffi_spec".
     rewrite /sty_init_obligation1 in Hsty_init1.
     rewrite /wpc_obligation.
-    iIntros "Hj #Hspec #Hcrash_spec #Htrace".
+    iIntros "Hborrow Hj #Hspec #Hcrash_spec #Htrace".
     iApply fupd_wpc.
-    iPoseProof (Hsty_init1 _ _ _ _  with "[$] [$]") as "H"; first auto.
+    iPoseProof (Hsty_init1 _ _ _ _  with "[$] [$] [$]") as "H"; first auto.
     iApply (fupd_mask_mono styN); first by set_solver+.
     iMod "H" as (names) "Hinit".
     iModIntro.
@@ -161,10 +162,10 @@ Proof.
     iExists σs', Hcrash. iFrame. iIntros (hRG') "Hcrash_rel Hrestart".
     iSpecialize ("Hrest" $! hRG' with "[$] [$]").
     rewrite /wpc_obligation.
-    iIntros "Hj #Hspec #Hspec_crash #Htrace".
+    iIntros "Hborrow Hj #Hspec #Hspec_crash #Htrace".
     iApply fupd_wpc.
     iApply (fupd_mask_mono styN); first by set_solver+.
-    iMod "Hrest" as (names) "Hinv".
+    iMod ("Hrest" with "[$]") as (names) "Hinv".
     iModIntro.
     iApply (sty_inv_to_wpc _ _ (sty_update logical_relnΣ hS' names) with "[$] [$] [$] [$]"); eauto.
   }

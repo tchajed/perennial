@@ -124,6 +124,77 @@ Qed.
 Definition pre_borrow : iProp Σ :=
   (later_tok ∗ later_tok ∗ later_tok ∗ later_tok).
 
+Definition pre_borrowN (n: nat) := Nat.iter n (λ P, pre_borrow ∗ P)%I True%I.
+
+Global Instance pre_borrowN_timeless n :
+  Timeless (pre_borrowN n).
+Proof. induction n; apply _. Qed.
+
+Lemma cred_frag_to_pre_borrowN n :
+  cred_frag (n * 4) -∗ pre_borrowN n.
+Proof.
+  induction n.
+  - rewrite //=. eauto.
+  - replace (S n * 4) with (4 + (n * 4)) by auto.
+    iIntros "H". iDestruct (cred_frag_split with "H") as "(H&IH)".
+    iDestruct (IHn with "IH") as "IH". simpl. iFrame.
+    replace 4 with (1 + 1 + 1 + 1) by auto.
+    repeat (iDestruct (cred_frag_split with "H") as "(H&?)").
+    iFrame.
+Qed.
+
+Lemma pre_borrowN_split n1 n2 :
+  pre_borrowN (n1 + n2) -∗ pre_borrowN n1 ∗ pre_borrowN n2.
+Proof.
+  rewrite /pre_borrowN Nat_iter_add.
+  induction n1 => //=.
+  - iIntros "$".
+  - iIntros "($&H)". by iApply IHn1.
+Qed.
+
+Lemma pre_borrowN_to_cred_frag n :
+  pre_borrowN (S n) -∗ cred_frag ((S n) * 4).
+Proof.
+  induction n.
+  - rewrite //=.
+    replace 4 with (1 + 1 + 1 + 1) by auto.
+    iIntros "((?&?&?&?)&_)".
+    repeat (iApply cred_frag_join; iFrame).
+  - iIntros "H". iDestruct (pre_borrowN_split 1 with "H") as "(H&Hrest)".
+    iDestruct (IHn with "Hrest") as "IH".
+    replace (S (S n) * 4) with (4 + (S n * 4)) by lia.
+    iApply cred_frag_join; iFrame.
+    replace 4 with (1 + 1 + 1 + 1) by auto.
+    iDestruct "H" as "((?&?&?&?)&_)".
+    repeat (iApply cred_frag_join; iFrame).
+Qed.
+
+Lemma pre_borrowN_global_interp_le n1 g n2 mj E κs :
+  pre_borrowN n1 -∗ global_state_interp g n2 mj E κs -∗
+  ⌜ 4 * n1 <= n2 ⌝.
+Proof.
+  destruct n1; first by (iIntros; iPureIntro; lia).
+  iIntros "Hpre Hg".
+  iDestruct "Hg" as "(_&_&Hinterp&_)".
+  iDestruct (pre_borrowN_to_cred_frag with "Hpre") as "Hcred_frag".
+  iDestruct (cred_interp_invert with "[$]") as (?) "%Heq". subst.
+  iPureIntro; lia.
+Qed.
+
+Lemma pre_borrowN_big_sepM `{Countable K} {A} n (m : gmap K A) :
+  size m = n →
+  pre_borrowN n -∗ [∗ map] _ ↦ _ ∈ m, pre_borrow.
+Proof.
+  iInduction m as [| x m] "IH" using map_ind forall (n).
+  - iIntros (_) "_". rewrite //=.
+  - iIntros (Hsize) "H".
+    rewrite big_sepM_insert //.
+    rewrite map_size_insert_None // in Hsize.
+    inversion Hsize; subst.
+    iDestruct (pre_borrowN_split 1 with "H") as "(($&_)&H)".
+    iApply "IH"; eauto.
+Qed.
+
 Definition crash_borrow Ps Pc : iProp Σ :=
  (∃ Ps' Pc', □ (Ps -∗ Pc) ∗
              ▷ (Ps' -∗ Ps) ∗
