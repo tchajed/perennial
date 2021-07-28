@@ -297,14 +297,14 @@ Definition sty_rules_obligation :=
     has_semTy (es vs) (e v) (val_interp (hS := hS) t2).
 
 Definition sty_crash_inv_obligation :=
-  (forall Σ `(hG: !heapGS Σ) `(hRG: !refinement_heapG Σ) (hS: styG Σ)
-     e (Φ: ival → iProp Σ),
+  (forall Σ `(hG: !heapGS Σ) `(hRG: !refinement_heapG Σ) (hS: styG Σ),
     ⊢ sty_init hS -∗
     spec_ctx -∗
     spec_crash_ctx (sty_crash_tok) -∗
-    (sty_inv hS -∗ (WPC e @ sty_lvl_ops; ⊤ {{ Φ }} {{ True%I }})) -∗
-    |={⊤}=> sty_inv hS ∗
+    |={⊤}=> init_cancel (sty_inv hS) (sty_crash_cond hS ∗ sty_crash_tok)).
+(*
     WPC e @ sty_lvl_init; ⊤ {{ Φ }} {{ sty_crash_cond hS ∗ sty_crash_tok }}).
+ *)
 
 Record subst_tuple :=
   { subst_ty : sty ; subst_sval : sval; subst_ival: ival }.

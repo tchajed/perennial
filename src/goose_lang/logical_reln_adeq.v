@@ -86,13 +86,15 @@ Lemma sty_inv_to_wpc hG hRG hS es e τ j:
   WPC e @ sty_lvl_init; ⊤ {{ _, True }}{{sty_derived_crash_condition hG hRG ∗ sty_crash_tok}}.
 Proof.
   iIntros (Htype Hsty_crash_inv Hsty_crash Hsty_rules Hatomic) "#Hspec #Hspec_crash #Htrace Hinit Hj".
-    rewrite /sty_crash_obligation in Hsty_crash.
-  iAssert (|={⊤}=> sty_inv hS ∗ WPC e @ sty_lvl_init; ⊤ {{ _, True }}{{sty_crash_cond hS ∗ sty_crash_tok}})%I with "[-]" as ">(#Hinv&H)".
+  rewrite /sty_crash_obligation in Hsty_crash.
+  iMod (Hsty_crash_inv with "[$] [$] [$]") as "Hinit".
+  iAssert (|={⊤}=> WPC e @ sty_lvl_init; ⊤ {{ _, True }}{{sty_inv hS ∗ sty_crash_cond hS ∗ sty_crash_tok}})%I with "[-]" as ">H".
   {
     rewrite /sty_crash_inv_obligation in Hsty_crash_inv.
-    iApply (Hsty_crash_inv with "[$] [$] [$] [Hj]").
-    { iIntros "#Hinv'".
-      iPoseProof (sty_fundamental_lemma _ _ _ Hsty_rules Hatomic ∅ _ _ _ Htype) as "H"; eauto.
+    iModIntro.
+    iPoseProof (sty_fundamental_lemma _ _ _ Hsty_rules Hatomic ∅ _ _ _ Htype) as "H"; eauto.
+    iApply (init_cancel_elim with "Hinit").
+    iIntros "#Hinv".
       iSpecialize ("H" $! ∅ with "[] [$] [$] [$] []").
       { iPureIntro. apply: fmap_empty. }
       { by rewrite big_sepM_empty. }
@@ -101,12 +103,13 @@ Proof.
       { iPureIntro. apply _. }
       { simpl. by rewrite fmap_empty subst_map_empty. }
       rewrite fmap_empty subst_map_empty.
-      iApply (wpc_strong_mono _ _ _ _ _ _ _ _ (λ _, True%I) with "[$]"); eauto 10. }
+      iApply wpc_idx_change.
+      iApply (wpc_strong_mono _ _ _ _ _ _ _ _ (λ _, True%I) with "[$]"); eauto 10.
   }
   iApply (wpc_strong_mono with "[$]"); eauto.
   iSplit.
   - eauto.
-  - iIntros "(?&?)".
+  - iIntros "(?&?&?)".
     iIntros "Hc".
     iApply fupd_level_fupd.
     iMod (fupd_level_mask_subseteq (styN)) as "Hclo"; eauto.

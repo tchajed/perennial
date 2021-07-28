@@ -17,7 +17,7 @@ From Goose Require github_com.mit_pdos.go_journal.obj.
 Existing Instances jrnl_spec_ext jrnl_spec_ffi_model jrnl_spec_ext_semantics jrnl_spec_ffi_interp jrnl_spec_interp_adequacy.
 
 Section refinement.
-Context (JRNL_SIZE : nat).
+Context (JRNL_KIND_SIZE : nat).
 
 Definition dinit0 sz : gmap Z Block :=
   gset_to_gmap block0 (list_to_set $ seqZ 513 (sz-513)).
@@ -34,18 +34,18 @@ Qed.
 
 Opaque crash_borrow.pre_borrow.
 
-Lemma jrnl_init_obligation1: sty_init_obligation1 (twophaseTy_update_model JRNL_SIZE) (twophase_initP JRNL_SIZE).
+Lemma jrnl_init_obligation1: sty_init_obligation1 (twophaseTy_update_model JRNL_KIND_SIZE) (twophase_initP JRNL_KIND_SIZE).
 Proof.
   rewrite /sty_init_obligation1//=.
   iIntros (? hG hRG hJrnl σs gs σi gi Hinit) "Hdisk".
   rewrite /jrnl_start /twophase_init.
-  destruct Hinit as (kinds&Hsize2&Hnn&Heqi&Heqs&Hdom).
+  destruct Hinit as (sz&kinds&Hsize2&Hnn&Heqi&Heqs&Hdom&Hkind_size).
   rewrite Heqs Heqi.
   iIntros "(Hclosed_frag&Hjrnl_frag)".
   iDestruct "Hjrnl_frag" as "(Hsmapstos&Hcrashtoks&Hcrash_ctx&Hkinds&Hdom&Hfull)".
   rewrite /twophase_crash_cond_full.
   iMod (sep_jrnl_recovery_proof.is_txn_durable_init
-          (dinit0 (JRNL_SIZE + 513)) kinds JRNL_SIZE with "[Hdisk]") as "H".
+          (dinit0 (sz + 513)) kinds sz with "[Hdisk]") as "H".
   { rewrite dom_dinit0. repeat f_equal. lia. }
   { eauto. }
   { lia. }
@@ -91,13 +91,13 @@ Proof.
   - iApply (big_sepM_mono with "H").
     { iIntros (?? Hlookup) "(Hkind&Hmod&Hdurable)".
       iFrame. }
-  - assert (size (recovery_proof.kind_heap0 kinds) ≤ JRNL_SIZE).
-    { rewrite /recovery_proof.kind_heap0.
+  - iApply (crash_borrow.pre_borrowN_big_sepM with "[$]").
+    eauto.
 Qed.
 
-Lemma jrnl_init_obligation2: sty_init_obligation2 (twophase_initP JRNL_SIZE).
+Lemma jrnl_init_obligation2: sty_init_obligation2 (twophase_initP JRNL_KIND_SIZE).
 Proof.
-  intros ???? (?&Hsize2&?&?&?&Hdom). rewrite //=. split_and!; eauto.
+  intros ???? (sz&?&Hsize2&?&?&?&Hdom&Hksz). rewrite //=. split_and!; eauto.
   eexists; split; eauto. eapply wf_jrnl_alt, kind_heap0_ok.
   { intros a Hin. revert Hin. rewrite Hdom elem_of_list_to_set elem_of_list_fmap; intros (?&->&Hin).
     apply elem_of_seqZ in Hin. clear -Hsize2 Hin. rewrite /block_bytes in Hsize2.
@@ -106,7 +106,7 @@ Proof.
 Qed.
 
 Lemma jrnl_rules_obligation:
-  @sty_rules_obligation _ _ disk_semantics _ _ _ _ _ _ (twophaseTy_model JRNL_SIZE) jrnl_trans.
+  @sty_rules_obligation _ _ disk_semantics _ _ _ _ _ _ (twophaseTy_model JRNL_KIND_SIZE) jrnl_trans.
 Proof.
   intros vs0 vs v0 v0' t1 t2 Htype0 Htrans.
   inversion Htype0 as [op Heq|op Heq]; subst.
@@ -170,62 +170,69 @@ Proof.
   }
 Qed.
 
+Opaque crash_borrow.crash_borrow.
+
 Lemma jrnl_crash_inv_obligation:
-  @sty_crash_inv_obligation _ _ disk_semantics _ _ _ _ _ _ (twophaseTy_model JRNL_SIZE).
+  @sty_crash_inv_obligation _ _ disk_semantics _ _ _ _ _ _ (twophaseTy_model JRNL_KIND_SIZE).
 Proof.
   rewrite /sty_crash_inv_obligation//=.
-  iIntros (? hG hRG hJrnl e Φ) "H Hspec #Hspec_crash_ctx Hwand".
-  iDestruct "H" as (????) "(Hcrash_cond&Hauth&Htok&Hclosed_frag)".
+  iIntros (? hG hRG hJrnl) "H Hspec #Hspec_crash_ctx".
+  iDestruct "H" as (????) "(Hcrash_cond&Hauth&Htok&Hclosed_frag&Hpre&HpreM)".
   iAssert (jrnl_dom (dom _ mt)) with "[Hcrash_cond]" as "#Hdom".
   { iDestruct "Hcrash_cond" as "(H1&?&?&H2)". iFrame. }
   rewrite /twophase_init/twophase_inv.
-  iMod (crash_borrow_alloc (pred LVL_INIT) _
+  iDestruct (crash_borrow.crash_borrow_init_cancel
                            (∃ γ dinit logm mt',
+                               ([∗ map] _ ↦ _ ∈ mt', crash_borrow.pre_borrow) ∗
                                   twophase_crash_cond_full γ dinit logm mt')%I
                            (∃ γ dinit logm mt',
                                   twophase_crash_cond_full γ dinit logm mt')%I
-          with "[Hcrash_cond] []") as "(Hna_crash_inv&Hcancel)".
-  { iNext. iExists _, _, _, _. iExact "Hcrash_cond". }
-  { iModIntro. iIntros "H !>". iExact "H". }
+          with "[$] [Hcrash_cond HpreM] []") as "Hinit". (* "(Hna_crash_inv&Hcancel)". *)
+  { iExists _, _, _, _. iFrame "HpreM". iExact "Hcrash_cond". }
+  { iModIntro. iIntros "H".
+    iNamed "H". iExists _, _, _, _. iDestruct "H" as "(_&$)". }
   iMod (ghost_var_alloc (0, expr_id)) as (γghost) "Hghost".
-  iMod (inv_alloc twophaseInitN _ (twophase_inv_inner γghost) with
-            "[Hclosed_frag Hna_crash_inv Hghost]") as "#Hinv".
-  { iNext. iLeft. iFrame. }
-  iModIntro. iSplitL "".
-  { iExists _. iFrame "Hinv Hspec_crash_ctx". }
-  { iSpecialize ("Hwand" with "[]").
-    { iExists _; eauto. }
-    iApply (wpc_strong_mono with "Hwand"); auto.
-    { rewrite /LVL_OPS/LVL_INIT. lia. }
-    { iSplit; first eauto.
-      iModIntro. iIntros. iMod "Hcancel" as ">Hcancel".
-      iIntros "_ !>". iNamed "Hcancel".
-      iDestruct "Hcancel" as "Hcancel".
-      iRename "Hdom" into "Hdom'".
-      iNamed "Hcancel".
-      iDestruct "Hdom" as "#Hdom".
-      iDestruct (jrnl_dom_agree with "[$Hdom] [$Hdom']") as %Hdom.
-      rewrite /twophase_crash_cond.
-      rewrite /twophase_crash_tok.
-      rewrite /jrnl_mapsto_own.
-      iEval (setoid_rewrite sep_assoc) in "Hmapstos".
-      iDestruct (big_sepM_sep with "Hmapstos") as "(H1&H2)".
-      iSplitL "H1 Htxn_durable".
-      { iExists _, _, _, _. iFrame. eauto. }
-      iFrame.
-      iExists {| jrnlData := (bufObj_to_obj <$> _); jrnlKinds := ∅; jrnlAllocs := ∅ |}.
-      iSplitL "H2".
-      { iApply big_sepM_fmap. iExact "H2". }
-      rewrite /=.
-      erewrite (fmap_unit_jrnl_dom_equal (bufObj_to_obj <$> mt) (bufObj_to_obj <$> mt')); last first.
-      { rewrite !dom_fmap_L //=. }
-      eauto.
-    }
+  rewrite /twophase_crash_tok.
+  iApply (init_cancel_fupd ⊤).
+  iModIntro.
+  iApply (init_cancel_wand with "Hinit [-Htok Hauth]").
+  {
+    iIntros "Hborrow".
+    iMod (inv_alloc twophaseInitN _ (twophase_inv_inner γghost) with
+              "[Hclosed_frag Hborrow Hghost]") as "#Hinv".
+    { iNext. iLeft. iFrame. }
+    iModIntro.
+    { iExists _. iFrame "Hinv Hspec_crash_ctx". }
   }
+  iIntros "H".
+  iNamed "H".
+  iDestruct "H" as "Hcancel".
+  iRename "Hdom" into "Hdom'".
+  iNamed "Hcancel".
+  iDestruct "Hdom" as "#Hdom".
+  iDestruct (jrnl_dom_agree with "[$Hdom] [$Hdom']") as %Hdom.
+  rewrite /twophase_crash_cond.
+  rewrite /twophase_crash_tok.
+  rewrite /jrnl_mapsto_own.
+  iEval (setoid_rewrite sep_assoc) in "Hmapstos".
+  iDestruct (big_sepM_sep with "Hmapstos") as "(H1&H2)".
+  iSplitL "H1 Htxn_durable".
+  { iExists _, _, _, _. iFrame. eauto. }
+  iFrame.
+  iExists {| jrnlData := (bufObj_to_obj <$> _); jrnlKinds := ∅; jrnlAllocs := ∅ |}.
+  iSplitL "H2".
+  { iApply big_sepM_fmap. iExact "H2". }
+  rewrite /=.
+  rewrite /spec_crash_ctx.
+  rewrite /source_crash_ctx.
+  rewrite /jrnl_full_crash_tok.
+  erewrite (fmap_unit_jrnl_dom_equal (bufObj_to_obj <$> mt) (bufObj_to_obj <$> mt')); last first.
+  { rewrite !dom_fmap_L //=. }
+  eauto.
 Qed.
 
 Lemma jrnl_crash_obligation:
-  @sty_crash_obligation _ _ disk_semantics _ _ _ _ _ _ twophaseTy_model.
+  @sty_crash_obligation _ _ disk_semantics _ _ _ _ _ _ (twophaseTy_model JRNL_KIND_SIZE).
 Proof.
   rewrite /sty_crash_obligation//=.
   iIntros (? hG hRG hJrnl) "Hinv Hcrash_cond".
@@ -254,6 +261,7 @@ Proof.
   rewrite //=.
   rewrite /jrnl_state_restart.
   iDestruct "Hrestart" as "(Hclosed&Hcrash_toks&Hcrash_ctx&#Hkinds&#Hdom&Hfull)".
+  iIntros "Hpre".
   iModIntro. iExists tt.
   rewrite /twophase_init.  iFrame "Hfull Hclosed".
   rewrite /twophase_crash_cond.
@@ -311,10 +319,14 @@ Proof.
       iFrame.
     }
   }
-  iExactEq "Hcrash_ctx".
-  f_equal.
-  eapply fmap_unit_jrnl_dom_equal; eauto => //=.
-  rewrite dom_fmap_L //=.
+  iDestruct "Hpre" as "($&HpreM)".
+  iSplitL "Hcrash_ctx".
+  { iExactEq "Hcrash_ctx".
+    f_equal.
+    eapply fmap_unit_jrnl_dom_equal; eauto => //=.
+    rewrite dom_fmap_L //=. }
+  iApply (crash_borrow.pre_borrowN_big_sepM with "HpreM").
+  
 Qed.
 
 

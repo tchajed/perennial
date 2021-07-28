@@ -798,13 +798,14 @@ Proof.
     iApply fupd_fupd2. eauto.
 Qed.
 
-Lemma wpc0_change_k s k1 k2 mj E1 e Φ:
-  wpc0 s k1 mj E1 e Φ True ⊢ wpc0 s k2 mj E1 e Φ True.
+Lemma wpc0_change_k s k1 k2 mj E1 e Φ Φc:
+  wpc0 s k1 mj E1 e Φ Φc ⊢ wpc0 s k2 mj E1 e Φ Φc.
 Proof.
-  iIntros "H". iLöb as "IH" forall (E1 e Φ).
+  iIntros "H". iLöb as "IH" forall (E1 e Φ Φc).
   rewrite !wpc0_unfold /wpc_pre.
   iSplit; last first.
-  - iIntros. iFrame. iApply step_fupd2N_inner_later; eauto. iModIntro. eauto.
+  - iIntros. iDestruct "H" as "(_&H)".
+    iSpecialize ("H" with "[$] [$]"). eauto.
   - destruct (to_val e) as [v|]; first by iDestruct "H" as "[H _]".
     iIntros (q σ1 g1 ns D κ κs nt) "Hσ Hg HNC".
     iMod ("H" with "Hσ Hg [$]") as "H".
@@ -883,6 +884,11 @@ Proof.
   iIntros (???) "H".
   iApply (wpc_strong_mono with "[$] [-]"); auto.
 Qed.
+
+Lemma wpc_idx_change k1 k2 s E1 e Φ Φc :
+  WPC e @ s; k1; E1 {{ Φ }} {{ Φc }} -∗
+  WPC e @ s; k2; E1 {{ Φ }} {{ Φc }}.
+Proof. rewrite wpc_eq /wpc_def. iIntros "H" (mj). by iApply wpc0_change_k. Qed.
 
 Lemma wpc_idx_mono k1 k2 s E1 e Φ Φc :
   k1 ≤ k2 →
