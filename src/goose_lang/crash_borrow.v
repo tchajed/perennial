@@ -759,6 +759,91 @@ Lemma crash_borrow_crash_wand P Pc:
   crash_borrow P Pc -∗ □ (P -∗ Pc).
 Proof. iDestruct 1 as (??) "($&_)". Qed.
 
+Lemma crash_borrow_wpc_nval E Pc P P' R :
+  crash_borrow P Pc -∗
+  ▷ (P -∗ |NC={E}=> □ (P' -∗ Pc) ∗ P' ∗ R) -∗
+  wpc_nval E (R ∗ crash_borrow P' Pc).
+Proof.
+  iIntros "Hborrow Hwand".
+  iDestruct "Hborrow" as (??) "(#Hw1&Hw2&#Hw3&Hval&Hltok1&Hltok2)".
+  iApply (wpc_nval_strong_mono with "[-Hltok2 Hltok1]").
+  { iApply (staged_inv_wpc_nval _ _ _ P' (□ (P' -∗ Pc) ∗ R) with "[$Hval]"); auto.
+    iNext. iIntros "HPs'". iDestruct ("Hw2" with "[$]") as "HP".
+    iMod ("Hwand" with "[$]") as "(#Hshift&HP'&HR)".
+    iModIntro.
+    iSplitL "".
+    { iModIntro. iIntros "?". iApply "Hw3". iApply "Hshift". iFrame. }
+    iFrame. iFrame "#".
+  }
+  iNext. iIntros "((#Hw4&HR)&Hval)".
+  iModIntro.
+  iDestruct "Hval" as (??????) "(?&?&?&?&?&?&?)".
+  iFrame "HR".
+  iExists P', Pc'.
+  iFrame "#".
+  iSplitR; first eauto.
+  iFrame.
+  iExists _, _, _, _, _, _. iFrame "∗".
+Qed.
+
+Lemma crash_borrow_wpc_nval_sepM `{Countable A} {B} E (P: A → B → iProp Σ) Q Q' R m:
+  ([∗ map] i ↦ x ∈ m, crash_borrow (Q i x) (P i x)) -∗
+  (([∗ map] i ↦ x ∈ m, Q i x) -∗
+   |NC={E}=> □ ([∗ map] i ↦ x ∈ m, ((Q' i x) -∗ (P i x))) ∗
+              ([∗ map] i ↦ x ∈ m, (Q' i x)) ∗ R) -∗
+  wpc_nval E (R ∗ ([∗ map] i ↦ x ∈ m, crash_borrow (Q' i x) (P i x))).
+Proof.
+  revert R.
+  induction m as [|i x m] using map_ind.
+  {
+    iIntros (?) "_ Hrestore".
+    iApply ncfupd_wpc_nval.
+    iDestruct ("Hrestore" with "[]") as "> (_&_&HR)";
+      first by (iApply big_sepM_empty; trivial).
+    iModIntro. iApply wpc_nval_intro. rewrite big_sepM_empty; trivial. iFrame.
+  }
+  iIntros (?) "Hcrash_invs Hrestores".
+  iDestruct (big_sepM_insert with "Hcrash_invs")
+    as "[Hcrash_inv Hcrash_invs]";
+    first by assumption.
+  iDestruct (IHm (crash_borrow (Q' i x) (P i x) ∗ R)%I with "Hcrash_invs [Hrestores Hcrash_inv]"
+  ) as "H". (* > [[Hcrash_inv HR] Hcrash_invs]". *)
+  {
+    iIntros "HQs".
+    iDestruct (
+      na_crash_inv_open_modify_ncfupd _ _ _ _ _
+      (
+        ([∗ map] i↦x ∈ m, ▷ Q' i x) ∗
+        □ ([∗ map] i↦x ∈ m, (▷ Q' i x -∗ |C={⊤}_k=> ▷ P i x)) ∗
+        R
+      )%I
+      with "Hcrash_inv [Hrestores HQs]"
+    ) as "> [(HQ's&#Hstatuses&HR) Hcrash_inv]".
+    {
+      iIntros "HQ".
+      iDestruct ("Hrestores" with "[HQs HQ]") as "> (#Hstatuses&HQ's&HR)".
+      {
+        iApply big_sepM_insert; first by assumption.
+        iFrame.
+      }
+      iDestruct (big_sepM_insert with "HQ's")
+        as "[HQ' HQ's]";
+        first by assumption.
+      iDestruct (big_sepM_insert with "Hstatuses")
+        as "[Hstatus Hstatuses']";
+        first by assumption.
+      iFrame "∗ #".
+      trivial.
+    }
+    iFrame.
+    trivial.
+  }
+  iModIntro.
+  iFrame.
+  iApply big_sepM_insert; first by assumption.
+  iFrame.
+Qed.
+ *)
 
 Lemma wpc_crash_borrow_open k E1 e Φ Φc P Pc:
   to_val e = None →
