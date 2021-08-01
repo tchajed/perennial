@@ -11,7 +11,7 @@ Definition wp_nval `{!irisGS Λ Σ, !crashG Σ} E1 P :=
        let E2 :=  ⊤ ∖ D in
        let E2 :=  ⊤ ∖ D in
        global_state_interp g1 ns mj D κs -∗ NC q -∗
-     ||={E1|E2,∅|∅}=> ||▷=>^(num_laters_per_step ns) ||={∅|∅,E1|E2}=> global_state_interp g1 ns mj D κs ∗ P ∗ NC q))%I.
+     ||={E1|E2,∅|∅}=> ||▷=>^(S (num_laters_per_step ns)) ||={∅|∅,E1|E2}=> global_state_interp g1 ns mj D κs ∗ P ∗ NC q))%I.
 
 Lemma wp_nval_strong_mono E P P' :
   wp_nval E P -∗
@@ -34,7 +34,7 @@ Proof.
   iFrame.
 Qed.
 
-Lemma wpc_nval_intro E P :
+Lemma wp_nval_intro E P :
   P -∗ wp_nval E P.
 Proof.
   iIntros "HP".
@@ -79,14 +79,13 @@ Proof.
   simpl. iModIntro. iNext. iModIntro.
   iApply (step_fupd2N_le).
   { apply (num_laters_per_step_exp ns'). lia. }
-  iApply (step_fupd2N_le (S (num_laters_per_step ns') + S (num_laters_per_step ns'))).
+  iApply (step_fupd2N_le ((S (num_laters_per_step ns')) + S (num_laters_per_step ns'))).
   { lia. }
-  simpl. iModIntro. iNext.
+  simpl. rewrite Nat_iter_add.
   iMod "Hclo'" as "_".
-  rewrite Nat_iter_add.
   iMod (fupd2_mask_subseteq E (⊤ ∖ D)) as "Hclo'"; try set_solver.
-  iMod ("H" with "[$] [$]") as "H". iModIntro.
-  iApply (step_fupd2N_wand with "H"). iIntros "H".
+  iMod ("H" with "[$] [$]") as "H".
+  iApply (step_fupd2N_wand with "H"). iNext. iIntros "H".
   simpl. iMod "H". iMod "Hclo'".
   iDestruct "H" as "(Hg&HP&HNC)".
   iMod ("Hwp" with "[$] [$] [$]") as "Hwp".

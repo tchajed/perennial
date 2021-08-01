@@ -759,23 +759,63 @@ Lemma crash_borrow_crash_wand P Pc:
   crash_borrow P Pc -∗ □ (P -∗ Pc).
 Proof. iDestruct 1 as (??) "($&_)". Qed.
 
+Lemma crash_borrow_wpc_nval' E Pc P P' R :
+  crash_borrow P Pc -∗
+  ▷ (P -∗ wp_nval E (□ (P' -∗ Pc) ∗ P' ∗ R)) -∗
+  wpc_nval E (R ∗ crash_borrow P' Pc).
+Proof.
+  iIntros "Hborrow Hwand".
+  iDestruct "Hborrow" as (??) "(#Hw1&Hw2&#Hw3&Hval&Hltok1&Hltok2)".
+  iApply (wp_nval_wpc_nval with "[$]"). iNext.
+  iApply (wp_nval_strong_mono with "[-Hltok1]").
+  { iApply (staged_inv_wp_nval _ _ _ P' (□ (P' -∗ Pc) ∗ R) with "[$Hval]"); auto.
+    iNext. iIntros "HPs'". iDestruct ("Hw2" with "[$]") as "HP".
+    iDestruct ("Hwand" with "[$]") as "H".
+    iApply (wp_nval_strong_mono with "H").
+    iIntros "(#Hshift&$&$)".
+    iModIntro. iFrame "#".
+    { iModIntro. iIntros "?". iApply "Hw3". iApply "Hshift". iFrame. }
+  }
+  iIntros "((#Hw4&HR)&Hval)".
+  iModIntro. iIntros "Hltok2".
+  iDestruct "Hval" as (??????) "(?&?&?&?&?&?&?)".
+  iFrame "HR".
+  iExists P', Pc'.
+  iFrame "#".
+  iSplitR; first eauto.
+  iFrame.
+  iExists _, _, _, _, _, _. iFrame "∗".
+Qed.
+
 Lemma crash_borrow_wpc_nval E Pc P P' R :
   crash_borrow P Pc -∗
   ▷ (P -∗ |NC={E}=> □ (P' -∗ Pc) ∗ P' ∗ R) -∗
   wpc_nval E (R ∗ crash_borrow P' Pc).
 Proof.
   iIntros "Hborrow Hwand".
+  iApply (crash_borrow_wpc_nval' with "[$]"). iNext. iIntros "HP".
+  iApply (ncfupd_wp_nval). iMod ("Hwand" with "[$]") as "(#Hwand&HP'&HR)".
+  iModIntro. iApply wp_nval_intro.
+  iFrame. eauto.
+Qed.
+
+Lemma crash_borrow_wp_nval E Pc P P' R :
+  crash_borrow P Pc -∗
+  ▷ (P -∗ wp_nval E (□ (P' -∗ Pc) ∗ P' ∗ R)) -∗
+  wp_nval E (R ∗ crash_borrow P' Pc).
+Proof.
+  iIntros "Hborrow Hwand".
   iDestruct "Hborrow" as (??) "(#Hw1&Hw2&#Hw3&Hval&Hltok1&Hltok2)".
-  iApply (wpc_nval_strong_mono with "[-Hltok2 Hltok1]").
-  { iApply (staged_inv_wpc_nval _ _ _ P' (□ (P' -∗ Pc) ∗ R) with "[$Hval]"); auto.
+  iApply (wp_nval_strong_mono with "[-Hltok2 Hltok1]").
+  { iApply (staged_inv_wp_nval _ _ _ P' (□ (P' -∗ Pc) ∗ R) with "[$Hval]"); auto.
     iNext. iIntros "HPs'". iDestruct ("Hw2" with "[$]") as "HP".
-    iMod ("Hwand" with "[$]") as "(#Hshift&HP'&HR)".
-    iModIntro.
-    iSplitL "".
+    iDestruct ("Hwand" with "[$]") as "H".
+    iApply (wp_nval_strong_mono with "H").
+    iIntros "(#Hshift&$&$)".
+    iModIntro. iFrame "#".
     { iModIntro. iIntros "?". iApply "Hw3". iApply "Hshift". iFrame. }
-    iFrame. iFrame "#".
   }
-  iNext. iIntros "((#Hw4&HR)&Hval)".
+  iIntros "((#Hw4&HR)&Hval)".
   iModIntro.
   iDestruct "Hval" as (??????) "(?&?&?&?&?&?&?)".
   iFrame "HR".
@@ -786,64 +826,68 @@ Proof.
   iExists _, _, _, _, _, _. iFrame "∗".
 Qed.
 
-Lemma crash_borrow_wpc_nval_sepM `{Countable A} {B} E (P: A → B → iProp Σ) Q Q' R m:
+Lemma crash_borrow_wp_nval_sepM `{Countable A} {B} E (P: A → B → iProp Σ) Q Q' R m:
   ([∗ map] i ↦ x ∈ m, crash_borrow (Q i x) (P i x)) -∗
   (([∗ map] i ↦ x ∈ m, Q i x) -∗
-   |NC={E}=> □ ([∗ map] i ↦ x ∈ m, ((Q' i x) -∗ (P i x))) ∗
-              ([∗ map] i ↦ x ∈ m, (Q' i x)) ∗ R) -∗
-  wpc_nval E (R ∗ ([∗ map] i ↦ x ∈ m, crash_borrow (Q' i x) (P i x))).
+   wp_nval E  (□ ([∗ map] i ↦ x ∈ m, ((Q' i x) -∗ (P i x))) ∗
+              ([∗ map] i ↦ x ∈ m, (Q' i x)) ∗ R)) -∗
+  wp_nval E (R ∗ ([∗ map] i ↦ x ∈ m, crash_borrow (Q' i x) (P i x))).
 Proof.
   revert R.
   induction m as [|i x m] using map_ind.
   {
     iIntros (?) "_ Hrestore".
-    iApply ncfupd_wpc_nval.
-    iDestruct ("Hrestore" with "[]") as "> (_&_&HR)";
+    iDestruct ("Hrestore" with "[]") as "H";
       first by (iApply big_sepM_empty; trivial).
-    iModIntro. iApply wpc_nval_intro. rewrite big_sepM_empty; trivial. iFrame.
+    iApply (wp_nval_strong_mono with "H"). iIntros "(_&_&R)". iModIntro.
+    rewrite big_sepM_empty; trivial. iFrame.
   }
   iIntros (?) "Hcrash_invs Hrestores".
   iDestruct (big_sepM_insert with "Hcrash_invs")
     as "[Hcrash_inv Hcrash_invs]";
     first by assumption.
-  iDestruct (IHm (crash_borrow (Q' i x) (P i x) ∗ R)%I with "Hcrash_invs [Hrestores Hcrash_inv]"
-  ) as "H". (* > [[Hcrash_inv HR] Hcrash_invs]". *)
+  iDestruct (IHm (crash_borrow (Q' i x) (P i x) ∗ R)%I with "Hcrash_invs [Hrestores Hcrash_inv]") as "H".
   {
     iIntros "HQs".
     iDestruct (
-      na_crash_inv_open_modify_ncfupd _ _ _ _ _
+      crash_borrow_wp_nval _ _ _ _
       (
-        ([∗ map] i↦x ∈ m, ▷ Q' i x) ∗
-        □ ([∗ map] i↦x ∈ m, (▷ Q' i x -∗ |C={⊤}_k=> ▷ P i x)) ∗
+        ([∗ map] i↦x ∈ m, Q' i x) ∗
+        □ ([∗ map] i↦x ∈ m, (Q' i x -∗ P i x)) ∗
         R
       )%I
       with "Hcrash_inv [Hrestores HQs]"
-    ) as "> [(HQ's&#Hstatuses&HR) Hcrash_inv]".
+    ) as "H".
     {
+      iNext.
       iIntros "HQ".
-      iDestruct ("Hrestores" with "[HQs HQ]") as "> (#Hstatuses&HQ's&HR)".
+      iDestruct ("Hrestores" with "[HQs HQ]") as "H".
       {
         iApply big_sepM_insert; first by assumption.
         iFrame.
       }
+      iApply (wp_nval_strong_mono with "H").
+      iIntros "(#Hstatuses&HQ's&HR)".
       iDestruct (big_sepM_insert with "HQ's")
         as "[HQ' HQ's]";
-        first by assumption.
+        first by assumption. iModIntro.
       iDestruct (big_sepM_insert with "Hstatuses")
         as "[Hstatus Hstatuses']";
         first by assumption.
       iFrame "∗ #".
       trivial.
     }
+    iApply (wp_nval_strong_mono with "H"). iIntros "((?&?&?)&?)".
     iFrame.
     trivial.
   }
+  iApply (wp_nval_strong_mono with "H").
+  iIntros "((?&?)&?)".
   iModIntro.
   iFrame.
   iApply big_sepM_insert; first by assumption.
   iFrame.
 Qed.
- *)
 
 Lemma wpc_crash_borrow_open k E1 e Φ Φc P Pc:
   to_val e = None →
@@ -902,6 +946,41 @@ Proof.
     { iApply wpc_crash_modality_intro. iIntros. iDestruct "HΦ" as "($&_)". }
     iIntros "Hltok". iDestruct "HΦ" as "(_&$)". }
 Qed.
+
+Opaque crash_borrow.
+Lemma crash_borrow_wpc_nval_sepM `{Countable A} {B} E (P: A → B → iProp Σ) Q Q' R m:
+  ([∗ map] i ↦ x ∈ m, crash_borrow (Q i x) (P i x)) -∗
+  (([∗ map] i ↦ x ∈ m, Q i x) -∗
+   |NC={E}=> (□ [∗ map] i ↦ x ∈ m, ((Q' i x) -∗ (P i x))) ∗ ([∗ map] i ↦ x ∈ m, (Q' i x)) ∗ R) -∗
+  wpc_nval E (R ∗ ([∗ map] i ↦ x ∈ m, crash_borrow (Q' i x) (P i x))).
+Proof.
+  iInduction m as [| i x m Hnin] "_"  using map_ind.
+  - iIntros "_ H".
+    iApply ncfupd_wpc_nval.
+    iMod ("H" with "[]") as "(_&_&R)".
+    { by rewrite big_sepM_empty. }
+    iModIntro. iApply wpc_nval_intro; eauto.
+  - iIntros "H Hwand".
+    iDestruct (big_sepM_insert with "H") as "(H&Hrest)"; auto.
+    iDestruct (crash_borrow_wpc_nval' E _ _ (Q' i x) (R ∗ [∗ map] i ↦ x ∈ m, crash_borrow (Q' i x) (P i x))
+                 with "H [Hrest Hwand]") as "H".
+    { iNext. iIntros "HQ".
+      iDestruct (crash_borrow_wp_nval_sepM E P Q Q' (□ (Q' i x -∗ P i x) ∗ R ∗ (Q' i x))
+                   with "Hrest [Hwand HQ]") as "H".
+      { iIntros "H".
+        iApply (ncfupd_wp_nval).
+        iMod ("Hwand" with "[HQ H]") as "(#H1&H2&?)".
+        { iApply big_sepM_insert; auto; iFrame. }
+        iModIntro. iApply wp_nval_intro. iFrame.
+        iDestruct (big_sepM_insert with "H1") as "($&$)"; auto.
+        iDestruct (big_sepM_insert with "H2") as "($&$)"; auto.
+      }
+      iApply (wp_nval_strong_mono with "H"). by iIntros "(($&$&$)&$)".
+    }
+    iApply (wpc_nval_strong_mono with "H"). iIntros "!> (($&H1)&H2)".
+    iModIntro. iApply big_sepM_insert; auto; iFrame.
+Qed.
+
 
 End crash_borrow_def.
 

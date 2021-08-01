@@ -38,8 +38,8 @@ Proof.
   inversion Heq; subst.
   iMod (later_tok_decr with "[$]") as (ns' Hlt') "Hg".
   iApply (step_fupd2N_le).
-  { apply (num_laters_per_step_exp ns'). lia. }
-  iApply (step_fupd2N_le (S (S (num_laters_per_step ns')))).
+  { apply le_n_S. apply (num_laters_per_step_exp ns'). lia. }
+  iApply (step_fupd2N_le (S (S (S (num_laters_per_step ns'))))).
   { lia. }
   iMod (fupd2_mask_subseteq ∅ ∅) as "Hclo'"; try set_solver+.
   iModIntro. simpl. iModIntro. iNext.
@@ -84,7 +84,7 @@ Proof.
   replace (⊤ ∖ D ∖ E2) with (⊤ ∖ (E2 ∪ D)) by set_solver.
   iMod ("Hwand" with "[$] [$]") as "Hwp".
   simpl. iModIntro.
-  iApply (step_fupd2N_wand with "Hwp"). iIntros "Hwp".
+  iApply (step_fupd2N_wand with "Hwp"). iNext. iIntros "Hwp".
   iMod ("Hwp") as "(Hg&(#Hshift&HQs'&HR)&HNC)".
   iMod (later_tok_incr with "[$]") as "(Hg&Hltok)".
     iMod (saved_prop_alloc Qs') as (γprop_stored') "#Hsaved1''".
