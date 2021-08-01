@@ -1111,7 +1111,7 @@ Section proof.
         (K (ExternalOp (ext := @spec_ffi_op_field jrnl_spec_ext)
           ReadBitOp (addr2val' a)))
     }}}
-      Txn__ReadBufBit #l (addr2val a)
+      Txn__ReadBufBit' #l (addr2val a)
     {{{ data, RET (val_of_obj (objBit data));
         is_twophase_started l γ γ' dinit objs_dom j K0 e1
           (K (val_of_obj' (objBit data)))
@@ -1120,20 +1120,15 @@ Section proof.
     iIntros (Φ) "Htwophase HΦ".
     iDestruct (twophase_started_ub_det' with "[$]") as "Htwophase".
     { auto. }
-    rewrite /Txn__ReadBufBit.
-    wp_bind (addr2val a)%E.
+    rewrite /Txn__ReadBufBit'.
+    wp_pure1.
+    wp_pure1.
+    wp_pure1.
+    wp_bind (Skip)%E.
     iApply (wpc_nval_elim_wp with "Htwophase"); auto.
     wp_pures. iModIntro. iNamed 1.
     iDestruct (is_twophase_wf_jrnl with "Htwophase") as "%Hwf_jrnl";
       [eassumption|eassumption|].
-
-    iMod (twophase_started_ub_det' with "[$]") as "Htwophase".
-    { auto. }
-    iNamed "Htwophase".
-    iDestruct (is_twophase_wf_jrnl with "Htwophase") as "%Hwf_jrnl";
-      [eassumption|eassumption|].
-    rewrite /Txn__ReadBuf'.
-
 
     destruct Hnotstuck as (s&g&Hsub&Hdom&Hnotstuck).
     apply not_stuck'_ReadBit_inv in Hnotstuck
@@ -1265,9 +1260,12 @@ Section proof.
     }}}.
   Proof.
     iIntros (Φ) "Htwophase HΦ".
-    iMod (twophase_started_ub_det' with "[$]") as "Htwophase".
+    rewrite /Txn__OverWrite'.
+    iDestruct (twophase_started_ub_det' with "[$]") as "Htwophase".
     { auto. }
-    iNamed "Htwophase".
+    wp_bind (addr2val a, val_of_obj ov)%E.
+    iApply (wpc_nval_elim_wp with "Htwophase"); auto.
+    wp_pures. iModIntro. iNamed 1.
     iDestruct (is_twophase_wf_jrnl with "Htwophase") as "%Hwf_jrnl";
       [eassumption|eassumption|].
     destruct Hwf_jrnl as [Hwf_jrnl1 Hwf_jrnl2].
@@ -1500,9 +1498,12 @@ Section proof.
     }}}.
   Proof.
     iIntros (Φ) "Htwophase HΦ".
-    iMod (twophase_started_ub_det' with "[$]") as "Htwophase".
+    rewrite /Txn__OverWrite'.
+    iDestruct (twophase_started_ub_det' with "[$]") as "Htwophase".
     { auto. }
-    iNamed "Htwophase".
+    wp_bind (addr2val a, val_of_obj ov)%E.
+    iApply (wpc_nval_elim_wp with "Htwophase"); auto.
+    wp_pures. iModIntro. iNamed 1.
     iDestruct (is_twophase_wf_jrnl with "Htwophase") as "%Hwf_jrnl";
       [eassumption|eassumption|].
     destruct Hwf_jrnl as [Hwf_jrnl1 Hwf_jrnl2].

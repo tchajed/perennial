@@ -84,7 +84,7 @@ Section translate.
 
   (** primitives operations *)
   | panic_expr_transTy msg t :
-      Γ @ tph ⊢ Panic msg -- Panic msg : t
+      Γ @ tph ⊢ Panic msg -- (Skip ;; Panic msg) : t
   | arbitrary_int_expr_transTy :
       Γ @ tph ⊢ ArbitraryInt -- ArbitraryInt : uint64T
   | cast_u64_op_transTy e1 e2 t :
@@ -166,7 +166,7 @@ Section translate.
       Γ @ tph ⊢ ExternalOp (ext := spec_op) ReadBufOp (e1, e2) -- (Txn__ReadBuf' tph (e1', e2')%E) : listT byteT
   | readbit_transTy e1 e1' :
       Γ @ tph ⊢ e1 -- e1' : addrT ->
-      Γ @ tph ⊢ ExternalOp (ext := spec_op) ReadBitOp e1 -- (Txn__ReadBufBit tph e1') : boolT
+      Γ @ tph ⊢ ExternalOp (ext := spec_op) ReadBitOp e1 -- (Txn__ReadBufBit' tph e1') : boolT
   | overwrite_transTy e1 e1' e2 e2' :
       Γ @ tph ⊢ e1 -- e1' : addrT ->
       Γ @ tph ⊢ e2 -- e2' : listT byteT ->
@@ -189,11 +189,11 @@ Section translate.
   | alloc_transTy e1 e1' :
       Γ @ tph ⊢ e1 -- e1' : extT AllocT ->
       Γ @ tph ⊢ ExternalOp (ext := spec_op) AllocOp e1 --
-               (Alloc__AllocNum e1') : baseT uint64BT
+               ((λ: "x", Skip;; Alloc__AllocNum (Var "x"))%V e1') : baseT uint64BT
   | num_free_transTy e1 e1' :
       Γ @ tph ⊢ e1 -- e1' : extT AllocT ->
       Γ @ tph ⊢ ExternalOp (ext := spec_op) NumFreeOp e1 --
-               (Alloc__NumFree e1') : baseT uint64BT
+               ((λ: "x", Skip;; Alloc__NumFree (Var "x"))%V e1') : baseT uint64BT
 
   where "Γ @ tph ⊢ e1 -- e2 : A" := (atomic_body_expr_transTy Γ tph e1 e2 A)
 

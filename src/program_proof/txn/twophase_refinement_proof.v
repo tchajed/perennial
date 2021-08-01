@@ -805,14 +805,15 @@ Proof.
   iIntros (v') "Hv".
   iDestruct "Hv" as (vs') "(Hstarted&Hinterp)".
   rewrite /op_wrappers.Txn__ConditionalCommit'.
-  wp_pures.
-  rewrite /=.
+  wp_pure1.
+  wp_bind (Rec _ _ _).
   iDestruct "Hinterp" as "[Hnone|Hsome]".
   {
     iDestruct "Hnone" as (vsnone vnone (->&->)) "Hunit".
     iDestruct "Hunit" as %(->&->).
-    wp_pures.
-    iMod (twophase_started_abort with "Hstarted") as "(Hrel&Hj)".
+    iDestruct (twophase_started_abort with "Hstarted") as "H".
+    iApply (wpc_nval_elim_wp with "H"); auto. wp_pures.
+    iIntros "!> (Hrel&Hj)".
     wp_apply (wp_Txn__ReleaseAll' with "Hrel").
     wp_pures. iExists _. iFrame. iLeft. eauto.
   }
@@ -830,7 +831,7 @@ Proof.
       wp_pures. iExists _. iFrame. iModIntro.
       rewrite /val_interp -/val_interp.
       iRight. iExists _, _. iSplit; first eauto. simpl; auto.
-      iApply (atomically_deconvertible_val_interp with "[$]"); eauto.
+      iApply (atomically_deconvertible_val_interp with "Hv"); eauto.
       naive_solver.
     - iDestruct "H" as "(Hrel&Hj)".
       wp_pures.

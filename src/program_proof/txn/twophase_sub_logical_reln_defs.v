@@ -425,9 +425,12 @@ Proof.
   - (* panic_expr_transTy *)
     subst. simpl.
     iApply wp_wpc.
-    iMod (twophase_started_ub_det with "Hj") as %[]; swap 1 3.
+    iDestruct (twophase_started_ub_det with "Hj") as "H".
     { set_solver+. }
     { intros; eapply stuck_Panic'. }
+    wp_bind (Skip)%E.
+    iApply (wpc_nval_elim_wp with "H"); eauto.
+    wp_pures. iIntros "!> []".
   - subst. simpl.
     iApply wp_wpc.
     iApply wp_ncfupd.
@@ -1148,14 +1151,17 @@ Proof.
     iDestruct "Hv2" as %(n&->&->).
     iApply wp_wpc.
     rewrite /op_wrappers.Alloc__MarkUsed'.
-    wp_pures.
     assert (LanguageCtx' (λ x : sexpr, K (ectx_language.fill [@ExternalOpCtx (spec_ffi_op_field) MarkUsedOp] x))).
     { apply comp_ctx'; eauto. apply ectx_lang_ctx'. }
     iDestruct (twophase_started_step_puredet _ _ _ _ _ _ _
                  (λ x : sexpr, K (ectx_language.fill [ExternalOpCtx _] x)) _  with "Hj") as "Hj";
               first (intros ??; apply head_prim_step_trans'; repeat econstructor; eauto).
-    iMod (twophase_started_ub_det_with_alloc' with "[$] [$]") as "H".
+    wp_bind (#li, #n)%E.
+    iDestruct (twophase_started_ub_det_with_alloc' with "[$] [$]") as "H".
     { set_solver. }
+    iApply (wpc_nval_elim_wp with "H"); auto.
+    wp_pures.
+    iIntros "!> H".
     iNamed "H".
     destruct Hnotstuck as (s&g&Hsub&Hdom&Hnotstuck).
     apply not_stuck'_MarkUsedOp_inv in Hnotstuck
@@ -1204,15 +1210,18 @@ Proof.
     iDestruct "Hv1" as (ls li max -> -> Hgt0) "(His_alloc&Hjrnl_alloc)".
     iDestruct "Hv2" as %(n&->&->).
     iApply wp_wpc.
-    rewrite /op_wrappers.Alloc__FreeNum'.
-    wp_pures.
+    wp_bind (#li, #n)%E.
     assert (LanguageCtx' (λ x : sexpr, K (ectx_language.fill [@ExternalOpCtx (spec_ffi_op_field) FreeNumOp] x))).
     { apply comp_ctx'; eauto. apply ectx_lang_ctx'. }
     iDestruct (twophase_started_step_puredet _ _ _ _ _ _ _
                  (λ x : sexpr, K (ectx_language.fill [ExternalOpCtx _] x)) _  with "Hj") as "Hj";
               first (intros ??; apply head_prim_step_trans'; repeat econstructor; eauto).
-    iMod (twophase_started_ub_det_with_alloc' with "[$] [$]") as "H".
+    iDestruct (twophase_started_ub_det_with_alloc' with "[$] [$]") as "H".
     { set_solver. }
+    iApply (wpc_nval_elim_wp with "H"); auto.
+    rewrite /op_wrappers.Alloc__FreeNum'.
+    wp_pures.
+    iIntros "!> H".
     iNamed "H".
     destruct Hnotstuck as (s&g&Hsub&Hdom&Hnotstuck).
     apply not_stuck'_FreeNumOp_inv in Hnotstuck
@@ -1252,13 +1261,19 @@ Proof.
     simpl.
     iDestruct "Hv1" as (ls li max -> -> Hgt0) "(His_alloc&Hjrnl_alloc)".
     iApply wp_wpc.
-    iMod (twophase_started_ub_det_with_alloc' with "[$] [$]") as "H".
+    wp_pure1.
+    wp_bind (Skip)%E.
+    iDestruct (twophase_started_ub_det_with_alloc' with "[$] [$]") as "H".
     { set_solver. }
+    iApply (wpc_nval_elim_wp with "[$]"); auto.
+    wp_pures.
+    iIntros "!> H".
     iNamed "H".
     destruct Hnotstuck as (s&g&Hsub&Hdom&Hnotstuck).
     iDestruct (is_twophase_wf_jrnl with "Htwophase") as "%Hwf_jrnl'";
       [eassumption|eassumption|].
     subst.
+    wp_pures.
     wp_apply (wp_AllocNum with "[$]").
     iIntros (n Hlt_max).
     iExists (#n). iSplit; last eauto.
@@ -1285,8 +1300,13 @@ Proof.
     simpl.
     iDestruct "Hv1" as (ls li max -> -> Hgt0) "(His_alloc&Hjrnl_alloc)".
     iApply wp_wpc.
-    iMod (twophase_started_ub_det_with_alloc' with "[$] [$]") as "H".
+    wp_pure1.
+    wp_bind (Skip)%E.
+    iDestruct (twophase_started_ub_det_with_alloc' with "[$] [$]") as "H".
     { set_solver. }
+    iApply (wpc_nval_elim_wp with "[$]"); auto.
+    wp_pures.
+    iIntros "!> H".
     iNamed "H".
     destruct Hnotstuck as (s&g&Hsub&Hdom&Hnotstuck).
     iDestruct (is_twophase_wf_jrnl with "Htwophase") as "%Hwf_jrnl'";
