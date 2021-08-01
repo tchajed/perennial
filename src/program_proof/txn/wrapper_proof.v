@@ -428,24 +428,22 @@ Section proof.
 
   Theorem twophase_started_abort l γ γ' dinit objs_dom j K e1 e2 :
     is_twophase_started l γ γ' dinit objs_dom j K e1 e2 -∗
-    |NC={⊤}=> is_twophase_releasable l γ γ' objs_dom ∗
-              j ⤇ K NONEV.
-  Proof. Admitted.
-  (*
+    wpc_nval ⊤ (is_twophase_releasable l γ γ' objs_dom ∗ j ⤇ K NONEV).
+  Proof.
     iIntros "Htwophase".
     iNamed "Htwophase".
     iNamed "Htwophase".
-    iMod (ghost_step_jrnl_atomically_abort with "[$] [$] [$]") as "$"; auto.
-    iExists _, _, _, _.
+    iApply ncfupd_wpc_nval.
+    iMod (ghost_step_jrnl_atomically_abort with "[$] [$] [$]") as "Hj"; auto.
+    (* iExists _, _, _, _. *)
     iDestruct (is_twophase_locks_get_pures with "Hlocks")
       as "#Hlocks_pures".
     iNamed "Hlocks_pures".
-    iFrame "∗ %".
     iNamed "Hjrnl".
     iDestruct (na_crash_inv_status_wand_sepM with "Hcrash_invs") as
       "#Hstatuses".
     iDestruct (
-      na_crash_inv_open_modify_ncfupd_sepM _ _ _ _
+      crash_borrow_wpc_nval_sepM ⊤ _ _
       (λ a vobj,
         twophase_pre_crash_inv_pred jrnl_mapsto_own γ a (committed vobj)
       )
@@ -455,11 +453,9 @@ Section proof.
       )%I
       with
       "Hcrash_invs [Hjrnl_mem Hjrnl_durable_frag]"
-    ) as "> [Htoks Hcrash_invs]".
+    ) as "H". (* "> [Htoks Hcrash_invs]". *)
     {
       iIntros "Hpreds".
-      iApply big_sepM_later_2 in "Hpreds".
-      iMod "Hpreds".
       iDestruct (big_sepM_sep with "Hpreds") as "[Hjrnl_mapstos Hpreds]".
       iDestruct (big_sepM_sep with "Hpreds")
         as "[Hdurable_mapstos %Hcommitted_valids]".
@@ -477,14 +473,20 @@ Section proof.
       iDestruct (big_sepM_sep with "[$Hdurable_mapstos $Hjrnl_mapstos]")
         as "Hpreds".
       iApply (big_sepM_impl with "Hpreds").
-      iIntros (a vobj) "!> %Hacc [Hdurable_mapsto Hjrnl_mapsto] !>".
+      iIntros (a vobj) "!> %Hacc [Hdurable_mapsto Hjrnl_mapsto]".
       iFrame.
       iPureIntro.
       apply Hcommitted_valids.
       assumption.
     }
+    iModIntro.
+    iApply (wpc_nval_strong_mono with "H").
+    iNext. iIntros "[Htoks Hcrash_invs]".
     iDestruct (big_sepM_sep with "[$Htoks $Hcrash_invs]") as "Hcrash_invs".
     iModIntro.
+    iFrame.
+    iExists _, _, _, _.
+    iFrame "∗ %".
     iSplit; last by auto.
     iApply big_sepS_set_map.
     {
@@ -511,7 +513,6 @@ Section proof.
     rewrite /mapsto_valid in Hacc.
     rewrite /mapsto_valid //.
   Qed.
-   *)
 
   Theorem wp_Txn__ReleaseAll' l γ γ' objs_dom :
     {{{ is_twophase_releasable l γ γ' objs_dom }}}
@@ -744,8 +745,8 @@ Section proof.
     nclose sN ⊆ E →
     jrnl_alloc la u -∗
     is_twophase_started l γ γ' dinit objs_dom j K0 e0 (K e)
-    -∗ |NC={E}=>
-      ∃ σj1 σj2 mt_changed (ls: sval),
+    -∗ wpc_nval E
+      (∃ σj1 σj2 mt_changed (ls: sval),
         "%Hin" ∷ ⌜ (jrnlAllocs σj1 !! la = Some u) ⌝ ∗
         "Hj" ∷ j ⤇ K0 (Atomically ls e0) ∗
         "Htwophase" ∷ is_twophase_raw
@@ -762,9 +763,8 @@ Section proof.
         "#Hjrnl_dom" ∷ jrnl_dom objs_dom ∗
         "%Hnotstuck" ∷ ⌜ (∃ s g, jrnl_sub_state σj2 s ∧
          dom (gset _) (jrnlData (get_jrnl s.(world))) = objs_dom ∧
-         ¬ stuck' (K e) s g) ⌝.
-  Proof. Admitted.
-  (*
+         ¬ stuck' (K e) s g) ⌝).
+  Proof.
     iIntros (?) "#Hjrnl_alloc1". iNamed 1.
     iNamed "Htwophase".
     iDestruct (na_crash_inv_status_wand_sepM with "Hcrash_invs") as
@@ -779,7 +779,7 @@ Section proof.
     assert (jrnlKinds (updateAllocs σj1 la u) = jrnlKinds σj1) as Heq_kinds_update.
     { destruct σj1; eauto. }
     iDestruct (
-      na_crash_inv_open_modify_ncfupd_sepM _ _ _ _
+      crash_borrow_wpc_nval_sepM E _ _
       (λ a vobj,
         twophase_pre_crash_inv_pred jrnl_mapsto_own γ a (committed vobj)
       )
@@ -793,11 +793,9 @@ Section proof.
       )%I
       with
       "Hcrash_invs [Hj]"
-    ) as "> [HR Hcrash_invs]".
+    ) as "H". (* "> [HR Hcrash_invs]". *)
     {
       iIntros "Hpreds".
-      iApply big_sepM_later_2 in "Hpreds".
-      iMod "Hpreds".
       iDestruct (big_sepM_sep with "Hpreds") as "(Hjrnl_mapstos&Hpreds)".
       iDestruct (big_sepM_sep with "Hpreds") as "(Hdurables&%Hvalids_c)".
       iDestruct (big_sepM_sep with "Hjrnl_mapstos")
@@ -823,13 +821,15 @@ Section proof.
       iDestruct (big_sepM_sep with "[$Htoks $Hdurables]") as "Hpreds".
       iDestruct (big_sepM_sep with "[$Hpreds $Hjrnl_mapstos]") as "Hpreds".
       iApply (big_sepM_mono with "Hpreds").
-      iIntros (a vobj Hacc) "[[Htok Hdurable] Hcrash_inv] !>".
+      iIntros (a vobj Hacc) "[[Htok Hdurable] Hcrash_inv]".
       iFrame.
       iPureIntro.
       apply Hvalids in Hacc.
       rewrite /mapsto_valid in Hacc.
       rewrite /mapsto_valid //.
     }
+    iApply (wpc_nval_strong_mono with "H").
+    iIntros "!> [HR Hcrash_invs]".
     iNamed "HR".
 
     iModIntro.
@@ -840,7 +840,6 @@ Section proof.
     iSplit; first by iFrame "∗ # %".
     iFrame "# %".
   Qed.
-   *)
 
   Lemma twophase_started_ub_det' l γ γ' dinit objs_dom E j K0 K
         `{Hctx: LanguageCtx'
@@ -850,8 +849,8 @@ Section proof.
           K} e0 e :
     nclose sN ⊆ E →
     is_twophase_started l γ γ' dinit objs_dom j K0 e0 (K e)
-    -∗ |NC={E}=>
-      ∃ σj1 σj2 mt_changed (ls: sval),
+    -∗ wpc_nval E
+      (∃ σj1 σj2 mt_changed (ls: sval),
         "Hj" ∷ j ⤇ K0 (Atomically ls e0) ∗
         "Htwophase" ∷ is_twophase_raw
           l γ γ' dinit jrnl_mapsto_own objs_dom mt_changed ∗
@@ -867,15 +866,14 @@ Section proof.
         "#Hjrnl_dom" ∷ jrnl_dom objs_dom ∗
         "%Hnotstuck" ∷ ⌜ (∃ s g, jrnl_sub_state σj2 s ∧
          dom (gset _) (jrnlData (get_jrnl s.(world))) = objs_dom ∧
-         ¬ stuck' (K e) s g) ⌝.
-  Proof. Admitted.
-  (*
+         ¬ stuck' (K e) s g) ⌝).
+  Proof.
     iIntros (?). iNamed 1.
     iNamed "Htwophase".
     iDestruct (na_crash_inv_status_wand_sepM with "Hcrash_invs") as
       "#Hstatuses".
     iDestruct (
-      na_crash_inv_open_modify_ncfupd_sepM _ _ _ _
+      crash_borrow_wpc_nval_sepM E _ _
       (λ a vobj,
         twophase_pre_crash_inv_pred jrnl_mapsto_own γ a (committed vobj)
       )
@@ -889,11 +887,9 @@ Section proof.
       )%I
       with
       "Hcrash_invs [Hj]"
-    ) as "> [HR Hcrash_invs]".
+    ) as "H". (* "> [HR Hcrash_invs]". *)
     {
       iIntros "Hpreds".
-      iApply big_sepM_later_2 in "Hpreds".
-      iMod "Hpreds".
       iDestruct (big_sepM_sep with "Hpreds") as "(Hjrnl_mapstos&Hpreds)".
       iDestruct (big_sepM_sep with "Hpreds") as "(Hdurables&%Hvalids_c)".
       iDestruct (big_sepM_sep with "Hjrnl_mapstos")
@@ -915,13 +911,15 @@ Section proof.
       iDestruct (big_sepM_sep with "[$Htoks $Hdurables]") as "Hpreds".
       iDestruct (big_sepM_sep with "[$Hpreds $Hjrnl_mapstos]") as "Hpreds".
       iApply (big_sepM_mono with "Hpreds").
-      iIntros (a vobj Hacc) "[[Htok Hdurable] Hcrash_inv] !>".
+      iIntros (a vobj Hacc) "[[Htok Hdurable] Hcrash_inv]".
       iFrame.
       iPureIntro.
       apply Hvalids in Hacc.
       rewrite /mapsto_valid in Hacc.
       rewrite /mapsto_valid //.
     }
+    iApply (wpc_nval_strong_mono with "H").
+    iIntros "!> [HR Hcrash_invs]".
     iNamed "HR".
 
     iModIntro.
@@ -930,7 +928,6 @@ Section proof.
     iSplit; first by iFrame "∗ # %".
     by iFrame "# %".
   Qed.
-   *)
 
 
   Lemma twophase_started_ub_det l γ γ' dinit objs_dom E j K0 K
@@ -942,17 +939,19 @@ Section proof.
     nclose sN ⊆ E →
     (∀ s g, stuck' e s g) →
     is_twophase_started l γ γ' dinit objs_dom j K0 e0 (K e)
-    -∗ |NC={E}=> False.
+    -∗ wpc_nval E False.
   Proof.
-    iIntros. iMod (twophase_started_ub_det' with "[$]") as "H".
+    iIntros. iDestruct (twophase_started_ub_det' with "[$]") as "H".
     { eauto. }
-    iNamed "H".
+    iApply (wpc_nval_strong_mono with "H").
+    iNext. iNamed 1.
     iExFalso.
     iPureIntro.
     destruct Hnotstuck as (s&g&Hsub&Hdom&Hnstuck).
     eapply Hnstuck.
     eapply stuck'_fill; eauto.
   Qed.
+  Opaque crash_borrow.
 
   Theorem wp_Txn__ReadBuf' l γ γ' dinit objs_dom j K0 K
           {Hctx: LanguageCtx'
@@ -972,12 +971,14 @@ Section proof.
     }}}.
   Proof.
     iIntros (Φ) "Htwophase HΦ".
-    iMod (twophase_started_ub_det' with "[$]") as "Htwophase".
+    rewrite /Txn__ReadBuf'.
+    iDestruct (twophase_started_ub_det' with "[$]") as "Htwophase".
     { auto. }
-    iNamed "Htwophase".
+    wp_bind (addr2val a, #sz)%E.
+    iApply (wpc_nval_elim_wp with "Htwophase"); auto.
+    wp_pures. iModIntro. iNamed 1.
     iDestruct (is_twophase_wf_jrnl with "Htwophase") as "%Hwf_jrnl";
       [eassumption|eassumption|].
-    rewrite /Txn__ReadBuf'.
 
 
     destruct Hnotstuck as (s&g&Hsub&Hdom&Hnotstuck).
@@ -993,17 +994,15 @@ Section proof.
       eauto.
     }
 
-    Opaque crash_borrow.
-
     wp_apply (wp_Txn__ReadBuf_raw with "Htwophase");
       [assumption|rewrite Hk -Hsz //|].
     iIntros (????) "Hpost".
     iNamed "Hpost".
     apply data_has_obj_wf in Hdata as Hwf.
     rewrite /block_bytes in Hwf.
+    iDestruct (is_twophase_raw_get_valid with "Htwophase") as "%Hvalids".
     wp_apply (wp_SliceToList with "Hdata_s");
       first by (rewrite list_untype_length; lia).
-    iDestruct (is_twophase_raw_get_valid with "Htwophase") as "%Hvalids".
     apply fmap_Some_1 in Hobj as [vobj [Hvobj ->]].
     apply Hvalids in Hvobj as Hvobj_valid.
     destruct Hvobj_valid as (Hvalid_addr&Hvalid_off&Hvalid_γ).
@@ -1119,6 +1118,15 @@ Section proof.
     }}}.
   Proof.
     iIntros (Φ) "Htwophase HΦ".
+    iDestruct (twophase_started_ub_det' with "[$]") as "Htwophase".
+    { auto. }
+    rewrite /Txn__ReadBufBit.
+    wp_bind (addr2val a)%E.
+    iApply (wpc_nval_elim_wp with "Htwophase"); auto.
+    wp_pures. iModIntro. iNamed 1.
+    iDestruct (is_twophase_wf_jrnl with "Htwophase") as "%Hwf_jrnl";
+      [eassumption|eassumption|].
+
     iMod (twophase_started_ub_det' with "[$]") as "Htwophase".
     { auto. }
     iNamed "Htwophase".
