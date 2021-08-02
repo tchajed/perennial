@@ -468,6 +468,22 @@ Proof.
     iModIntro. rewrite -!later_laterN !laterN_later.
     iNext. iNext. by iMod "H".
 Qed.
-
 End step_fupd2.
 
+Lemma step_fupd2N_soundness_strong `{HIPRE: !invGpreS Σ} φ n :
+  (∀ `{Hinv: !invGS Σ} (Heq_pre: inv_inG = HIPRE), ⊢@{iPropI Σ} ||={⊤|⊤,∅|∅}=> ||▷=>^n ⌜ φ ⌝) →
+  φ.
+Proof.
+  intros Hiter.
+  apply (soundness (M:=iResUR Σ) _  (S n)); simpl.
+  apply (fupd2_plain_soundness_strong ⊤ ⊤ ⊤ ⊤); auto.
+  { apply _. }
+  intros Hinv Heq.
+  iPoseProof (Hiter Hinv) as "H"; first done. clear Hiter.
+  iApply fupd2_plainly_mask_empty. iMod "H".
+  iPoseProof (step_fupd2N_plain _ _ _ ⌜φ⌝%I with "[H]") as "H".
+  { iApply (step_fupd2N_wand with "H"). iIntros "H !>". eauto. }
+  rewrite -later_plainly -laterN_plainly -later_laterN laterN_later.
+  iMod "H". iModIntro.
+  iNext. iMod "H" as %Hφ. auto.
+Qed.
