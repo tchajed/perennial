@@ -5,15 +5,26 @@ From iris.prelude Require Import options.
 
 (** *
 
-Like gmap_view.v from Iris, except that we parameterize by an additional
-step-indexed relation, R. Recall that in gmap_view, at step index n if there is
-a fragment k ↦ v, then the auth map m must have m !! k = v' where v is
-equivalent to v' at n.  Here, instead, we would merely require that R n v' v
-holds.
+Like gmap_view.v from Iris, except that fragments might only "approximate" the
+authoritative copy of a value.
 
-The idea is that by making R a relation that captures some notion of
-"approximation", we allow for the fragments to have an approximate view of the
-values associated with keys.
+More precisely, recall that in gmap_view, at step index n if there is a fragment
+k ↦ v, then the auth map m must have m !! k = v' where v is equivalent to v' at
+n. In this library, we instead further parameterize things by a step-indexed
+relation R, and we allow fragments to not just have the key value, but
+auxilliary information a, so that a fragment can be thought of as points-tos of the form
+k ↦ (v, a). The existence of such a fragment at step index n implies that there
+exists some vm such that m !! k = vm and the relation R n vm v a.
+
+Ownership of k can be fractional so we might have that k ↦{q1} (v1, a1) and k
+↦{q2} (v2, a2), in which case we can conclude the usual restrictions on q1 and
+q2 summing up to <= 1, v1 = v2, and that there must be some vm such that R n vm
+v1 a1 and R n vm v2 a2 for all n. This allows us to enforce that the auxilliary
+information a1 and a2 have to be "coherent" in some sense.
+
+The intended use case is to model the status of an asynchronous disk, where with
+k ↦ (b, bs), b would be the current block contents of k, and bs would be a set of
+block contents that could be there after a crash.
 
 *)
 
