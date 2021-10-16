@@ -320,7 +320,6 @@ Section lemmas.
     { rewrite singleton_validN ?pair_validN. naive_solver. }
     intros k' q' v' aset' Hlookup. destruct HR as (vm&HR). exists vm. intros a' Hin.
     apply dist_Some_inv_r' in Hlookup as (?&Heq1&Heq2).
-    Search lookup "singleton" Some.
     revert Heq1. rewrite lookup_singleton_Some. intros (->&<-).
     destruct Heq2 as [? [Hag Hset]].
     simpl in Hag, Hset. apply leibniz_equiv_iff in Hset. subst.
@@ -352,7 +351,8 @@ Section lemmas.
     ✓{n} (gmap_rel_view_frag R k dq1 a1 v1 ⋅ gmap_rel_view_frag R k dq2 a2 v2) →
       ✓ (dq1 ⋅ dq2) ∧ v1 ≡{n}≡ v2.
   Proof.
-    rewrite view_frag_validN. intros Hrel%gmap_rel_view_rel_exists_l1.
+    rewrite view_frag_validN.
+    intros Hrel%gmap_rel_view_rel_exists_l1.
     revert Hrel. rewrite singleton_op singleton_validN.
     rewrite -?pair_op ?pair_validN to_agree_op_validN //.
     set_solver.
@@ -375,66 +375,88 @@ Section lemmas.
   Qed.
 
   Lemma gmap_rel_view_frag_op_validN n k dq1 dq2 a1 a2 v1 v2 :
-    (∃ vm, R n vm v1 a1) →
     ✓{n} (gmap_rel_view_frag R k dq1 a1 v1 ⋅ gmap_rel_view_frag R k dq2 a2 v2) ↔
-      ✓ (dq1 ⋅ dq2) ∧ v1 ≡{n}≡ v2.
+      ✓ (dq1 ⋅ dq2) ∧ v1 ≡{n}≡ v2 ∧ (∃ vm, R n vm v1 a1 ∧ R n vm v1 a2).
   Proof.
-    intros HR.
+    split; first by (apply gmap_rel_view_frag_op_validN_l).
+    intros [Hqval [Hvequiv Hexm]].
     rewrite view_frag_validN gmap_rel_view_rel_exists; last first.
     { intros k' q' v' aset'. simpl.
       rewrite singleton_op -?pair_op => Hlookup.
       symmetry in Hlookup. eapply dist_Some_inv_l in Hlookup as (z&Heq1&Heq2); eauto.
       apply lookup_singleton_Some in Heq1 as [? ?]. subst.
-      eapply lookup_singleton in Heq1.
-    edestruct (dist_Some_inv_l _ _ _ _ Hm Hm1) as (vm' & Hm2 & Hv).
-      Search "singleton". rewrite lookup_singleton.
+      destruct Hexm as (vm&HR1&HR2).
+      exists vm. intros a Hin.
+      destruct Heq2 as [_ [Hvagree Haset]].
+      simpl in Haset. apply leibniz_equiv_iff in Haset. rewrite Haset in Hin. set_unfold in Hin.
+      simpl in Hvagree.
+      assert (v' ≡{n}≡ v1).
+      { symmetry. apply to_agree_includedN. exists (to_agree v2). auto. }
+      destruct Hin as [ -> | -> ]; eauto using gval_rel_mono.
+    }
+    rewrite singleton_op singleton_validN -?pair_op ?pair_validN to_agree_op_validN. naive_solver.
+  Qed.
 
-      rewrite view_frag_op. /destruct HR as (vm&HR). exists vm.
-      intros a Hin. rewrite 
-    singleton_op singleton_validN.
-    by rewrite -pair_op pair_validN to_agree_op_validN.
-  Qed.
-  Lemma gmap_rel_view_frag_op_valid k dq1 dq2 v1 v2 :
-    ✓ (gmap_rel_view_frag R k dq1 v1 ⋅ gmap_rel_view_frag R k dq2 v2) ↔ ✓ (dq1 ⋅ dq2) ∧ v1 ≡ v2.
+  Lemma gmap_rel_view_frag_op_valid_l k dq1 dq2 a1 a2 v1 v2 :
+    ✓ (gmap_rel_view_frag R k dq1 a1 v1 ⋅ gmap_rel_view_frag R k dq2 a2 v2) →
+      ✓ (dq1 ⋅ dq2) ∧ v1 ≡ v2 ∧ (∀ n, ∃ vm, R n vm v1 a1 ∧ R n vm v1 a2).
   Proof.
-    rewrite view_frag_valid. setoid_rewrite gmap_rel_view_rel_exists.
-    rewrite -cmra_valid_validN singleton_op singleton_valid.
-    by rewrite -pair_op pair_valid to_agree_op_valid.
+    intros Hrel.
+    split_and!.
+    - revert Hrel. rewrite cmra_valid_validN. intros Hrel.
+      specialize (Hrel O). edestruct (gmap_rel_view_frag_op_validN_l); naive_solver. 
+    - revert Hrel. rewrite cmra_valid_validN. intros Hrel.
+      apply equiv_dist => n.
+      specialize (Hrel n). edestruct (gmap_rel_view_frag_op_validN_l); naive_solver.
+    - intros n. revert Hrel. rewrite cmra_valid_validN. intros Hrel.
+      specialize (Hrel n). edestruct (gmap_rel_view_frag_op_validN_l); naive_solver.
   Qed.
+
+  Lemma gmap_rel_view_frag_op_valid k dq1 dq2 a1 a2 v1 v2 :
+    ✓ (gmap_rel_view_frag R k dq1 a1 v1 ⋅ gmap_rel_view_frag R k dq2 a2 v2) ↔
+      ✓ (dq1 ⋅ dq2) ∧ v1 ≡ v2 ∧ (∀ n, ∃ vm, R n vm v1 a1 ∧ R n vm v1 a2).
+  Proof.
+    split; first eapply gmap_rel_view_frag_op_valid_l.
+    intros [Hqval [Hvequiv Hexm]].
+    rewrite cmra_valid_validN. intros n.
+    apply gmap_rel_view_frag_op_validN. split_and!; auto.
+  Qed.
+
   (* FIXME: Having a [valid_L] lemma is not consistent with [auth] and [view]; they
      have [inv_L] lemmas instead that just have an equality on the RHS. *)
-  Lemma gmap_rel_view_frag_op_valid_L `{!LeibnizEquiv V} k dq1 dq2 v1 v2 :
-    ✓ (gmap_rel_view_frag R k dq1 v1 ⋅ gmap_rel_view_frag R k dq2 v2) ↔ ✓ (dq1 ⋅ dq2) ∧ v1 = v2.
+  Lemma gmap_rel_view_frag_op_valid_L `{!LeibnizEquiv V} k dq1 dq2 a1 a2 v1 v2 :
+    ✓ (gmap_rel_view_frag R k dq1 a1 v1 ⋅ gmap_rel_view_frag R k dq2 a2 v2) ↔
+    ✓ (dq1 ⋅ dq2) ∧ v1 = v2 ∧ (∀ n, ∃ vm, R n vm v1 a1 ∧ R n vm v1 a2).
   Proof. unfold_leibniz. apply gmap_rel_view_frag_op_valid. Qed.
 
-  Lemma gmap_rel_view_both_frac_validN' n q m k dq v :
-    ✓{n} (gmap_rel_view_auth R q m ⋅ gmap_rel_view_frag R k dq v) ↔
-      ∃ vm, (q ≤ 1)%Qp ∧ ✓ dq ∧ m !! k = Some vm ∧ R n vm v.
+  Lemma gmap_rel_view_both_frac_validN' n q m k dq a v :
+    ✓{n} (gmap_rel_view_auth R q m ⋅ gmap_rel_view_frag R k dq a v) ↔
+      ∃ vm, (q ≤ 1)%Qp ∧ ✓ dq ∧ m !! k = Some vm ∧ R n vm v a.
   Proof.
     rewrite /gmap_rel_view_auth /gmap_rel_view_frag.
     rewrite view_both_dfrac_validN gmap_rel_view_rel_lookup'.
     naive_solver.
   Qed.
-  Lemma gmap_rel_view_both_frac_validN n q m k dq v :
-    ✓{n} (gmap_rel_view_auth R q m ⋅ gmap_rel_view_frag R k dq v) ↔
-      ∃ vm, (q ≤ 1)%Qp ∧ ✓ dq ∧ m !! k ≡{n}≡ Some vm ∧ R n vm v.
+  Lemma gmap_rel_view_both_frac_validN n q m k dq a v :
+    ✓{n} (gmap_rel_view_auth R q m ⋅ gmap_rel_view_frag R k dq a v) ↔
+      ∃ vm, (q ≤ 1)%Qp ∧ ✓ dq ∧ m !! k ≡{n}≡ Some vm ∧ R n vm v a.
   Proof.
     rewrite /gmap_rel_view_auth /gmap_rel_view_frag.
     rewrite view_both_dfrac_validN gmap_rel_view_rel_lookup.
     naive_solver.
   Qed.
-  Lemma gmap_rel_view_both_validN' n m k dq v :
-    ✓{n} (gmap_rel_view_auth R 1 m ⋅ gmap_rel_view_frag R k dq v) ↔
-      ∃ vm, ✓ dq ∧ m !! k = Some vm ∧ R n vm v.
+  Lemma gmap_rel_view_both_validN' n m k dq a v :
+    ✓{n} (gmap_rel_view_auth R 1 m ⋅ gmap_rel_view_frag R k dq a v) ↔
+      ∃ vm, ✓ dq ∧ m !! k = Some vm ∧ R n vm v a.
   Proof. rewrite gmap_rel_view_both_frac_validN'. naive_solver done. Qed.
-  Lemma gmap_rel_view_both_validN n m k dq v :
-    ✓{n} (gmap_rel_view_auth R 1 m ⋅ gmap_rel_view_frag R k dq v) ↔
-      ∃ vm, ✓ dq ∧ m !! k ≡{n}≡ Some vm ∧ R n vm v.
+  Lemma gmap_rel_view_both_validN n m k dq a v :
+    ✓{n} (gmap_rel_view_auth R 1 m ⋅ gmap_rel_view_frag R k dq a v) ↔
+      ∃ vm, ✓ dq ∧ m !! k ≡{n}≡ Some vm ∧ R n vm v a.
   Proof. rewrite gmap_rel_view_both_frac_validN. naive_solver done. Qed.
 
-  Lemma gmap_rel_view_both_frac_valid q m k dq v :
-    ✓ (gmap_rel_view_auth R q m ⋅ gmap_rel_view_frag R k dq v) ↔
-    ∃ vm, (q ≤ 1)%Qp ∧ ✓ dq ∧ m !! k = Some vm ∧ (∀ n, R n vm v).
+  Lemma gmap_rel_view_both_frac_valid q m k dq a v :
+    ✓ (gmap_rel_view_auth R q m ⋅ gmap_rel_view_frag R k dq a v) ↔
+    ∃ vm, (q ≤ 1)%Qp ∧ ✓ dq ∧ m !! k = Some vm ∧ (∀ n, R n vm v a).
   Proof.
     rewrite /gmap_rel_view_auth /gmap_rel_view_frag.
     rewrite view_both_dfrac_valid. setoid_rewrite gmap_rel_view_rel_lookup'.
@@ -446,45 +468,46 @@ Section lemmas.
       + apply Hm.
       + naive_solver.
   Qed.
-  Lemma gmap_rel_view_both_frac_valid_L `{!LeibnizEquiv V} q m k dq v :
-    ✓ (gmap_rel_view_auth R q m ⋅ gmap_rel_view_frag R k dq v) ↔
-    ∃ vm, ✓ q ∧ ✓ dq ∧ m !! k = Some vm ∧ (∀ n, R n vm v).
+  Lemma gmap_rel_view_both_frac_valid_L `{!LeibnizEquiv V} q m k dq a v :
+    ✓ (gmap_rel_view_auth R q m ⋅ gmap_rel_view_frag R k dq a v) ↔
+    ∃ vm, ✓ q ∧ ✓ dq ∧ m !! k = Some vm ∧ (∀ n, R n vm v a).
   Proof.
     rewrite gmap_rel_view_both_frac_valid.
     unfold_leibniz. naive_solver.
   Qed.
-  Lemma gmap_rel_view_both_valid m k dq v :
-    ✓ (gmap_rel_view_auth R 1 m ⋅ gmap_rel_view_frag R k dq v) ↔
-    ∃ vm, ✓ dq ∧ m !! k = Some vm ∧ (∀ n, R n vm v).
+  Lemma gmap_rel_view_both_valid m k dq a v :
+    ✓ (gmap_rel_view_auth R 1 m ⋅ gmap_rel_view_frag R k dq a v) ↔
+    ∃ vm, ✓ dq ∧ m !! k = Some vm ∧ (∀ n, R n vm v a).
   Proof. rewrite gmap_rel_view_both_frac_valid. naive_solver done. Qed.
   (* FIXME: Having a [valid_L] lemma is not consistent with [auth] and [view]; they
      have [inv_L] lemmas instead that just have an equality on the RHS. *)
-  Lemma gmap_rel_view_both_valid_L `{!LeibnizEquiv V} m k dq v :
-    ✓ (gmap_rel_view_auth R 1 m ⋅ gmap_rel_view_frag R k dq v) ↔
-    ∃ vm, ✓ dq ∧ m !! k = Some vm ∧ (∀ n, R n vm v).
+  Lemma gmap_rel_view_both_valid_L `{!LeibnizEquiv V} m k dq a v :
+    ✓ (gmap_rel_view_auth R 1 m ⋅ gmap_rel_view_frag R k dq a v) ↔
+    ∃ vm, ✓ dq ∧ m !! k = Some vm ∧ (∀ n, R n vm v a).
   Proof. apply gmap_rel_view_both_valid. Qed.
 
   (** Frame-preserving updates *)
-  Lemma gmap_rel_view_alloc m k dq v :
+  Lemma gmap_rel_view_alloc m k dq vm a v :
+    (∀ n, R n vm v a) →
     m !! k = None →
     ✓ dq →
-    gmap_rel_view_auth R 1 m ~~> gmap_rel_view_auth R 1 (<[k := v]> m) ⋅ gmap_rel_view_frag R k dq v.
+    gmap_rel_view_auth R 1 m ~~> gmap_rel_view_auth R 1 (<[k := vm]> m) ⋅ gmap_rel_view_frag R k dq a v.
   Proof.
-    intros Hfresh Hdq. apply view_update_alloc=>n bf Hrel j [df va] /=.
+    intros HRnew Hfresh Hdq. apply view_update_alloc=>n bf Hrel j [df va] /=.
     rewrite lookup_op. destruct (decide (j = k)) as [->|Hne].
     - assert (bf !! k = None) as Hbf.
       { destruct (bf !! k) as [[df' va']|] eqn:Hbf; last done.
-        specialize (Hrel _ _ Hbf). destruct Hrel as (v' & vm'  & _ & _ & Hm & HR).
+        specialize (Hrel _ _ Hbf). destruct Hrel as (v' & aset & vm' & _ & _ & Hm & HR).
         exfalso. rewrite Hm in Hfresh. done. }
       rewrite lookup_singleton Hbf right_id.
-      intros [= <- <-]. eexists v, v.
+      intros [= <- <-]. eexists v, {[a]}, vm.
       do 2 (split; first done).
       rewrite lookup_insert. split; first done.
-      apply gval_rel_refl.
+      set_unfold; naive_solver.
     - rewrite lookup_singleton_ne; last done.
       rewrite left_id=>Hbf.
-      specialize (Hrel _ _ Hbf). destruct Hrel as (v' & vm' & ? & ? & Hm & HR).
-      eexists _, vm'. do 2 (split; first done).
+      specialize (Hrel _ _ Hbf). destruct Hrel as (v' & aset & vm' & ? & ? & Hm & HR).
+      eexists _, aset, vm'. do 2 (split; first done).
       rewrite lookup_insert_ne //.
   Qed.
 
