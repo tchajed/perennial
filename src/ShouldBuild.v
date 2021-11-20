@@ -33,28 +33,6 @@ From Perennial.program_proof.examples Require
      all_examples
 .
 
-(* TODO: refactoring in progress
-From Perennial.program_proof.lockservice Require
-     bank_proof incr_proof incr_proxy_proof two_pc_example. *)
-
-(* In-memory sharded KV system *)
-From Perennial.program_proof.memkv Require
-     rpc_proof
-     connman_proof
-     memkv_clerk_proof memkv_shard_start_proof memkv_shard_make_proof memkv_coord_make_proof
-     memkv_clerk_proof
-     lockservice_proof bank_proof
-     closed.
-
-From Goose.github_com.mit_pdos.gokv Require
-     pb.
-
-From Goose.github_com.mit_pdos.gokv.pb Require
-     controller.
-(*
-From Perennial.goose_lang Require
-     ffi.append_log_ffi.
-*)
 From Perennial.tutorial Require
      ipm_extensions.
 
