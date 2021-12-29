@@ -746,21 +746,29 @@ Proof.
   rewrite dom_singleton. set_solver.
 Qed.
 
+Lemma insert_jrnl_upd_heap a o σj σh s :
+  a ∉ dom (gset _) (jrnlData σj) →
+  jrnl_upd_heap (updateData σj a o) σh s =
+  jrnl_upd_heap σj σh (jrnl_upd ({| jrnlData := {[ a := o]};
+                           jrnlKinds := jrnlKinds σj;
+                           jrnlAllocs := jrnlAllocs σj|}) s).
+Proof. intros. rewrite /jrnl_upd_heap. rewrite insert_jrnl_upd //. Qed.
+
 Lemma always_steps_bind `{Hctx: LanguageCtx' (ext := @spec_ffi_op_field _)
                                              (ffi := (spec_ffi_model_field))
                                              (ffi_semantics := (spec_ext_semantics_field))
-                                             K} e1 e2 σj1 σj2 :
-  always_steps e1 σj1 e2 σj2 →
-  always_steps (K e1) σj1 (K e2) σj2.
+                                             K} e1 e2 σj1 σj2 σh1 σh2 :
+  always_steps e1 σj1 σh1 e2 σj2 σh2 →
+  always_steps (K e1) σj1 σh1 (K e2) σj2 σh2.
 Proof.
   rewrite /always_steps.
-  intros (?&?&Hstep). split_and!; eauto.
+  intros (?&?&?&Hstep). split_and!; eauto.
   intros s g Hsub. specialize (Hstep _ g Hsub).
   clear -Hstep Hctx.
   remember (e1, (s,g)) as ρ1 eqn:Hρ1.
-  remember (e2, (jrnl_upd σj2 s,g)) as ρ2 eqn:Hρ2.
+  remember (e2, (jrnl_upd_heap σj2 σh2 s,g)) as ρ2 eqn:Hρ2.
   revert Hρ1 Hρ2. destruct g.
-  generalize (jrnl_upd σj2 s) as s'.
+  generalize (jrnl_upd_heap σj2 σh2 s) as s'.
   revert e1 e2 s.
   induction Hstep.
   - intros. rewrite Hρ1 in Hρ2. inversion Hρ2. subst.
@@ -795,6 +803,16 @@ Proof.
     rewrite lookup_singleton_ne //=.
 Qed.
 
+Lemma insert_jrnl_sub_heap_state a o σj σh s:
+  jrnl_sub_heap_state (updateData σj a o ) σh s →
+  s = (jrnl_upd_heap ({| jrnlData := {[ a := o]};
+                           jrnlKinds := jrnlKinds σj;
+                           jrnlAllocs := jrnlAllocs σj|}) σh s).
+Proof.
+  intros (?&Hsub). rewrite /jrnl_upd_heap. rewrite -insert_jrnl_sub_state //.
+  rewrite /set. destruct s => //=; f_equal. rewrite map_subseteq_union //.
+Qed.
+
 Lemma wf_jrnl_extend σj a o:
   size_consistent_and_aligned a o (jrnlKinds σj) →
   wf_jrnl σj →
@@ -813,27 +831,30 @@ Proof.
     eapply Hwf; eauto.
 Qed.
 
-Lemma always_steps_extend e1 σj1 e2 σj2 a o :
+Lemma always_steps_extend e1 σj1 σh1 e2 σj2 σh2 a o :
   (a ∉ dom (gset _) (jrnlData σj2)) →
   size_consistent_and_aligned a o (jrnlKinds σj1) →
-  always_steps e1 σj1 e2 σj2 →
-  always_steps e1 (updateData σj1 a o)
-               e2 (updateData σj2 a o).
+  always_steps e1 σj1 σh1 e2 σj2 σh2 →
+  always_steps e1 (updateData σj1 a o) σh1
+               e2 (updateData σj2 a o) σh2.
 Proof.
-  intros Hdom Hconsistent (?&Hsub&Hstep).
+  intros Hdom Hconsistent (?&Hsub&?&Hstep).
   split_and!.
   - simpl. congruence.
   - destruct Hsub as (?&?&?&?&?). split_and! => //=.
-    * rewrite ?dom_insert_L H2. set_solver.
+    * rewrite ?dom_insert_L H3. set_solver.
     * apply wf_jrnl_extend; auto.
     * apply wf_jrnl_extend; auto. congruence.
+  - auto.
   - intros s g Hsub_state.
-    rewrite insert_jrnl_upd //.
-    rewrite {1}(insert_jrnl_sub_state _ _ _ _ Hsub_state).
+    rewrite insert_jrnl_upd_heap //.
+    destruct Hsub_state as (Hsub1&Hsub2).
+    rewrite {1}(insert_jrnl_sub_state _ _ _ _ Hsub1).
     apply Hstep.
-    rewrite /jrnl_sub_state.
-    destruct Hsub_state as (sj&Hworld&Hsub_data&?&Hsub_allocs).
+    rewrite /jrnl_sub_heap_state.
+    destruct Hsub1 as (sj&Hworld&Hsub_data&?&Hsub_allocs).
     rewrite /jrnl_upd/set//=. rewrite Hworld /=.
+    split; last done.
     eexists; split_and!; eauto => /=.
     intros i => /=.
     specialize (Hsub_data i).
@@ -846,25 +867,28 @@ Proof.
       rewrite lookup_insert_ne // in Hsub_data.
 Qed.
 
-Lemma always_steps_extend_allocs1 e1 σj1 e2 σj2 l u :
+Lemma always_steps_extend_allocs1 e1 σj1 σh1 e2 σj2 σh2 l u :
   (l ∉ dom (gset _) (jrnlAllocs σj2)) →
-  always_steps e1 σj1 e2 σj2 →
-  always_steps e1 (updateAllocs σj1 l u)
-               e2 (updateAllocs σj2 l u).
+  always_steps e1 σj1 σh1 e2 σj2 σh2 →
+  always_steps e1 (updateAllocs σj1 l u) σh1
+               e2 (updateAllocs σj2 l u) σh2.
 Proof.
-  intros Hdom (?&Hsub&Hstep).
+  intros Hdom (?&Hsub&?&Hstep).
   split_and!.
   - simpl. congruence.
   - destruct Hsub as (?&?&Ha&?&?). split_and! => //=.
     * rewrite ?dom_insert_L Ha. set_solver.
+  - auto.
   - intros s g Hsub_state.
-    assert (jrnl_upd (updateAllocs σj2 l u) s =
-            jrnl_upd σj2 s) as ->.
+    assert (jrnl_upd_heap (updateAllocs σj2 l u) σh2 s =
+            jrnl_upd_heap σj2 σh2 s) as ->.
     { rewrite /jrnl_upd/updateAllocs //=. }
     apply Hstep.
     rewrite /jrnl_sub_state.
+    destruct Hsub_state as (Hsub_state&?).
     destruct Hsub_state as (sj&Hworld&Hsub_data&?&Hsub_allocs).
-    rewrite /jrnl_upd/set//=. rewrite Hworld /=.
+    split; last done.
+    rewrite /jrnl_upd/set//=.
     eexists; split_and!; eauto => /=.
     intros i => /=.
     specialize (Hsub_allocs i).
@@ -877,11 +901,11 @@ Proof.
       rewrite lookup_insert_ne // in Hsub_allocs.
 Qed.
 
-Lemma always_steps_extend_allocs2 e1 σj1 e2 σj2 l u :
+Lemma always_steps_extend_allocs2 e1 σj1 σh1 e2 σj2 σh2 l u :
   (l ∉ dom (gset _) (jrnlAllocs σj1) ∨ jrnlAllocs σj1 !! l = Some u) →
-  always_steps e1 σj1 e2 σj2 →
-  always_steps e1 (updateAllocs σj1 l u)
-               e2 (updateAllocs σj2 l u).
+  always_steps e1 σj1 σh1 e2 σj2 σh2 →
+  always_steps e1 (updateAllocs σj1 l u) σh1
+               e2 (updateAllocs σj2 l u) σh2.
 Proof.
   intros [Hdom|Hlookup] Halways_steps. (* (?&Hsub&Hstep). *)
   { eapply always_steps_extend_allocs1; eauto.
@@ -908,23 +932,24 @@ Lemma always_steps_lifting_puredet K `{Hctx: LanguageCtx' (ext := @spec_ffi_op_f
                                              (ffi := (spec_ffi_model_field))
                                              (ffi_semantics := (spec_ext_semantics_field))
                                              K}:
-  ∀ e0 σ0 e1 σ1 e2,
+  ∀ e0 σ0 σh0 e1 σ1 σh1 e2,
   (∀ σ g, prim_step' e1 σ g [] e2 σ g []) →
-  always_steps e0 σ0 (K e1) σ1 →
-  always_steps e0 σ0 (K e2) σ1.
+  always_steps e0 σ0 σh0 (K e1) σ1 σh1 →
+  always_steps e0 σ0 σh0 (K e2) σ1 σh1.
 Proof.
-  intros e0 σ0 e1 σ1 e2 Hdet Hsteps.
+  intros e0 σ0 σh0 e1 σ1 σh1 e2 Hdet Hsteps.
   split_and!; eauto.
   { eapply Hsteps. }
   { eapply Hsteps. }
+  { eapply Hsteps. }
   intros s g Hsub.
-  destruct Hsteps as (?&?&Hrtc).
+  destruct Hsteps as (?&?&?&Hrtc).
   specialize (Hrtc _ g Hsub).
   eapply rtc_r; eauto.
   simpl. eapply fill_step'. eapply Hdet.
 Qed.
 
-Lemma always_steps_MarkUsedOp l n max σj:
+Lemma always_steps_MarkUsedOp l n max σj σh:
   wf_jrnl σj →
   jrnlAllocs σj !! l = Some max →
   (int.Z n < int.Z max) →
@@ -932,8 +957,10 @@ Lemma always_steps_MarkUsedOp l n max σj:
                            MarkUsedOp
                            (PairV #(LitLoc l) #(LitInt n)))
                σj
+               σh
                #()
-               σj.
+               σj
+               σh.
 Proof.
   intros Hwf Hlookup Hmax.
   split_and!; eauto.
@@ -941,7 +968,8 @@ Proof.
   intros s g Hsub.
   apply rtc_once.
   eapply (Ectx_step' _ _ _ _ _ _ _ _ []) => //=.
-  rewrite jrnl_upd_sub // /head_step//=.
+  rewrite jrnl_upd_heap_sub // /head_step//=.
+  destruct Hsub as (Hsub&?).
   rewrite /jrnl_sub_state in Hsub.
   destruct Hsub as (?&Heq&?&?&?).
   econstructor; last econstructor; eauto.
@@ -953,7 +981,7 @@ Proof.
   { rewrite /check/ifThenElse. rewrite decide_True //=. }
 Qed.
 
-Lemma always_steps_FreeNumOp l n max σj:
+Lemma always_steps_FreeNumOp l n max σj σh:
   wf_jrnl σj →
   jrnlAllocs σj !! l = Some max →
   (int.Z n ≠ 0 ∧ int.Z n < int.Z max) →
@@ -961,8 +989,10 @@ Lemma always_steps_FreeNumOp l n max σj:
                            FreeNumOp
                            (PairV #(LitLoc l) #(LitInt n)))
                σj
+               σh
                #()
-               σj.
+               σj
+               σh.
 Proof.
   intros Hwf Hlookup Hmax.
   split_and!; eauto.
@@ -970,7 +1000,8 @@ Proof.
   intros s g Hsub.
   apply rtc_once.
   eapply (Ectx_step' _ _ _ _ _ _ _ _ []) => //=.
-  rewrite jrnl_upd_sub // /head_step//=.
+  rewrite jrnl_upd_heap_sub // /head_step//=.
+  destruct Hsub as (Hsub&?).
   rewrite /jrnl_sub_state in Hsub.
   destruct Hsub as (?&Heq&?&?&?).
   econstructor; last econstructor; eauto.
@@ -982,7 +1013,7 @@ Proof.
   { rewrite /check/ifThenElse. rewrite decide_True //=. }
 Qed.
 
-Lemma always_steps_AllocOp l n max σj:
+Lemma always_steps_AllocOp l n max σj σh:
   wf_jrnl σj →
   jrnlAllocs σj !! l = Some max →
   (0 < int.Z max ∧ int.Z n < int.Z max) →
@@ -990,8 +1021,10 @@ Lemma always_steps_AllocOp l n max σj:
                            AllocOp
                            #(LitLoc l))
                σj
+               σh
                #(LitInt n)
-               σj.
+               σj
+               σh.
 Proof.
   intros Hwf Hlookup (Hgt0&Hmax).
   split_and!; eauto.
@@ -999,7 +1032,8 @@ Proof.
   intros s g Hsub.
   apply rtc_once.
   eapply (Ectx_step' _ _ _ _ _ _ _ _ []) => //=.
-  rewrite jrnl_upd_sub // /head_step//=.
+  rewrite jrnl_upd_heap_sub // /head_step//=.
+  destruct Hsub as (Hsub&?).
   rewrite /jrnl_sub_state in Hsub.
   destruct Hsub as (?&Heq&?&?&?).
   econstructor; last econstructor; eauto.
@@ -1011,7 +1045,7 @@ Proof.
   { rewrite /checkPf. rewrite decide_True_pi //=. }
 Qed.
 
-Lemma always_steps_NumFreeOp l n max σj:
+Lemma always_steps_NumFreeOp l n max σj σh:
   wf_jrnl σj →
   jrnlAllocs σj !! l = Some max →
   (int.Z n ≤ int.Z max) →
@@ -1019,8 +1053,10 @@ Lemma always_steps_NumFreeOp l n max σj:
                            NumFreeOp
                            #(LitLoc l))
                σj
+               σh
                #(LitInt n)
-               σj.
+               σj
+               σh.
 Proof.
   intros Hwf Hlookup Hmax.
   split_and!; eauto.
@@ -1028,7 +1064,8 @@ Proof.
   intros s g Hsub.
   apply rtc_once.
   eapply (Ectx_step' _ _ _ _ _ _ _ _ []) => //=.
-  rewrite jrnl_upd_sub // /head_step//=.
+  rewrite jrnl_upd_heap_sub // /head_step//=.
+  destruct Hsub as (Hsub&?).
   rewrite /jrnl_sub_state in Hsub.
   destruct Hsub as (?&Heq&?&?&?).
   econstructor; last econstructor; eauto.
@@ -1039,7 +1076,7 @@ Proof.
     rewrite Hlookup. econstructor; eauto. }
 Qed.
 
-Lemma always_steps_ReadBufOp a v (sz: u64) k σj:
+Lemma always_steps_ReadBufOp a v (sz: u64) k σj σh:
   wf_jrnl σj →
   jrnlData σj !! a = Some v →
   jrnlKinds σj !! (addrBlock a) = Some k →
@@ -1048,8 +1085,10 @@ Lemma always_steps_ReadBufOp a v (sz: u64) k σj:
                            ReadBufOp
                            (PairV (addr2val' a) #sz))
                σj
+               σh
                (val_of_obj' v)
-               σj.
+               σj
+               σh.
 Proof.
   intros Hwf Hlookup1 Hlookup2 Hk.
   split_and!; eauto.
@@ -1057,7 +1096,8 @@ Proof.
   intros s g Hsub.
   apply rtc_once.
   eapply (Ectx_step' _ _ _ _ _ _ _ _ []) => //=.
-  rewrite jrnl_upd_sub // /head_step//=.
+  rewrite jrnl_upd_heap_sub // /head_step//=.
+  destruct Hsub as (Hsub&Hsub').
   rewrite /jrnl_sub_state in Hsub.
   destruct Hsub as (?&Heq&?&?&?).
   destruct a as (ablk&aoff).
@@ -1073,7 +1113,7 @@ Proof.
   { rewrite /check/ifThenElse. rewrite decide_True //=. }
 Qed.
 
-Lemma always_steps_ReadBitOp a v σj:
+Lemma always_steps_ReadBitOp a v σj σh:
   wf_jrnl σj →
   jrnlData σj !! a = Some v →
   jrnlKinds σj !! (addrBlock a) = Some KindBit →
@@ -1081,8 +1121,10 @@ Lemma always_steps_ReadBitOp a v σj:
                            ReadBitOp
                            (addr2val' a))
                σj
+               σh
                (val_of_obj' v)
-               σj.
+               σj
+               σh.
 Proof.
   intros Hwf Hlookup1 Hlookup2.
   split_and!; eauto.
@@ -1090,7 +1132,8 @@ Proof.
   intros s g Hsub.
   apply rtc_once.
   eapply (Ectx_step' _ _ _ _ _ _ _ _ []) => //=.
-  rewrite jrnl_upd_sub // /head_step//=.
+  rewrite jrnl_upd_heap_sub // /head_step//=.
+  destruct Hsub as (Hsub&Hsub').
   rewrite /jrnl_sub_state in Hsub.
   destruct Hsub as (?&Heq&?&?&?).
   destruct a as (ablk&aoff).
@@ -1131,7 +1174,7 @@ Proof.
     * eapply Hwf. rewrite lookup_insert_ne in Hlookup'; eauto.
 Qed.
 
-Lemma always_steps_OverWriteOp a vs k σj:
+Lemma always_steps_OverWriteOp a vs k σj σh:
   wf_jrnl σj →
   is_Some (jrnlData σj !! a)  →
   jrnlKinds σj !! (addrBlock a) = Some k →
@@ -1140,8 +1183,10 @@ Lemma always_steps_OverWriteOp a vs k σj:
                            OverWriteOp
                            (PairV (addr2val' a) (val_of_obj' (objBytes vs))))
                σj
+               σh
                #()
-               (updateData σj a (objBytes vs)).
+               (updateData σj a (objBytes vs))
+               σh.
 Proof.
   intros Hwf (vs_old&Hlookup1) Hlookup2 Hk.
   split_and!; eauto.
@@ -1154,6 +1199,7 @@ Proof.
   intros s g Hsub.
   apply rtc_once.
   eapply (Ectx_step' _ _ _ _ _ _ _ _ []) => //=.
+  destruct Hsub as (Hsub&Hsub').
   rewrite /jrnl_sub_state in Hsub.
   destruct Hsub as (?&Heq&?&?&?).
   destruct a as (ablk&aoff).
@@ -1173,15 +1219,17 @@ Proof.
   }
   { rewrite //= Heq. repeat econstructor. }
   { rewrite //=. do 2 f_equal.
-    rewrite /jrnl_upd //=. rewrite /set. destruct s => //=.
-    do 2 f_equal. rewrite /updateData. rewrite /= in Heq.
+    rewrite /jrnl_upd_heap/jrnl_upd //=. rewrite /set. destruct s => //=.
+    do 2 f_equal.
+    { rewrite map_subseteq_union //. }
+    rewrite /updateData. rewrite /= in Heq.
     subst => //=. repeat f_equal.
     rewrite -insert_union_l.
     rewrite map_subseteq_union //.
   }
 Qed.
 
-Lemma always_steps_OverWriteBitOp a b k σj:
+Lemma always_steps_OverWriteBitOp a b k σj σh:
   wf_jrnl σj →
   is_Some (jrnlData σj !! a)  →
   jrnlKinds σj !! (addrBlock a) = Some k →
@@ -1190,8 +1238,11 @@ Lemma always_steps_OverWriteBitOp a b k σj:
                            OverWriteBitOp
                            (PairV (addr2val' a) (val_of_obj' (objBit b))))
                σj
+               σh
                #()
-               (updateData σj a (objBit b)).
+               (updateData σj a (objBit b))
+               σh
+               .
 Proof.
   intros Hwf (vs_old&Hlookup1) Hlookup2 Hk.
   split_and!; eauto.
