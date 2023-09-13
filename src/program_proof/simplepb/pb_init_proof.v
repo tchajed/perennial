@@ -2,19 +2,18 @@ From Perennial.base_logic Require Import lib.saved_prop.
 From Perennial.program_proof Require Import grove_prelude.
 From Goose.github_com.mit_pdos.gokv.simplepb Require Export pb.
 From Perennial.program_proof.simplepb Require Export pb_protocol.
-From Perennial.program_proof.simplepb Require Import pb_definitions config_protocol_proof
-     clerk_proof.
+From Perennial.program_proof.simplepb Require Import pb_definitions config_protocol_proof config_proof.
 From Perennial.program_proof.grove_shared Require Import urpc_proof.
 From iris.algebra Require Import mono_list.
 
 Section pb_init_proof.
 
-Context {pb_record:Sm.t}.
+Context {params:pbParams.t}.
+Import pbParams.
 Notation OpType := (Sm.OpType pb_record).
 Notation has_op_encoding := (Sm.has_op_encoding pb_record).
 Notation has_snap_encoding := (Sm.has_snap_encoding pb_record).
 Notation compute_reply := (Sm.compute_reply pb_record).
-Notation pbG := (pbG (pb_record:=pb_record)).
 Context `{!gooseGlobalGS Σ}.
 Context `{!pbG Σ}.
 
@@ -27,15 +26,15 @@ Definition pb_spec_list γ γsrv :=
     (U64 6, ApplyRo_spec γ);
     (U64 7, IncreaseCommit_spec γ γsrv)].
 
-Lemma pb_host_init host γsys γsrv :
+Lemma alloc_pb_rpcs host γsys γsrv :
   host c↦ ∅ ={⊤}=∗
-  is_pb_host host γsys γsrv.
+  is_pb_rpcs host γsys γsrv.
 Proof.
   iIntros "Hchan".
   iMod (alloc_is_urpc_list_pred host (pb_spec_list γsys γsrv) with "Hchan") as (γrpc) "H".
   { simpl. set_solver. }
   iModIntro.
-  rewrite is_pb_host_unfold.
+  rewrite is_pb_rpcs_unfold.
   iExists γrpc.
   simpl.
   iDestruct "H" as "(H1 & $ & $ & $ & $ & $ & $ & $ & _)".
@@ -44,6 +43,7 @@ Proof.
   set_solver.
 Qed.
 
+(* FIXME: make this global, not per-server by changing how to initialize idle replica servers *)
 Definition is_pb_sys_init_witness γ γsrv : iProp Σ :=
   is_sys_init_witness γ.(s_pb) ∗
   is_in_config γ γsrv (U64 0) ∗
@@ -101,7 +101,7 @@ Proof.
   lia.
 Qed.
 
-Lemma alloc_simplepb_system γsrvs :
+Lemma alloc_simplepb_last γsrvs :
   length γsrvs > 0 →
   (∀ γsrv, ⌜γsrv ∈ γsrvs⌝ → is_accepted_lb γsrv.(r_pb) (U64 0) [] ∗ is_epoch_lb γsrv.(r_pb) 0)
   ={⊤}=∗ ∃ γ,
@@ -141,6 +141,110 @@ Proof.
   iExists _; iFrame "#".
   iPureIntro.
   by apply elem_of_list_fmap_1.
+Qed.
+
+Lemma alloc_simplepb_system (configHost:u64) (extrahosts: list u64) :
+  extrahosts = [] → (* FIXME: get rid of this assumption *)
+  length initconf > 0 →
+  ([∗ list] h ∈ (initconf ++ extrahosts), h c↦ ∅) -∗
+  configHost c↦ ∅
+  ={⊤}=∗
+  ∃ γ,
+  (* committed log of operations *)
+   own_op_log γ [] ∗
+   is_pb_config_host configHost γ ∗
+
+  (* for each pb replica server:  *)
+  ([∗ list] host ∈ initconf ++ extrahosts,
+     ∃ γsrv,
+     is_pb_host host γ γsrv ∗
+     (own_Server_ghost_f γ γsrv 0 [] false)
+  ) ∗
+
+  (* for the config server:  *)
+  (∃ γconf,
+    is_config_host configHost γconf ∗
+    makeConfigServer_pre γconf initconf
+  )
+.
+Proof.
+  intros.
+  iIntros "Hchans HconfChans".
+  subst. rewrite app_nil_r.
+  iAssert (|={⊤}=> [∗ list] h ∈ initconf (* ++ extrahosts*),
+             ∃ γsrv,
+           is_server_prealloc_witness γsrv ∗
+           (∀ γ, is_pb_sys_init_witness γ γsrv -∗ own_Server_ghost_f γ γsrv (U64 0) [] false)
+           )%I with "[]" as ">Hpresrvs".
+  {
+    iApply big_sepL_fupd. iApply big_sepL_impl.
+    { by iApply big_sepL_emp. }
+    iIntros "!# * _ _".
+    iMod prealloc_simplepb_server as (?) "H".
+    by iExists _; iFrame.
+  }
+  iDestruct (big_sepL_exists_to_sepL2 with "Hpresrvs") as (γsrvs) "Hpresrvs".
+  iDestruct (big_sepL2_sep with "Hpresrvs") as "[#Hwits Hpresrvs]".
+  (* iDestruct (big_sepL2_app_inv_l with "Hwits") as (γsrvs ? _) "[#Hwits _]". *)
+  iDestruct (big_sepL2_length with "Hwits") as %Hlength.
+
+  iMod (alloc_simplepb_last γsrvs with "[]") as (γ) "H".
+  { lia. }
+  {
+    iIntros.
+    iDestruct (big_sepL2_const_sepL_r with "Hwits") as "[_ Hwits2]".
+    by iDestruct (big_sepL_elem_of with "Hwits2") as "$".
+  }
+
+  iClear "Hwits".
+  iDestruct "H" as "(#HsysInvs & Hlog & #HinitWits & Hconf & Hprim & #Hproph)".
+  iDestruct (big_sepL2_impl with "Hpresrvs []") as "Hpresrvs".
+  {
+    iModIntro. iIntros "* % % H".
+    iSpecialize ("H" $! γ).
+    iAccu.
+  }
+  simpl.
+  iDestruct (big_sepL2_wand with "[] Hpresrvs") as "Hsrvs".
+  {
+    iApply big_sepL2_forall.
+    iSplitR; first done.
+    iIntros.
+    iApply "HinitWits".
+    iPureIntro.
+    by eapply elem_of_list_lookup_2.
+  }
+  iExists γ.
+  iFrame "Hlog".
+  rewrite sep_comm. repeat rewrite -sep_assoc.
+  iAssert (|={⊤}=> [∗ list] h; γsrv ∈ params.(initconf); γsrvs, is_pb_host h γ γsrv)%I with "[Hchans]" as ">#Hrpcs".
+  {
+    iApply big_sepL2_fupd.
+    iDestruct (big_sepL2_const_sepL_l with "[$Hchans]") as "HH".
+    { done. }
+    iDestruct (big_sepL2_impl with "HH []") as "$".
+    iIntros "!# * % % H".
+    iMod (alloc_pb_rpcs with "[$]") as "$".
+    by iFrame "HsysInvs".
+  }
+  iSplitL "Hsrvs".
+  {
+    iModIntro.
+    iDestruct (big_sepL2_sep with "[$Hsrvs $Hrpcs]") as "HH".
+    iDestruct (big_sepL2_to_sepL_1 with "HH") as "HH".
+    iApply (big_sepL_impl with "HH").
+    iIntros "!# * %Hlookup H".
+    iDestruct "H" as (?) "[_ [? ?]]".
+    iExists _; iFrame.
+  }
+  iMod (alloc_pb_config_ghost with "[] [$] [$]") as "H".
+  { rewrite big_sepL2_flip. iFrame "#". }
+  iDestruct "H" as (γconf) "(#Hinv & Hres)".
+  iMod (config_server_init with "[$]") as "#HconfHost".
+  iSplitL.
+  2:{ by iExists _; iFrame "#". }
+  repeat iExists _.
+  by iFrame "∗#".
 Qed.
 
 End pb_init_proof.

@@ -8,15 +8,12 @@ From Perennial.program_proof.simplepb Require Import config_protocol_proof pb_ge
 
 Section admin_proof.
 
-Context {pb_record:Sm.t}.
-Notation pbG := (pbG (pb_record:=pb_record)).
+Context {params:pbParams.t}.
+Import pbParams.
 Notation OpType := (Sm.OpType pb_record).
 Notation has_op_encoding := (Sm.has_op_encoding pb_record).
 Notation has_snap_encoding := (Sm.has_snap_encoding pb_record).
 Notation compute_reply := (Sm.compute_reply pb_record).
-
-Notation wp_Clerk__GetState := (wp_Clerk__GetState (pb_record:=pb_record)).
-Notation wp_Clerk__SetState := (wp_Clerk__SetState (pb_record:=pb_record)).
 
 Context `{!heapGS Σ}.
 Context `{!pbG Σ}.
@@ -47,7 +44,8 @@ Proof using waitgroupG0.
     by iApply "HΦ".
   }
 
-  wp_apply (wp_MakeClerk2 with "Hconf_host").
+  wp_apply (wp_MakeClerk2 with "[Hconf_host]").
+  { iFrame "#". }
   iIntros (ck γconf) "#Hck".
   wp_pures.
   wp_bind (Clerk__ReserveEpochAndGetConfig _).
@@ -78,6 +76,7 @@ Proof using waitgroupG0.
     rewrite fmap_length in Hconfγ_nz.
     word.
   }
+  (* iMod (readonly_load with "Hconf_sl") as (?) "Hconf_sl2". *)
   iDestruct (own_slice_small_sz with "Hconf_sl") as %Hconf_len.
   set (oldNodeId:=word.modu randId config_sl.(Slice.sz)).
   assert (int.nat oldNodeId < length conf) as Hlookup_conf.
@@ -97,6 +96,14 @@ Proof using waitgroupG0.
   iDestruct (big_sepL2_lookup_2_some with "His_hosts") as %HH.
   { done. }
   destruct HH as [γsrv_old Hconfγ_lookup].
+  iRename "His_hosts" into "His_hosts_full".
+  iAssert ([∗ list] γsrv;host0 ∈ confγs;conf, is_pb_rpcs host0 γ γsrv)%I with "[]" as "#His_hosts".
+  {
+    iApply (big_sepL2_impl with "[$]").
+    iIntros "!# * % % H".
+    iClear "Hhost".
+    iNamed "H". iFrame "#".
+  }
   wp_apply (pb_makeclerk_proof.wp_MakeClerk with "[]").
   {
     iDestruct (big_sepL2_lookup_acc with "His_hosts") as "[HisHost _]".
@@ -230,7 +237,9 @@ Proof using waitgroupG0.
     destruct HH as [γsrv Hserver_γs_lookup].
     wp_apply (wp_MakeClerk with "[]").
     {
-      iDestruct (big_sepL2_lookup_acc with "Hhost") as "[$ _]"; done.
+      iDestruct (big_sepL2_lookup_acc with "Hhost") as "[H _]".
+      3:{ iClear "Hhost". iNamed "H". iFrame "#". }
+      all: done.
     }
     iIntros (pbCk) "#HpbCk".
     wp_load.
@@ -842,9 +851,9 @@ Proof using waitgroupG0.
          with "Hinit Hprim") as "#Hescrow".
   iMod "Hmask". iModIntro.
 
+  iMod (readonly_alloc_1 with "Hservers_sl") as "Hservers_sl".
   wp_apply (wp_Clerk__BecomePrimary with "[$HprimaryCk Hconf Hhost Epoch Replicas Hservers_sl]").
   {
-
     iFrame.
     instantiate (1:=(pb_marshal_proof.BecomePrimaryArgs.mkC _ _)).
     simpl.
@@ -865,9 +874,10 @@ Proof using waitgroupG0.
       instantiate (1:=servers).
       iSplitL; first done.
       iIntros.
-      iDestruct (big_sepL2_lookup_acc with "Hhost") as "[$ HH]".
-      { done. }
-      { done. }
+      iDestruct (big_sepL2_lookup_acc with "Hhost") as "[H _]".
+      1-2: done.
+      iClear "Hhost".
+      iNamed "H". iFrame "#".
       iApply "Hrest"; last first.
       {
         iPureIntro.
@@ -888,7 +898,7 @@ Proof using waitgroupG0.
       }
     }
     {
-      iExists _; iFrame.
+      iExists _; iFrame "∗#".
     }
   }
   iIntros.

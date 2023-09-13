@@ -9,14 +9,12 @@ Import RecordSetNotations.
 Section pb_sendcommitthread_proof.
 
 Context `{!heapGS Σ}.
-Context {pb_record:Sm.t}.
+Context {params:pbParams.t}.
+Import pbParams.
 Notation OpType := (pb_record.(Sm.OpType)).
 Notation has_op_encoding := (Sm.has_op_encoding pb_record).
 Notation has_snap_encoding := (Sm.has_snap_encoding pb_record).
 Notation compute_reply := (Sm.compute_reply pb_record).
-Notation "server.t" := (server.t (pb_record:=pb_record)).
-Notation pbG := (pbG (pb_record:=pb_record)).
-Notation get_rwops := (get_rwops (pb_record:=pb_record)).
 
 Context `{!pbG Σ}.
 
@@ -147,7 +145,8 @@ Proof.
   set (clerkIdx:=(word.modu randint clerks_sl.(Slice.sz))).
 
   rename clerkss into clerkss'.
-  set (clerkss := (t :: clerkss')) in *.
+  rename t0 into x.
+  set (clerkss := (x :: clerkss')) in *.
   assert (int.nat clerkIdx < length clerkss) as Hlookup_clerks.
   { (* FIXME: better lemmas about mod? *)
     rewrite Hclerkss_sz.

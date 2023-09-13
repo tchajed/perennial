@@ -15,13 +15,9 @@ Import RecordSetNotations.
 Section pb_apply_proof.
 
 Context `{!heapGS Σ}.
-Context {pb_record:Sm.t}.
-
-Notation OpType := (Sm.OpType pb_record).
-Notation has_op_encoding := (Sm.has_op_encoding pb_record).
-Notation compute_reply := (Sm.compute_reply pb_record).
-Notation pbG := (pbG (pb_record:=pb_record)).
-Notation apply_postcond := (Sm.apply_postcond pb_record).
+Context {params:pbParams.t}.
+Import pbParams.
+Import Sm.
 
 Context `{!pbG Σ}.
 
@@ -49,7 +45,7 @@ Proof.
   wp_pures.
   iNamed "Hck".
   wp_loadField.
-  rewrite is_pb_host_unfold.
+  rewrite is_pb_rpcs_unfold.
   iNamed "Hsrv".
   wp_apply (wp_ReconnectingClient__Call2 with "Hcl_rpc [] Hop_sl Hrep").
   {

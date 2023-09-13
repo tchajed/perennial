@@ -18,13 +18,13 @@ Section global_proof.
 
 Context `{low_record:Sm.t}.
 
-Notation low_OpType := (Sm.OpType low_record).
-Notation low_has_op_encoding := (Sm.has_op_encoding low_record).
-Notation low_has_snap_encoding := (Sm.has_snap_encoding low_record).
-Notation low_compute_reply := (Sm.compute_reply low_record).
-Notation low_is_readonly_op := (Sm.is_readonly_op low_record).
+Notation low_OpType := (@Sm.OpType low_record).
+Notation low_has_op_encoding := (@Sm.has_op_encoding low_record).
+Notation low_has_snap_encoding := (@Sm.has_snap_encoding low_record).
+Notation low_compute_reply := (@Sm.compute_reply low_record).
+Notation low_is_readonly_op := (@Sm.is_readonly_op low_record).
 Instance low_op_eqdec : EqDecision (low_OpType).
-Proof. apply (Sm.OpType_EqDecision low_record). Qed.
+Proof. apply (@Sm.OpType_EqDecision low_record). Qed.
 
 Inductive EOp :=
   | getcid : EOp
@@ -130,7 +130,6 @@ destruct o; apply _.
 Qed.
 
 Context `{!inG Σ (mono_listR (leibnizO low_OpType))}.
-Context `{!pbG (pb_record:=esm_record) Σ}.
 
 Context `{!gooseGlobalGS Σ, !urpcregG Σ, !erpcG Σ (list u8)}.
 Definition own_esm st γ γerpc : iProp Σ :=
@@ -142,15 +141,16 @@ Definition own_esm st γ γerpc : iProp Σ :=
 
 Definition esmN := nroot .@ "esm".
 
-Notation own_op_log := (own_op_log (pb_record:=esm_record)).
-
 (* This is the invariant maintained by all the servers for the "centralized"
    ghost state of the system. *)
+Context {initconf:list u64}.
+Local Instance esmParams : pbParams.t := pbParams.mk initconf (esm_record).
+Context `{!pbG (pb_record:=esmParams.(pbParams.pb_record)) Σ}.
 Definition is_esm_inv γpb γlog γerpc : iProp Σ :=
   inv esmN (∃ ops,
-              own_op_log γpb ops ∗
-              own_esm (compute_state ops) γlog γerpc
-      )
+               own_op_log γpb ops ∗
+               own_esm (compute_state ops) γlog γerpc
+       )
 .
 
 Lemma alloc_esm γpb :
@@ -179,12 +179,12 @@ End global_proof.
 Section local_proof.
 
 Context {low_record:Sm.t}.
-Notation low_OpType := (Sm.OpType low_record).
-Notation low_has_op_encoding := (Sm.has_op_encoding low_record).
-Notation low_is_readonly_op := (Sm.is_readonly_op low_record).
-Notation low_compute_reply := (Sm.compute_reply low_record).
+Notation low_OpType := (@Sm.OpType low_record).
+Notation low_has_op_encoding := (@Sm.has_op_encoding low_record).
+Notation low_is_readonly_op := (@Sm.is_readonly_op low_record).
+Notation low_compute_reply := (@Sm.compute_reply low_record).
 Instance low_op_dec2 : EqDecision low_OpType.
-Proof. apply (Sm.OpType_EqDecision low_record). Qed.
+Proof. apply (@Sm.OpType_EqDecision low_record). Qed.
 
 Context `{!heapGS Σ, !urpcregG Σ, !erpcG Σ (list u8)}.
 
@@ -193,11 +193,16 @@ Notation compute_state := (compute_state (low_record:=low_record)).
 Notation EOp := (EOp (low_record:=low_record)).
 Notation esm_is_InMemoryStateMachine := (is_InMemoryStateMachine (sm_record:=esm_record)).
 Notation low_is_VersionedStateMachine := (is_VersionedStateMachine (sm_record:=low_record)).
-Notation own_pb_Clerk := (clerk_proof.own_Clerk (pb_record:=esm_record)).
+Notation own_pb_Clerk := clerk_proof.own_Clerk.
 Notation is_esm_inv := (is_esm_inv (low_record:=low_record)).
 
 Context `{!inG Σ (mono_listR (leibnizO low_OpType))}.
-Context `{!pbG (pb_record:=esm_record) Σ}.
+Context {initconf:list u64}.
+(* FIXME: can this second copy of the instance be avoided? *)
+(* Existing Instance esmParams. *)
+Local Instance esmParams2 : pbParams.t := esmParams (low_record:=low_record) (initconf:=initconf).
+
+Context `{!pbG (pb_record:=esmParams2.(pbParams.pb_record)) Σ}.
 Context `{!vsmG (sm_record:=low_record) Σ}.
 
 Definition own_Clerk ck γoplog : iProp Σ :=
@@ -1764,13 +1769,13 @@ Proof.
   done.
 Qed.
 
-Lemma wp_MakeClerk confHost γ γoplog γerpc :
+Lemma wp_MakeClerk configHost γ γoplog γerpc :
   {{{
+    "#Hconf" ∷ config_protocol_proof.is_pb_config_host configHost γ ∗
     "#Hesm_inv" ∷ is_esm_inv γ γoplog γerpc ∗
-    "#Herpc_inv" ∷ is_eRPCServer γerpc ∗
-    "#Hconf" ∷ is_pb_sys_host confHost γ
+    "#Herpc_inv" ∷ is_eRPCServer γerpc
   }}}
-    esm.MakeClerk #confHost
+    esm.MakeClerk #configHost
   {{{
         ck, RET #ck; own_Clerk ck γoplog
   }}}
@@ -1786,7 +1791,7 @@ Proof.
   iNamed "HH".
   wp_pures.
   wp_apply clerk_proof.wp_MakeClerk.
-  { iFrame "#". }
+  { iFrame "#%". }
   iIntros (?) "Hck".
   wp_storeField.
   wp_apply (wp_NewSlice).

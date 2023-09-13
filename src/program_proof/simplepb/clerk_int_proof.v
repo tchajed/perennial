@@ -6,16 +6,9 @@ From Perennial.program_proof.simplepb Require Export config_protocol_proof.
 
 Section clerk_proof.
 Context `{!heapGS Σ}.
-Context {pb_record:Sm.t}.
-
-Notation OpType := (Sm.OpType pb_record).
-Notation has_op_encoding := (Sm.has_op_encoding pb_record).
-Notation is_readonly_op := (Sm.is_readonly_op pb_record).
-Notation has_snap_encoding := (Sm.has_snap_encoding pb_record).
-Notation compute_reply := (Sm.compute_reply pb_record).
-Notation apply_postcond := (Sm.apply_postcond pb_record).
-Notation pbG := (pbG (pb_record:=pb_record)).
-Notation is_pb_Clerk := (pb_definitions.is_Clerk (pb_record:=pb_record)).
+Context {params:pbParams.t}.
+Import pbParams.
+Import Sm.
 
 Context `{!pbG Σ}.
 
@@ -30,10 +23,10 @@ Definition own_Clerk2 ck γ : iProp Σ :=
     "%Hlen" ∷ ⌜length γsrvs > 0⌝
 .
 
-Lemma wp_makeClerks γ config_sl servers γsrvs :
+Lemma wp_makeClerks γ config_sl servers γsrvs q :
   {{{
         "#Hhosts" ∷ ([∗ list] γsrv ; host ∈ γsrvs ; servers, is_pb_host host γ γsrv) ∗
-        "Hservers_sl" ∷ own_slice_small config_sl uint64T 1 servers
+        "Hservers_sl" ∷ own_slice_small config_sl uint64T q servers
   }}}
     makeClerks (slice_val config_sl)
   {{{
@@ -67,7 +60,7 @@ Proof.
           "%HcompleteLen" ∷ ⌜length clerksComplete = int.nat i⌝ ∗
           "%Hlen" ∷ ⌜length (clerksComplete ++ clerksLeft) = length servers⌝ ∗
           "Hclerks_sl" ∷ own_slice_small clerks_sl ptrT 1 (clerksComplete ++ clerksLeft) ∗
-          "Hservers_sl" ∷ own_slice_small config_sl uint64T 1 servers ∗
+          "Hservers_sl" ∷ own_slice_small config_sl uint64T q servers ∗
           "#Hclerks_is" ∷ ([∗ list] ck ; γsrv ∈ clerksComplete ; (take (length clerksComplete) γsrvs),
                               pb_definitions.is_Clerk ck γ γsrv
                               )
@@ -104,7 +97,8 @@ Proof.
     { done. }
     destruct HH as [γsrv Hserver_γs_lookup].
     wp_apply (pb_makeclerk_proof.wp_MakeClerk with "[]").
-    { iDestruct (big_sepL2_lookup_acc with "Hhosts") as "[$ _]"; done. }
+    { iDestruct (big_sepL2_lookup_acc with "Hhosts") as "[H _]"; try done. iNamed "H".
+      iFrame "#". }
     iIntros (pbCk) "#HpbCk".
     wp_load.
     wp_apply (wp_SliceSet (V:=loc) with "[Hclerks_sl]").
@@ -201,7 +195,7 @@ Proof.
   by iFrame "#".
 Qed.
 
-Lemma wp_MakeClerk2 γ configHost:
+Lemma wp_MakeClerk2 γ configHost :
   {{{
         "#Hconf" ∷ is_pb_config_host configHost γ
   }}}
@@ -220,7 +214,8 @@ Proof.
   iDestruct (struct_fields_split with "Hl") as "HH".
   iNamed "HH".
   wp_pures.
-  wp_apply (wp_MakeClerk2 with "[$]").
+  wp_apply (wp_MakeClerk2 with "[]").
+  { iFrame "#". }
   iIntros (??) "#HconfCk".
   wp_storeField.
   wp_pures.
@@ -228,7 +223,7 @@ Proof.
   wp_forBreak.
   wp_pures.
   wp_loadField.
-  wp_bind (config.Clerk__GetConfig _).
+  wp_bind (Clerk__GetConfig _).
   wp_apply (wp_frame_wand with "[-HconfCk]").
   { iNamedAccu. }
   wp_apply (wp_Clerk__GetConfig2 with "HconfCk").
@@ -394,7 +389,7 @@ Proof.
     wp_apply (wp_Sleep).
     wp_pures.
     wp_loadField.
-    wp_bind (config.Clerk__GetConfig _).
+    wp_bind (Clerk__GetConfig _).
     wp_apply (wp_frame_wand with "[-]").
     { iNamedAccu. }
     wp_apply (wp_Clerk__GetConfig2 with "HisConfCk").
@@ -648,7 +643,7 @@ Proof.
       wp_apply (wp_Sleep).
       wp_pures.
       wp_loadField.
-      wp_bind (config.Clerk__GetConfig _).
+      wp_bind (Clerk__GetConfig _).
       wp_apply (wp_frame_wand with "[-]").
       { iNamedAccu. }
       wp_apply (wp_Clerk__GetConfig2 with "HisConfCk").

@@ -7,36 +7,11 @@ From iris.algebra Require Import mono_list.
 (** This library layers exactly-once read operations on top of clerk_int_proof, which
    has duplicated reads. *)
 
-Section global_proof.
-Context `{!gooseGlobalGS Σ}.
-Context {pb_record:Sm.t}.
-
-Definition prophReadN := nroot .@ "prophread".
-Definition prophReadReqN := prophReadN .@ "req".
-Definition prophReadLogN := prophReadN .@ "log".
-Notation pbG := (pbG (pb_record:=pb_record)).
-Context `{!pbG Σ}.
-
-Definition is_proph_read_inv γ : iProp Σ :=
-  inv prophReadLogN (∃ σ, own_op_log γ σ ∗ own_int_log γ σ).
-
-Definition is_pb_sys_host host γ : iProp Σ :=
-  is_pb_config_host host γ ∗ is_proph_read_inv γ.
-
-End global_proof.
-
 Section clerk_proof.
 Context `{!heapGS Σ}.
-Context {pb_record:Sm.t}.
-
-Notation OpType := (Sm.OpType pb_record).
-Notation has_op_encoding := (Sm.has_op_encoding pb_record).
-Notation is_readonly_op := (Sm.is_readonly_op pb_record).
-Notation has_snap_encoding := (Sm.has_snap_encoding pb_record).
-Notation compute_reply := (Sm.compute_reply pb_record).
-Notation is_pb_Clerk := (pb_definitions.is_Clerk (pb_record:=pb_record)).
-Notation apply_postcond := (Sm.apply_postcond pb_record).
-Notation pbG := (pbG (pb_record:=pb_record)).
+Context {params:pbParams.t}.
+Import pbParams.
+Import Sm.
 
 Context `{!pbG Σ}.
 
@@ -126,6 +101,7 @@ Definition read_fupd γ readOp (Q:list u8 → iProp Σ) : iProp Σ :=
 £ 1 ∗ (|={⊤∖↑pbN∖↑prophReadN,∅}=> ∃ ops, own_op_log γ ops ∗
   (own_op_log γ ops ={∅,⊤∖↑pbN∖↑prophReadN}=∗ Q (compute_reply ops readOp))).
 
+Definition prophReadReqN := prophReadN .@ "req".
 Definition prophetic_read_inv prophV γ γreq readOp Φ : iProp Σ :=
   inv prophReadReqN (
         (*
@@ -314,9 +290,9 @@ Proof.
   iApply ("Hupd" with "[$] [$] [$]").
 Qed.
 
-Lemma wp_MakeClerk γ configHost:
+Lemma wp_MakeClerk γ configHost :
   {{{
-        "#Hconf" ∷ is_pb_sys_host configHost γ
+        "#Hconf" ∷ is_pb_config_host configHost γ
   }}}
     Make #configHost
   {{{
@@ -324,9 +300,12 @@ Lemma wp_MakeClerk γ configHost:
   }}}
 .
 Proof.
-  iIntros (?) "#[? ?] HΦ".
-  wp_apply (wp_MakeClerk2 with "[$]").
+  iIntros (?) "#H HΦ".
+  iNamed "H".
+  wp_apply (wp_MakeClerk2 with "[]").
+  { iFrame "#%". }
   iIntros (?) "?". iApply "HΦ".
+  iNamed "Hconf".
   iFrame "∗#".
 Qed.
 

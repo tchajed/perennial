@@ -6,6 +6,7 @@ From Perennial.program_proof.kv Require Import interface.
 Section clerkpool_proof.
 
 Context `{!heapGS Σ, !ekvG Σ}.
+Context {params:ekvParams.t}.
 Definition own_ClerkPool c γkv : iProp Σ :=
   ∃ (cls:list loc) cls_sl,
   "Hcls" ∷ c ↦[ClerkPool :: "cls"] (slice_val cls_sl) ∗
@@ -18,7 +19,7 @@ Definition is_ClerkPool c γkv : iProp Σ :=
   "#Hmu" ∷ readonly (c ↦[ClerkPool :: "mu"] mu) ∗
   "#HmuInv" ∷ is_lock nroot mu (own_ClerkPool c γkv) ∗
   "#HconfHost" ∷ readonly (c ↦[ClerkPool :: "confHost"] #confHost) ∗
-  "#Hhost" ∷ is_kv_config confHost γkv
+  "#Hhost" ∷ is_kv_config_host confHost γkv
 .
 
 Lemma wp_doWithClerk c γkv (f:val) Φ :
@@ -101,7 +102,8 @@ Proof.
     { iFrame "#∗". iNext. repeat iExists _. iFrame "∗#". }
     wp_pures.
     wp_loadField.
-    wp_apply (wp_MakeClerk with "[$]").
+    wp_apply (wp_MakeClerk with "[]").
+    { iFrame "#%". }
     iIntros (?) "Hck".
     wp_store.
     wp_load.
@@ -130,7 +132,7 @@ Qed.
 
 Lemma wp_MakeClerkPool γkv confHost :
   {{{
-        "#Hhost" ∷ is_kv_config confHost γkv
+        "#Hhost" ∷ is_kv_config_host confHost γkv
   }}}
     MakeClerkPool #confHost
   {{{
@@ -160,11 +162,11 @@ Proof.
   iNext. repeat iExists _; iFrame. rewrite replicate_0. iApply big_sepL_nil. done.
 Qed.
 
-Definition vkvE : coPset := (↑pb_protocol.pbN ∪ ↑clerk_proof.prophReadN ∪ ↑esm_proof.esmN ∪
+Definition vkvE : coPset := (↑pb_protocol.pbN ∪ ↑pb_definitions.prophReadN ∪ ↑esm_proof.esmN ∪
                                      ↑stateN).
 Lemma wp_MakeKv γkv confHost :
   {{{
-        "#Hhost" ∷ is_kv_config confHost γkv
+        "#Hhost" ∷ is_kv_config_host confHost γkv
   }}}
     MakeKv #confHost
   {{{
@@ -176,7 +178,8 @@ Proof.
   iIntros (?) "Hpre HΦ".
   iNamed "Hpre".
   wp_lam.
-  wp_apply (wp_MakeClerkPool with "[$]").
+  wp_apply (wp_MakeClerkPool with "[]").
+  { iFrame "#%". }
   iIntros (?) "#Hck".
   wp_pures.
   wp_lam. wp_pures.

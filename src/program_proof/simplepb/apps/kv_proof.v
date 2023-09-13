@@ -4,7 +4,7 @@ From Perennial.program_proof Require Import marshal_stateless_proof.
 From iris.base_logic Require Import ghost_map.
 From Perennial.goose_lang Require Import crash_borrow.
 From Perennial.program_proof.simplepb.simplelog Require Import proof.
-From Perennial.program_proof.simplepb Require Import pb_definitions config_proof.
+From Perennial.program_proof.simplepb Require Import pb_definitions config_proof config_protocol_proof.
 From Perennial.program_proof.simplepb Require Import pb_apply_proof clerk_proof.
 From Perennial.program_proof.grove_shared Require Import erpc_lib.
 From Perennial.program_proof Require Import map_marshal_proof.
@@ -25,20 +25,37 @@ Global Instance subG_kvΣ {Σ} : subG kvΣ Σ → kvG Σ.
 Proof. intros. solve_inG. Qed.
 
 Definition ekv_record := (esm_record (low_record:=kv_record)).
+
+Local Instance esmParams (initconf: list u64) : pbParams.t := pbParams.mk initconf (ekv_record).
+
 Class ekvG Σ :=
   {
     ekv_erpcG :> erpcG Σ (list u8) ;
-    ekv_simplelogG :> simplelogG (sm_record:=ekv_record) Σ;
+    ekv_simplelogG :> simplelogG Σ (sm_record:=ekv_record);
     ekv_kvG :> kvG Σ ;
   }.
 
-Definition ekvΣ := #[erpcΣ (list u8); simplelogΣ (sm_record:=ekv_record);
-                     kvΣ].
+Definition ekvΣ := #[erpcΣ (list u8); simplelogΣ (sm_record:=ekv_record); kvΣ].
 Global Instance subG_ekvΣ {Σ} : subG ekvΣ Σ → ekvG Σ.
 Proof. intros. solve_inG. Qed.
 
-Section global_proof.
+Record kv_names :=
+  {
+    pb_gn : simplepb_system_names ;
+    kv_gn : gname ;
+  }
+.
 
+Implicit Types γ : kv_names.
+
+Module ekvParams.
+Class t :=
+  mk {
+      initconfig : list u64
+    }.
+End ekvParams.
+
+Section global_proof.
 
 Context `{!gooseGlobalGS Σ}.
 Context `{!ekvG Σ}.
@@ -46,69 +63,34 @@ Context `{!ekvG Σ}.
 (* The abstract state applies the operation to an all-nil map,
    so that each key already exists from the start. This is consisent with
    [getOp] doing [default []]. *)
-Definition own_kvs (γkv:gname) ops : iProp Σ :=
+Definition own_kvs γ ops : iProp Σ :=
   ∃ allocatedKeys,
-  ghost_map_auth γkv 1 (compute_state ops ∪ gset_to_gmap "" allocatedKeys)
+  ghost_map_auth γ.(kv_gn) 1 (compute_state ops ∪ gset_to_gmap "" allocatedKeys)
 .
 
 Definition stateN := nroot .@ "state".
 
-Definition kv_inv γlog γkv : iProp Σ :=
-  inv stateN ( ∃ ops, own_log γlog ops ∗ own_kvs γkv ops).
+Definition kv_inv γlog γ : iProp Σ :=
+  inv stateN ( ∃ ops, own_log γlog ops ∗ own_kvs γ ops).
 
-Definition kv_ptsto γkv (k v : string) : iProp Σ :=
-  k ↪[γkv] v.
+Definition kv_ptsto γ (k v : string) : iProp Σ :=
+  k ↪[γ.(kv_gn)] v.
 
-Lemma alloc_kv γlog allocated :
-  own_log γlog [] ={⊤}=∗
-  ∃ γkv ,
-  kv_inv γlog γkv ∗
-  [∗ set] k ∈ allocated, kv_ptsto γkv k ""
-.
-Proof.
-  iIntros "Hlog".
-  iMod (ghost_map_alloc (gset_to_gmap "" allocated)) as (γkv) "[Hkvs Hkvptsto]".
-  iExists _.
-  iMod (inv_alloc with "[Hkvs Hlog]") as "$".
-  { iNext. iExists _; iFrame. rewrite /own_kvs /compute_state /=.
-    iExists _. rewrite left_id_L. done. }
-  replace allocated with (dom (gset_to_gmap "" allocated)) at 2.
-  2:{ rewrite dom_gset_to_gmap. done. }
-  iApply big_sepM_dom. iApply (big_sepM_impl with "Hkvptsto").
-  iIntros "!# %k %x".
-  rewrite lookup_gset_to_gmap_Some.
-  iIntros ([_ <-]). auto.
-Qed.
+Context {params:ekvParams.t}.
+Local Instance toEsmParams1 : pbParams.t := esmParams (ekvParams.initconfig).
 
-(* These are the client-side invs *)
-Definition is_ekv_invs γpb γkv : iProp Σ :=
-  ∃ γlog γerpc,
-  is_esm_inv (low_record:=kv_record) γpb γlog γerpc ∗
-  is_eRPCServer γerpc ∗
-  kv_inv γlog γkv
-.
-
-Definition is_kv_config confHost γkv : iProp Σ :=
-  ∃ γpb γerpc γlog,
-    "#Hee_inv" ∷ is_esm_inv (low_record:=kv_record) γpb γlog γerpc ∗
+Definition is_kv_config_host confHost γ : iProp Σ :=
+  ∃ γerpc γlog,
+    "#Hee_inv" ∷ is_esm_inv (initconf:=ekvParams.initconfig) (low_record:=kv_record) γ.(pb_gn) γlog γerpc ∗
     "#Herpc_inv" ∷ is_eRPCServer γerpc ∗
-    "#Hkv_inv" ∷ kv_inv γlog γkv ∗
-    "#Hconf" ∷ is_pb_sys_host confHost γpb
+    "#Hkv_inv" ∷ kv_inv γlog γ ∗
+    "#Hconf" ∷ is_pb_config_host confHost γ.(pb_gn)
 .
 
-Lemma alloc_ekv γpb allocated :
-  own_op_log γpb [] ={⊤}=∗
-  ∃ γkv ,
-  is_ekv_invs γpb γkv ∗
-  [∗ set] k ∈ allocated, kv_ptsto γkv k ""
-.
-Proof.
-  iIntros "Hoplog".
-  iMod (alloc_esm with "[$]") as (??) "(#? & #? & ?)".
-  iMod (alloc_kv with "[$]") as (?) "(#? & Hkvs)".
-  iExists _. iFrame.
-  iModIntro. repeat iExists _; iFrame "#".
-Qed.
+Definition is_kv_replica_host host γ γsrv : iProp Σ :=
+  is_pb_host host γ.(pb_gn) γsrv.
+
+Definition kv_crash_resources γ γsrv data : iProp Σ := file_crash (own_Server_ghost_f γ.(pb_gn) γsrv) data.
 
 End global_proof.
 
@@ -117,16 +99,16 @@ Section local_proof.
 Context `{!heapGS Σ}.
 Context `{!ekvG Σ}.
 
-Lemma wp_Start fname (confHost host:chan) γsys γsrv data :
+Context {params:ekvParams.t}.
+Existing Instance toEsmParams1.
+Lemma wp_Start fname configHost (host:chan) γ γsrv data :
   {{{
-      "#Hhost" ∷ is_pb_host (pb_record:=ekv_record) host γsys γsrv ∗
-      "#HconfHost" ∷ config_protocol_proof.is_pb_config_host confHost γsys ∗
-      "Hfile_ctx" ∷ crash_borrow (fname f↦ data ∗ file_crash (own_Server_ghost_f γsys γsrv) data)
-                  (|C={⊤}=> ∃ data', fname f↦ data' ∗ ▷ file_crash (own_Server_ghost_f γsys γsrv) data') ∗
-
-      "#Hinvs" ∷ is_pb_system_invs γsys
+      "#Hconf" ∷ is_kv_config_host configHost γ ∗
+      "#Hhost" ∷ is_kv_replica_host host γ γsrv ∗
+      "Hfile_ctx" ∷ crash_borrow (fname f↦ data ∗ kv_crash_resources γ γsrv data)
+                  (|C={⊤}=> ∃ data', fname f↦ data' ∗ ▷ kv_crash_resources γ γsrv data')
   }}}
-    Start #(LitString fname) #(host:u64) #(confHost:u64)
+    Start #(LitString fname) #(host:u64) #configHost
   {{{
         RET #(); True
   }}}
@@ -135,6 +117,7 @@ Proof using Type*.
   iIntros (Φ) "Hpre HΦ".
   iNamed "Hpre".
   wp_call.
+
   wp_apply (wp_makeVersionedStateMachine).
   iIntros (??) "[#His1 Hown]".
   wp_apply (wp_MakeExactlyOnceStateMachine with "[Hown]").
@@ -143,8 +126,9 @@ Proof using Type*.
     iFrame "His1".
   }
   iIntros (??) "[#His2 Hown]".
-  wp_apply (wp_MakePbServer (sm_record:=ekv_record) with "[$Hown $Hfile_ctx]").
-  { iFrame "#". }
+  iNamed "Hconf".
+  wp_apply (wp_MakePbServer with "[Hown Hfile_ctx]").
+  { iFrame "∗#". }
   iIntros (?) "His".
   wp_pures.
   wp_apply (pb_start_proof.wp_Server__Serve with "[$]").
@@ -156,14 +140,14 @@ Definition own_Clerk ck γkv : iProp Σ :=
   ∃ (eeCk:loc) γlog,
     "Hcl" ∷ ck ↦[kv.Clerk :: "cl"] #eeCk ∗
     "#Hkvinv" ∷ kv_inv γlog γkv ∗
-    "Hownck" ∷ esm_proof.own_Clerk (low_record:=kv_record) eeCk γlog
+    "Hownck" ∷ esm_proof.own_Clerk (initconf:=ekvParams.initconfig) (low_record:=kv_record) eeCk γlog
 .
 
-Lemma wp_MakeClerk γkv confHost :
+Lemma wp_MakeClerk γkv configHost :
   {{{
-      is_kv_config confHost γkv
+      "#Hhost" ∷ is_kv_config_host configHost γkv
   }}}
-    kv.MakeClerk #confHost
+    kv.MakeClerk #configHost
   {{{
         ck, RET #ck; own_Clerk ck γkv
   }}}
@@ -172,8 +156,9 @@ Proof.
   iIntros (Φ) "Hpre HΦ".
   iNamed "Hpre".
   wp_call.
+  iNamed "Hhost".
   wp_apply (esm_proof.wp_MakeClerk with "[]").
-  { iFrame "#". }
+  { iFrame "#%". }
   iIntros (?) "Hck".
   wp_apply (wp_allocStruct).
   { repeat econstructor. }

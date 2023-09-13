@@ -10,14 +10,13 @@ Import RecordSetNotations.
 
 Section pb_increasecommit_proof.
 Context `{!heapGS Σ}.
-Context {pb_record:Sm.t}.
+Context {params:pbParams.t}.
+Import pbParams.
 
 Notation OpType := (Sm.OpType pb_record).
 Notation has_op_encoding := (Sm.has_op_encoding pb_record).
 Notation has_snap_encoding := (Sm.has_snap_encoding pb_record).
 Notation compute_reply := (Sm.compute_reply pb_record).
-Notation pbG := (pbG (pb_record:=pb_record)).
-Notation own_Server_ghost_f := (own_Server_ghost_f (pb_record:=pb_record)).
 
 Context `{!waitgroupG Σ}.
 Context `{!pbG Σ}.
@@ -50,7 +49,7 @@ Proof.
   wp_loadField.
   iDestruct (own_slice_to_small with "Henc_args_sl") as "Henc_args_sl".
   wp_apply (wp_frame_wand with "HΦ").
-  rewrite is_pb_host_unfold.
+  rewrite is_pb_rpcs_unfold.
   iNamed "Hsrv".
   wp_apply (wp_ReconnectingClient__Call2 with "Hcl_rpc [] Henc_args_sl Hrep").
   {

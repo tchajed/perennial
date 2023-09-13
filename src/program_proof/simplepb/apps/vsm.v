@@ -7,14 +7,8 @@ From Perennial.program_proof.fencing Require Import map.
 Section vsm_definitions.
 
 Context `{sm_record:Sm.t}.
-Notation OpType := (Sm.OpType sm_record).
-Notation has_op_encoding := (Sm.has_op_encoding sm_record).
-Notation has_snap_encoding := (Sm.has_snap_encoding sm_record).
-Notation compute_reply := (Sm.compute_reply sm_record).
-Notation is_readonly_op := (Sm.is_readonly_op sm_record).
-Instance e : EqDecision OpType := (Sm.OpType_EqDecision sm_record).
-Notation pbG := (pbG (pb_record:=sm_record)).
-Notation pbΣ := (pbΣ (pb_record:=sm_record)).
+Import Sm.
+Instance e : EqDecision OpType := (OpType_EqDecision).
 
 Implicit Type γst:gname.
 

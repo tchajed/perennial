@@ -11,31 +11,23 @@ From iris.algebra Require Import mono_list.
 
 Section pb_start_proof.
 
-Context {pb_record:Sm.t}.
-Notation pbG := (pbG (pb_record:=pb_record)).
-Notation OpType := (Sm.OpType pb_record).
-Notation has_op_encoding := (Sm.has_op_encoding pb_record).
-Notation has_snap_encoding := (Sm.has_snap_encoding pb_record).
-Notation compute_reply := (Sm.compute_reply pb_record).
-
-Notation wp_Clerk__ApplyAsBackup := (wp_Clerk__ApplyAsBackup (pb_record:=pb_record)).
-Notation wp_Clerk__SetState := (wp_Clerk__SetState (pb_record:=pb_record)).
-Notation wp_Clerk__GetState := (wp_Clerk__GetState (pb_record:=pb_record)).
-Notation wp_Clerk__BecomePrimary := (wp_Clerk__BecomePrimary (pb_record:=pb_record)).
-Notation wp_Clerk__Apply := (wp_Clerk__Apply (pb_record:=pb_record)).
+Context {params:pbParams.t}.
+Import pbParams.
+Import Sm.
 
 Context `{!heapGS Σ}.
 Context `{!pbG Σ}.
 
 Implicit Type (own_StateMachine: u64 → list OpType → bool → (u64 → list OpType → bool → iProp Σ) → iProp Σ).
-Lemma wp_MakeServer sm_ptr own_StateMachine (epoch:u64) (confHost:u64) opsfull (sealed:bool) (nextIndex:u64) γ γsrv :
+Lemma wp_MakeServer sm_ptr own_StateMachine (epoch:u64) (confHost:u64) opsfull (sealed:bool) (nextIndex:u64) γ γsrv
+      host :
   {{{
         "Hstate" ∷ own_StateMachine epoch (get_rwops opsfull) sealed (own_Server_ghost_f γ γsrv) ∗
         "#His_sm" ∷ is_StateMachine sm_ptr own_StateMachine (own_Server_ghost_f γ γsrv) ∗
 
-        "#Hinvs" ∷ is_pb_system_invs γ ∗
-
         "#Hconf_host" ∷ is_pb_config_host confHost γ ∗
+        "#Hhost" ∷ is_pb_host host γ γsrv ∗
+
         "%HnextIndex" ∷ ⌜int.nat nextIndex = length (get_rwops opsfull)⌝ ∗
         (* XXX: this is basically a guarantee that the list of ops being
            implicitly passed in via own_StateMachine has been made durable. It
@@ -105,14 +97,16 @@ Proof.
   wp_storeField.
 
   iDestruct "Hconf_host" as (?) "[#Hconf_host1 #Hconf_inv]".
-  wp_apply (config_proof.wp_MakeClerk with "[$]").
+  wp_apply (config_proof.wp_MakeClerk with "[]").
+  { iFrame "#%". }
   iIntros (confCk) "#HconfCk".
   wp_storeField.
 
   iApply fupd_wp.
   iMod (fupd_mask_subseteq (↑pb_protocolN)) as "Hmask".
   { set_solver. }
-  iDestruct "Hinvs" as "(#? & #? & #?)".
+  iNamed "Hhost".
+  iDestruct "Hinvs" as "(#? & #? & #? & #?)".
   iMod (pb_log_get_nil_lb with "[$]") as "#Hcommit_nil_lb".
   iMod "Hmask".
   iModIntro.
@@ -134,6 +128,7 @@ Proof.
   iMod (readonly_alloc_1 with "confCk") as "#confCk".
   iMod (alloc_lock with "HmuInv [-]") as "$"; last first.
   { repeat iExists _.
+    iNamed "Hconf_inv".
     iModIntro. iFrame "#".
   }
 
@@ -143,7 +138,7 @@ Proof.
   iSplitL.
   {
     repeat iExists _.
-    instantiate (1:=(server.mkC pb_record _ _ _ _ _ _ _ _)).
+    instantiate (1:=(server.mkC _ _ _ _ _ _ _ _ _)).
     simpl.
     iFrame "∗".
     iSplitL "nextIndex".
@@ -195,7 +190,7 @@ Lemma wp_Server__Serve s host γ γsrv :
 .
 Proof.
   iIntros (Φ) "Hpre HΦ".
-  iNamed "Hpre".
+  iNamed "Hpre". iNamed "Hhost".
   wp_call.
 
   wp_apply (map.wp_NewMap u64).
@@ -240,7 +235,7 @@ Proof.
   iIntros (r) "Hr".
   wp_pures.
 
-  rewrite is_pb_host_unfold.
+  rewrite is_pb_rpcs_unfold.
   iNamed "Hhost".
   wp_apply (wp_StartServer_pred with "[$Hr]").
   {

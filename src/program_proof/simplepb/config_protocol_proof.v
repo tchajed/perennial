@@ -9,8 +9,8 @@ From Perennial.program_proof.simplepb Require Export config_proof pb_definitions
 
 Section config_global.
 
-Context {pb_record:Sm.t}.
-Notation pbG := (pbG (pb_record:=pb_record)).
+Context {params:pbParams.t}.
+Import pbParams.
 Notation OpType := (Sm.OpType pb_record).
 
 Context `{!gooseGlobalGS Σ}.
@@ -20,7 +20,10 @@ Definition configN := nroot .@ "config".
 
 Definition is_pb_config_host confHost γ : iProp Σ :=
   ∃ γconf,
-  is_config_host confHost γconf ∗ is_conf_inv γ γconf.
+  "#Hhost" ∷ is_config_host confHost γconf ∗
+  "#HconfInv" ∷ is_conf_inv γ γconf ∗
+  "#HprophRead" ∷ is_proph_read_inv γ
+.
 
 (* before calling this lemma, have to already allocate pb ghost state *)
 Lemma alloc_pb_config_ghost γ conf confγs :
@@ -58,8 +61,8 @@ End config_global.
 
 Section pb_config_proof.
 
-Context {pb_record:Sm.t}.
-Notation pbG := (pbG (pb_record:=pb_record)).
+Context {params:pbParams.t}.
+Import pbParams.
 Notation OpType := (Sm.OpType pb_record).
 Notation has_op_encoding := (Sm.has_op_encoding pb_record).
 Notation has_snap_encoding := (Sm.has_snap_encoding pb_record).
@@ -82,7 +85,7 @@ Lemma wp_MakeClerk2 (configHost:u64) γ :
   }}}.
 Proof.
   iIntros (Φ) "#Hhost HΦ".
-  iDestruct "Hhost" as (?) "[Hhost Hinv]".
+  iNamed "Hhost".
   wp_apply (config_proof.wp_MakeClerk with "[$Hhost]").
   iIntros.
   iApply "HΦ".
@@ -310,7 +313,7 @@ Proof.
   iMod (lc_fupd_elim_later with "Hlc Hi") as "Hi".
   iApply fupd_mask_intro.
   {
-    enough (↑epochLeaseN ## (↑configN:coPset)) by set_solver.
+    enough (↑epochLeaseN ## (↑configN:coPset)) by solve_ndisj.
     by apply ndot_ne_disjoint.
   }
   iIntros "Hmask".

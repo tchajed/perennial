@@ -10,13 +10,13 @@ Import RecordSetNotations.
 
 Section pb_becomeprimary_proof.
 Context `{!heapGS Σ}.
-Context {pb_record:Sm.t}.
+Context {params:pbParams.t}.
+Import pbParams.
 
 Notation OpType := (Sm.OpType pb_record).
 Notation has_op_encoding := (Sm.has_op_encoding pb_record).
 Notation has_snap_encoding := (Sm.has_snap_encoding pb_record).
 Notation compute_reply := (Sm.compute_reply pb_record).
-Notation pbG := (pbG (pb_record:=pb_record)).
 
 Context `{!waitgroupG Σ}.
 Context `{!pbG Σ}.
@@ -28,7 +28,7 @@ Lemma wp_Clerk__BecomePrimary γ γsrv ck args_ptr args σ backupγ:
         "#Hepoch_lb" ∷ is_epoch_lb γsrv.(r_pb) args.(BecomePrimaryArgs.epoch) ∗
         "#Hconf" ∷ is_epoch_config γ.(s_pb) args.(BecomePrimaryArgs.epoch) (r_pb <$> γsrv :: backupγ) ∗
         "#Hhosts" ∷ ([∗ list] host ; γsrv' ∈ args.(BecomePrimaryArgs.replicas) ; γsrv :: backupγ,
-                       is_pb_host host γ γsrv' ∗
+                       is_pb_rpcs host γ γsrv' ∗
                        is_epoch_lb γsrv'.(r_pb) args.(BecomePrimaryArgs.epoch)) ∗
         "#Hprim_escrow" ∷ become_primary_escrow γ.(s_prim) γsrv.(r_prim) args.(BecomePrimaryArgs.epoch) σ
                           (own_primary_ghost γ.(s_pb) args.(BecomePrimaryArgs.epoch) σ) ∗
@@ -53,7 +53,7 @@ Proof.
   wp_loadField.
   iDestruct (own_slice_to_small with "Henc_args_sl") as "Henc_args_sl".
   wp_apply (wp_frame_wand with "HΦ").
-  rewrite is_pb_host_unfold.
+  rewrite is_pb_rpcs_unfold.
   iNamed "Hsrv".
   wp_apply (wp_ReconnectingClient__Call2 with "Hcl_rpc [] Henc_args_sl Hrep").
   {
@@ -104,7 +104,7 @@ Lemma become_primary_eph_step γ γsrv st σ backupγ replicaHosts:
   is_proposal_facts_prim γ.(s_prim) st.(server.epoch) σ -∗
   is_epoch_config γ.(s_pb) st.(server.epoch) (r_pb <$> γsrv :: backupγ) -∗
   ([∗ list] host ; γsrv' ∈ replicaHosts ; γsrv :: backupγ,
-                  is_pb_host host γ γsrv' ∗
+                  is_pb_rpcs host γ γsrv' ∗
                   is_epoch_lb γsrv'.(r_pb) st.(server.epoch)) -∗
   become_primary_escrow γ.(s_prim) γsrv.(r_prim) st.(server.epoch) σ
                     (own_primary_ghost γ.(s_pb) st.(server.epoch) σ) -∗
@@ -135,7 +135,7 @@ Lemma wp_Server__BecomePrimary γ γsrv s args_ptr args σ backupγ Φ Ψ :
   is_Server s γ γsrv -∗
   BecomePrimaryArgs.own args_ptr args -∗
   (∀ (err:u64), Ψ err -∗ Φ #err) -∗
-  BecomePrimary_core_spec γ γsrv args σ backupγ is_pb_host Ψ -∗
+  BecomePrimary_core_spec γ γsrv args σ backupγ is_pb_rpcs Ψ -∗
   WP pb.Server__BecomePrimary #s #args_ptr {{ Φ }}
   .
 Proof.
@@ -204,7 +204,8 @@ Proof.
     iIntros (j_ptr) "Hj".
     wp_pures.
 
-    iRename "Hargs_replicas_sl" into "Hreplicas_sl".
+    iRename "Hargs_replicas_sl" into "Hreplicas_sl_ro".
+      iMod (readonly_load with "Hreplicas_sl_ro") as (?) "Hreplicas_sl".
     iAssert (
           ∃ (j:u64) clerkssComplete clerkssLeft,
             "Hj" ∷ j_ptr ↦[uint64T] #j ∗
@@ -474,7 +475,8 @@ Proof.
 
       destruct clerkssLeft.
       { exfalso. rewrite app_nil_r in Hlens. word. }
-      replace (<[int.nat j:=new_clerks_sl]> (clerkssComplete ++ t :: clerkssLeft))
+      rename t0 into x.
+      replace (<[int.nat j:=new_clerks_sl]> (clerkssComplete ++ x :: clerkssLeft))
         with
         (((clerkssComplete ++ [new_clerks_sl]) ++ (clerkssLeft))); last first.
       {
