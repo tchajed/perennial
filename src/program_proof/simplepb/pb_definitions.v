@@ -467,17 +467,6 @@ Definition is_conf_inv γ γconf : iProp Σ :=
 .
 (* End config client-side protocol. *)
 
-(* Program Local Instance toConfigParams γ : configParams.t Σ :=
-  configParams.mk Σ
-                  (pbConfWf γ)
-                  (pbN .@ "configservice")
-                  initconf _
-.
-Next Obligation.
-  intros. rewrite /crash_modality.IntoCrash.
-  iIntros "$". iIntros; eauto.
-Qed. *)
-
 End pb_global_definitions.
 
 Module server.
@@ -700,7 +689,6 @@ Definition own_Server (s:loc) (st:server.t) γ γsrv mu : iProp Σ :=
   "%HnextIndexNoOverflow" ∷ ⌜no_overflow (length (get_rwops (st.(server.ops_full_eph))))⌝
 .
 
-(* Existing Instance toConfigParams. *)
 Definition is_Server_lease_resource γ (epoch:u64) (leaseValid:bool) (leaseExpiration:u64) : iProp Σ :=
   "#HprereadInv" ∷ is_preread_inv γ.(s_pb) γ.(s_prelog) γ.(s_reads) ∗
   "#Hlease" ∷ □(if leaseValid then
