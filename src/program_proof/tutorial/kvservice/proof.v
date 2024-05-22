@@ -71,60 +71,6 @@ Lemma wp_decode  sl enc_args args q :
   }}}
 .
 Proof.
-  iIntros (Φ) "Hpre HΦ".
-  iNamed "Hpre".
-  wp_lam.
-  wp_apply wp_ref_to.
-  { done. }
-  iIntros (e) "He".
-  wp_pures.
-  wp_apply wp_allocStruct.
-  { val_ty. }
-  iIntros (args_ptr) "Hargs".
-  iDestruct (struct_fields_split with "Hargs") as "HH".
-  iNamed "HH".
-
-  wp_pures.
-  wp_load.
-  rewrite Henc; clear dependent enc_args.
-  wp_apply (wp_ReadInt with "[$]").
-  iIntros (?) "Hsl".
-  wp_pures.
-  wp_storeField.
-  wp_store.
-  wp_load.
-  wp_apply (wp_ReadInt with "[$]").
-  iIntros (?) "Hsl".
-  wp_pures.
-  iDestruct (own_slice_small_sz with "Hsl") as %Hsz.
-  wp_apply (wp_ReadBytes with "[$]").
-  { rewrite app_length in Hsz. word. }
-  iIntros (???) "[Hkey Hval]".
-  wp_pures.
-  wp_apply (wp_StringFromBytes with "[$Hkey]").
-  iIntros "Hkey".
-  wp_storeField.
-  wp_apply (wp_StringFromBytes with "[$Hval]").
-  iIntros "Hval".
-  wp_storeField.
-  iModIntro.
-  iApply "HΦ".
-  do 2 rewrite string_to_bytes_inj.
-  iFrame.
-Qed.
-
-(* diaframe version of above *)
-Lemma wp_decode_auto  sl enc_args args q :
-  {{{
-        "%Henc" ∷ ⌜encodes enc_args args⌝ ∗
-        "Hsl" ∷ own_slice_small sl byteT q enc_args
-  }}}
-    decodePutArgs (slice_val sl)
-  {{{
-        (args_ptr:loc), RET #args_ptr; own args_ptr args
-  }}}
-.
-Proof.
   rewrite /encodes.
   iSteps.
   rewrite !string_to_bytes_inj.
@@ -169,7 +115,6 @@ Lemma wp_encode args_ptr args :
   }}}
 .
 Proof.
-  iSteps.
   rewrite /encodes.
   iSteps.
   iModIntro.
@@ -178,81 +123,10 @@ Proof.
       iRename select (own_slice x _ _ _) into "H"; iExactEq "H"
   end.
   f_equal.
+  (* TODO: list solver? *)
   rewrite replicate_0 app_nil_l.
   rewrite -!assoc.
   repeat f_equal; word.
-
-  (* (*  this is the manual proof: *)
-  iIntros (Φ) "Hargs HΦ".
-  iNamed "Hargs".
-  wp_lam.
-  wp_apply wp_NewSlice.
-  iIntros (sl) "Hsl".
-  wp_apply wp_ref_to.
-  { done. }
-  iIntros (e) "He".
-  wp_pures.
-
-  wp_loadField.
-  wp_load.
-  wp_apply (wp_WriteInt with "[$]").
-  iIntros (?) "Hsl".
-  rewrite replicate_0 /=.
-  wp_store.
-
-  wp_loadField.
-  wp_apply wp_StringToBytes.
-  iIntros (key_sl) "Hkey_sl".
-  wp_pures.
-  wp_apply wp_slice_len.
-  iDestruct (own_slice_sz with "Hkey_sl") as "%Hsz".
-  wp_load.
-  wp_apply (wp_WriteInt with "[$Hsl]").
-  iIntros (?) "Hsl".
-  wp_store.
-
-  wp_load.
-  iDestruct (own_slice_to_small with "Hkey_sl") as "Hkey_sl".
-  wp_apply (wp_WriteBytes with "[$Hsl $Hkey_sl]").
-  iIntros (?) "[Hsl Hkey_sl]".
-  wp_store.
-
-  wp_loadField.
-  wp_apply (wp_StringToBytes).
-  iIntros (?) "Hexpect_sl".
-  iDestruct (own_slice_to_small with "Hexpect_sl") as "Hexpect_sl".
-  wp_pures.
-
-  wp_apply wp_slice_len.
-  iDestruct (own_slice_small_sz with "Hexpect_sl") as %?.
-  wp_load.
-  wp_apply (wp_WriteInt with "[$Hsl]").
-  iIntros (?) "Hsl".
-  wp_store.
-
-  wp_load.
-  wp_apply (wp_WriteBytes with "[$Hsl $Hexpect_sl]").
-  iIntros (?) "[Hsl Hexpect_sl]".
-  wp_store.
-
-  wp_loadField.
-  wp_apply (wp_StringToBytes).
-  iIntros (?) "Hval_sl".
-  wp_load.
-  iDestruct (own_slice_to_small with "Hval_sl") as "Hval_sl".
-  wp_apply (wp_WriteBytes with "[$Hsl $Hval_sl]").
-  iIntros (?) "[Hsl Hval_sl]".
-  wp_store.
-
-  wp_load.
-  iApply "HΦ".
-  iFrame.
-  iPureIntro.
-  unfold encodes.
-  repeat rewrite -assoc.
-  rewrite Hsz.
-  repeat f_equal; word.
-   *)
 Qed.
 
 Lemma wp_decode  sl enc_args args q :
@@ -304,48 +178,8 @@ Lemma wp_encode args_ptr args :
   }}}
 .
 Proof.
-  iIntros (Φ) "Hargs HΦ".
-  iNamed "Hargs".
-  wp_lam.
-  wp_apply wp_NewSlice.
-  iIntros (?) "Hsl".
-  wp_apply (wp_ref_to).
-  { done. }
-  iIntros (?) "He".
-  wp_pures.
-  wp_loadField.
-  wp_load.
-  wp_apply (wp_WriteInt with "Hsl").
-  iIntros (?) "Hsl".
-  wp_store.
-  wp_loadField.
-  wp_apply (wp_StringToBytes).
-  iIntros (?) "Hkey_sl".
-  wp_load.
-  iDestruct (own_slice_to_small with "Hkey_sl") as "Hkey_sl".
-  wp_apply (wp_WriteBytes with "[$Hsl $Hkey_sl]").
-  iIntros (?) "[Hsl _]".
-  wp_store.
-  wp_load.
-  iModIntro. iApply "HΦ".
-  iFrame.
-  iPureIntro. done.
-Qed.
-
-(* diaframe version of above *)
-Lemma wp_encode_auto args_ptr args :
-  {{{
-        own args_ptr args
-  }}}
-    encodeGetArgs #args_ptr
-  {{{
-        (sl:Slice.t) enc_args, RET (slice_val sl); own args_ptr args ∗
-          ⌜encodes enc_args args⌝ ∗
-          own_slice sl byteT 1 enc_args
-  }}}
-.
-Proof.
   iSteps.
+  (* notice that the goal is reasonable even if you forget to unfold encodes *)
   rewrite /encodes. iSteps.
 Qed.
 
@@ -385,20 +219,10 @@ Lemma wp_EncodeBool (b:bool) :
   {{{ sl, RET (slice_val sl); own_slice sl byteT 1 (bool_le b) }}}
 .
 Proof.
-  iIntros (Φ) "_ HΦ".
-  wp_lam. wp_if_destruct.
-  {
-    wp_apply wp_NewSlice. iIntros (?) "?".
-    wp_apply (wp_SliceAppend with "[$]").
-    iIntros (?) "?".
-    by iApply "HΦ".
-  }
-  {
-    wp_apply wp_NewSlice. iIntros (?) "?".
-    wp_apply (wp_SliceAppend with "[$]").
-    iIntros (?) "?".
-    by iApply "HΦ".
-  }
+  iSteps.
+  wp_if_destruct.
+  - iSteps.
+  - iSteps.
 Qed.
 
 Lemma wp_DecodeBool sl b q :
@@ -407,24 +231,16 @@ Lemma wp_DecodeBool sl b q :
   {{{ RET #b; True }}}
 .
 Proof.
-  iIntros (?) "Hsl HΦ".
-  wp_lam.
-  unfold bool_le.
-  destruct b.
-  {
-    wp_apply (wp_SliceGet with "[$Hsl]").
-    { done. }
-    iIntros "_".
-    wp_pures.
-    iModIntro. by iApply "HΦ".
-  }
-  {
-    wp_apply (wp_SliceGet with "[$Hsl]").
-    { done. }
-    iIntros "_".
-    wp_pures.
-    iModIntro. by iApply "HΦ".
-  }
+  iSteps.
+  iRename select (own_slice_small sl _ _ _) into "Hs".
+  rewrite /bool_le.
+  destruct b; simpl.
+  { wp_apply (wp_SliceGet with "[$Hs]").
+    { iPureIntro. reflexivity. }
+    iSteps. }
+  { wp_apply (wp_SliceGet with "[$Hs]").
+    { iPureIntro. reflexivity. }
+    iSteps. }
 Qed.
 
 Lemma wp_EncodeUint64 x:
@@ -448,12 +264,9 @@ Lemma wp_DecodeUint64 sl x q :
   {{{ RET #x; True }}}
 .
 Proof.
-  iIntros (Φ) "Hsl HΦ".
-  wp_lam.
-  wp_apply (wp_ReadInt with "Hsl").
-  iIntros (?) "Hsl".
-  wp_pures.
-  by iApply "HΦ".
+  iSteps.
+  rewrite -(app_nil_r (u64_le x)).
+  iSteps.
 Qed.
 
 End marshal_proof.
