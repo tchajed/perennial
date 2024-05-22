@@ -708,7 +708,7 @@ Proof.
   iIntros (Φ) "Hpre HΦ".
   wp_lam.
   wp_apply wp_allocStruct.
-  { repeat econstructor. }
+  { val_ty. }
   iIntros (s) "Hs".
   iDestruct (struct_fields_split with "Hs") as "HH".
   iNamed "HH".
@@ -957,7 +957,7 @@ Proof.
   iIntros (?) "#?".
   iApply wp_fupd.
   wp_apply wp_allocStruct.
-  { repeat econstructor. }
+  { val_ty. }
   iIntros (?) "Hl".
   iDestruct (struct_fields_split with "Hl") as "HH".
   iNamed "HH".
@@ -1276,7 +1276,7 @@ Proof.
   wp_load.
   wp_pures.
   wp_apply (wp_allocStruct).
-  { repeat econstructor. }
+  { val_ty. }
   iIntros (args_ptr) "Hargs".
   iDestruct (struct_fields_split with "Hargs") as "HH".
   iNamed "HH".
@@ -1356,7 +1356,7 @@ Proof.
   wp_load.
   wp_pures.
   wp_apply (wp_allocStruct).
-  { repeat econstructor. }
+  { val_ty. }
   iIntros (args_ptr) "Hargs".
   iDestruct (struct_fields_split with "Hargs") as "HH".
   iNamed "HH".
@@ -1439,7 +1439,7 @@ Proof.
   wp_load.
   wp_pures.
   wp_apply (wp_allocStruct).
-  { repeat econstructor. }
+  { val_ty. }
   iIntros (args_ptr) "Hargs".
   iDestruct (struct_fields_split with "Hargs") as "HH".
   iNamed "HH".
@@ -1468,26 +1468,18 @@ Proof.
   iModIntro. iApply "HΦ". done.
 Qed.
 
+#[local] Opaque makeClient.
+
 Lemma wp_MakeClerk (host:u64) :
   {{{ is_kvserver_host host }}}
     MakeClerk #host
   {{{ ck, RET #ck; is_Clerk ck }}}
 .
 Proof.
-  iIntros (Φ) "#Hhost HΦ".
-  wp_lam.
-  wp_apply (wp_makeClient with "Hhost").
-  iIntros (?) "#?".
-  iApply wp_fupd.
-  wp_apply wp_allocStruct.
-  { repeat econstructor. }
-  iIntros (?) "Hl".
-  iDestruct (struct_fields_split with "Hl") as "HH".
-  iNamed "HH".
-  iApply "HΦ".
-  iMod (readonly_alloc_1 with "rpcCl") as "#?".
-  iModIntro.
-  iExists _; iFrame "#".
+  iSteps.
+  wp_apply (wp_makeClient).
+  { iSteps. }
+  iSteps.
 Qed.
 
 End clerk_proof.
