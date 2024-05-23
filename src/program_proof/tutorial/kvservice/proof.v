@@ -52,8 +52,6 @@ Proof.
   iPureIntro.
   rewrite /encodes.
   repeat rewrite -assoc.
-  rewrite replicate_0.
-  rewrite app_nil_l.
   repeat f_equal.
   word.
 Qed.
@@ -126,7 +124,6 @@ Proof.
   end.
   f_equal.
   (* TODO: list solver? *)
-  rewrite replicate_0 app_nil_l.
   rewrite -!assoc.
   repeat f_equal; word.
 Qed.
@@ -397,7 +394,7 @@ Proof.
   iSteps.
 
   iNamed.
-  wp_apply (wp_MapGet' with "[$HkvsM //]").
+  wp_apply (wp_MapGet' (K:=string) with "[$HkvsM //]").
   iIntros (v ok) "(%Hget & HkvsM)".
   iSteps.
   wp_if_destruct.
@@ -410,9 +407,6 @@ Proof.
     iRename select (own_map x5 _ _) into "HlastRepliesM".
     wp_apply (wp_MapInsert with "HlastRepliesM") as "HlastRepliesM"; [ eauto | ].
     iSteps.
-
-    Unshelve.
-    all: tc_solve.
 Qed.
 
 Lemma wp_Server__get (s:loc) args_ptr (args:getArgs.t) Ψ :
@@ -431,7 +425,7 @@ Proof.
   wp_if_destruct; [ iSteps | ].
   iSteps.
   iNamed.
-  wp_apply (wp_MapGet' with "[$HkvsM]"); [ by eauto | ].
+  wp_apply (wp_MapGet' (K:=string) with "[$HkvsM]"); [ by eauto | ].
   iIntros (v ok) "(%Hget & HkvsM)".
   iSteps.
   iRename select (own_map x5 _ _) into "HlastRepliesM".
@@ -439,9 +433,6 @@ Proof.
   rewrite /typed_map.map_insert.
   iIntros "hLastRepliesM".
   iSteps.
-
-  Unshelve.
-  all: tc_solve.
 Qed.
 
 Lemma wp_MakeServer :
@@ -672,7 +663,12 @@ Definition is_Client (cl:loc) : iProp Σ :=
   "#Hhost" ∷ is_kvserver_host host
 .
 
+#[global] Instance is_Client_pers cl :
+  Persistent (is_Client cl).
+Proof. apply _. Qed.
+
 #[local] Opaque urpc.MakeClient.
+#[local] Opaque is_uRPCClient.
 
 Lemma wp_makeClient (host:u64) :
   {{{
@@ -683,23 +679,12 @@ Lemma wp_makeClient (host:u64) :
         (cl:loc), RET #cl; is_Client cl
   }}}.
 Proof.
-  iIntros (Φ) "Hpre HΦ".
-  iNamed "Hpre".
-  wp_lam.
+  iSteps.
   wp_apply wp_MakeClient.
-  iIntros (?) "#?".
-  iApply wp_fupd.
-  wp_apply wp_allocStruct.
-  { val_ty. }
-  iIntros (?) "Hl".
-  iDestruct (struct_fields_split with "Hl") as "HH".
-  iNamed "HH".
-  iMod (readonly_alloc_1 with "cl") as "#?".
-  iModIntro.
-  iApply "HΦ".
-  repeat iExists _.
-  iFrame "#".
+  iSteps.
 Qed.
+
+#[local] Opaque urpc.Client__Call.
 
 Lemma wp_Client__getFreshNumRpc Post cl :
   {{{
@@ -712,51 +697,35 @@ Lemma wp_Client__getFreshNumRpc Post cl :
   }}}
 .
 Proof.
-  iIntros (Φ) "Hpre HΦ".
-  iNamed "Hpre".
-  (* symbolic execution *)
-  wp_lam.
-  wp_apply (wp_ref_of_zero).
-  { done. }
-  iIntros (rep_ptr) "Hrep".
-  wp_pures.
-  wp_apply (wp_NewSlice).
-  iIntros (?) "Hreq_sl".
-  wp_pures.
-  iNamed "Hcl".
-  wp_loadField.
-  iNamed "Hhost".
-  iDestruct (own_slice_to_small with "Hreq_sl") as "Hreq_sl".
-
+  iSteps.
+  iRename select (_ ↦[slice.T _] _)%I into "Hrep".
+  iRename select (own_slice _ _ _ _)%I into "Hreq_sl".
   wp_bind (urpc.Client__Call _ _ _ _ _).
   wp_apply (wp_frame_wand with "[-Hreq_sl Hrep]").
   { iNamedAccu. }
+  iDestruct (own_slice_to_small with "Hreq_sl") as "Hreq_sl".
 
-  wp_apply (wp_Client__Call2 with "[$] [] [$] [$] [Hspec]"); first iFrame "#".
+  iRename select (getFreshNum_core_spec _) into "Hspec".
+
+  wp_apply (wp_Client__Call2 with "[$] [] [$] [$] []"); first iFrame "#".
   iSplit.
   { (* case: got a reply *)
     iModIntro. iModIntro.
-    rewrite replicate_0.
     rewrite /getFreshNum_spec /=.
     iApply (monotonic_fact with "[] Hspec").
     iModIntro.
-    iIntros (?) "HPost".
-    iIntros "Hreq_sl % Hrep Hrep_sl".
-    iNamed 1.
-    wp_pures.
-    wp_load. subst.
-    wp_apply (wp_DecodeUint64 with "[$]").
-    wp_pures.
-    by iApply "HΦ".
+    iSteps.
+    (* TODO: need another hint for marshal ReadInt that handles the integer
+    being the whole slice; this should be a keyed proposition *)
+    rewrite -(app_nil_r (u64_le x6)).
+    iSteps.
   }
   { (* case: Call returns error *)
-    iIntros (??) "Hreq_sl Hrep". iNamed 1.
-    wp_pures.
-    wp_if_destruct.
-    { by exfalso. }
-    wp_pures.
-    iApply "HΦ".
-    by rewrite decide_False.
+    iSteps.
+    wp_if_destruct; [ done | ].
+    iSteps.
+    iModIntro. iModIntro.
+    rewrite decide_False //.
   }
 Qed.
 
