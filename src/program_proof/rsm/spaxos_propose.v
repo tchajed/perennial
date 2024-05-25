@@ -130,13 +130,13 @@ Definition is_paxos_node (paxos : loc) (nid : u64) (sc : nat) γ : iProp Σ :=
 
 (* NB: We don't really need read-only map since reconfiguration is to be supported. *)
 Instance own_map_as_pointsto `{Countable K} `{!IntoVal K} `{!IntoVal V} (mref : loc) (m : gmap K V) :
-  AsMapsTo (own_map mref 1 m) (λ q : Qp, own_map mref q m).
+  AsMapsTo (own_map mref (DfracOwn 1) m) (λ q : Qp, own_map mref (DfracOwn q) m).
 Admitted.
 
 Definition is_paxos_comm (paxos : loc) (nid : u64) sc γ : iProp Σ :=
   ∃ (peers : loc) (peersM : gmap u64 loc) (scu64 : u64),
     "#Hpeers"   ∷ readonly (paxos ↦[Paxos :: "peers"] #peers) ∗
-    "#HpeersMR" ∷ readonly (own_map peers 1 peersM) ∗
+    "#HpeersMR" ∷ readonly (own_map peers (DfracOwn 1) peersM) ∗
     "#Hpaxos"   ∷ ([∗ map] i ↦ px ∈ peersM, is_paxos_node px i sc γ) ∗
     "%Hszpeers" ∷ ⌜size peersM < max_nodes⌝ ∗
     "%Hnotin"   ∷ ⌜nid ∉ dom peersM⌝ ∗
@@ -780,7 +780,7 @@ Proof.
                then node_accepted term decree nid γ ∗ is_proposal γ (uint.nat term) decree
                else True) -∗ Φ #ok)%I.
   set R := (own_term γ nid (uint.nat term) ∗ P ∗ is_proposal γ (uint.nat term) decree)%I.
-  iAssert (|={⊤}=> R)%I with "[Hterm HAU]" as "> (Hterm & HΦ & #Hproposal)".
+  iAssert (|NC={⊤}=> R)%I with "[Hterm HAU]" as "> (Hterm & HΦ & #Hproposal)".
   { iInv "Hinv" as ">HinvO" "HinvC".
     iNamed "HinvO".
     iDestruct (term_lookup with "Hterm Hts") as %Htermc.

@@ -59,7 +59,7 @@ Qed.
 Definition own_tuple_phys_vers tuple vers : iProp Σ :=
   ∃ versS,
     "Hvers" ∷ tuple ↦[Tuple :: "vers"] (to_val versS) ∗
-    "HversS" ∷ slice.own_slice versS (structTy Version) 1 (ver_to_val <$> vers).
+    "HversS" ∷ slice.own_slice versS (structTy Version) (DfracOwn 1) (ver_to_val <$> vers).
 
 (*****************************************************************)
 (* func (tuple *Tuple) removeVersions(tid uint64)                *)
@@ -106,7 +106,7 @@ Proof.
              "%Hbound" ∷ (⌜uint.Z 0 ≤ uint.Z idx < Z.of_nat (length vers)⌝) ∗
              "HidxR" ∷ idxR ↦[uint64T] #idx ∗
              "Hvers" ∷ tuple ↦[Tuple :: "vers"] (to_val versS) ∗
-             "HversX" ∷ own_slice_small versS (struct.t Version) 1 (ver_to_val <$> vers) ∗
+             "HversX" ∷ own_slice_small versS (struct.t Version) (DfracOwn 1) (ver_to_val <$> vers) ∗
              "%HallLe" ∷ (⌜Forall (λ ver, uint.Z tid ≤ uint.Z ver.1.1) (drop (S (uint.nat idx)) vers)⌝) ∗
              "%Hexit" ∷ if b
                         then ⌜True⌝
@@ -135,7 +135,8 @@ Proof.
     wp_loadField.
     destruct (list_lookup_lt _ (ver_to_val <$> vers) (uint.nat idx)) as [ver HSome].
     { rewrite fmap_length. word. }
-    wp_apply (wp_SliceGet with "[HversX]"); first auto.
+    wp_apply (wp_SliceGet with "[HversX]").
+    { iFrame. done. }
     iIntros "[HversX %Hval_ty]".
     destruct (val_to_ver_with_val_ty ver) as (b & d & v & ->); first auto.
     wp_pures.

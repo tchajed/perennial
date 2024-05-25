@@ -7,12 +7,12 @@ Section map_marshal_proof.
 Context `{!heapGS Σ}.
 Definition own_byte_map (mptr:loc) (m:gmap u64 (list u8)): iProp Σ :=
   ∃ (kvs_sl:gmap u64 Slice.t),
-    "Hkvs_map" ∷ own_map mptr 1 kvs_sl ∗
+    "Hkvs_map" ∷ own_map mptr (DfracOwn 1) kvs_sl ∗
     "%Hkvs_dom" ∷ ⌜dom kvs_sl = dom m⌝ ∗
     "#Hkvs_slices" ∷ (∀ (k:u64),
         readonly (own_slice_small (default Slice.nil (kvs_sl !! k))
                     byteT
-                    1
+                    (DfracOwn 1)
                     (default [] (m !! k))
                  )
       )
@@ -29,7 +29,7 @@ Lemma wp_byteMapNew :
 Proof.
   iIntros (Φ) "_ HΦ".
 
-  iDestruct (own_slice_small_nil byteT 1 Slice.nil) as "HH".
+  iDestruct (own_slice_small_nil byteT (DfracOwn 1) Slice.nil) as "HH".
   { done. }
   iMod (readonly_alloc_1 with "HH") as "Hsl".
   wp_apply (wp_NewMap).
@@ -50,7 +50,7 @@ Lemma wp_byteMapGet mptr m (k:u64) :
     Fst (MapGet #mptr #k)
   {{{
         sl, RET (slice_val sl);
-        readonly (own_slice_small sl byteT 1 (default [] (m !! k))) ∗
+        readonly (own_slice_small sl byteT (DfracOwn 1) (default [] (m !! k))) ∗
         own_byte_map mptr m
   }}}
 .
@@ -74,7 +74,7 @@ Qed.
 
 Lemma wp_byteMapPut mptr m (k:u64) sl (v:list u8) q :
 {{{
-      own_byte_map mptr m ∗ own_slice_small sl byteT q v
+      own_byte_map mptr m ∗ own_slice_small sl byteT (DfracOwn q) v
 }}}
     MapInsert #mptr #k (slice_val sl)
 {{{
@@ -84,7 +84,7 @@ Lemma wp_byteMapPut mptr m (k:u64) sl (v:list u8) q :
 Proof.
   iIntros (Φ) "[Hmap Hsl] HΦ".
   iNamed "Hmap".
-  iMod (readonly_alloc (own_slice_small sl byteT 1 v) with "[Hsl]") as "#Hsl".
+  iMod (readonly_alloc (own_slice_small sl byteT (DfracOwn 1) v) with "[Hsl]") as "#Hsl".
   { done. }
   wp_apply (wp_MapInsert with "Hkvs_map").
   { done. }
@@ -134,7 +134,7 @@ Lemma wp_EncodeMapU64ToBytes mptr m :
   {{{
         enc_sl enc, RET (slice_val enc_sl);
         own_byte_map mptr m ∗
-        own_slice enc_sl byteT 1 enc ∗
+        own_slice enc_sl byteT (DfracOwn 1) enc ∗
         ⌜has_byte_map_encoding enc m⌝
   }}}.
 Proof.
@@ -151,7 +151,7 @@ Proof.
       "%Hdisk" ∷ ⌜dom kvs_todo ## dom kvs_done⌝ ∗
       "%Henc" ∷ ⌜has_partial_byte_map_encoding enc (size m) (map_zip_with (λ v _, v) m kvs_done)⌝ ∗
       "Hl" ∷ l ↦[slice.T byteT] (slice_val s) ∗
-      "Hs" ∷ own_slice s byteT 1 enc
+      "Hs" ∷ own_slice s byteT (DfracOwn 1) enc
     )%I with "Hkvs_map [Hl Hs]").
   { iExists _, _. iFrame. iPureIntro.
     rewrite right_id_L. split; first done.
@@ -208,13 +208,13 @@ Qed.
 Lemma wp_DecodeMapU64ToBytes m enc_sl enc enc_rest q :
   {{{
         "%Henc" ∷ ⌜has_byte_map_encoding enc m⌝ ∗
-        "Henc_sl" ∷ own_slice_small enc_sl byteT q (enc ++ enc_rest)
+        "Henc_sl" ∷ own_slice_small enc_sl byteT (DfracOwn q) (enc ++ enc_rest)
   }}}
     DecodeMapU64ToBytes (slice_val enc_sl)
   {{{
         rest_enc_sl q' mptr, RET (#mptr, slice_val rest_enc_sl);
         own_byte_map mptr m ∗
-        own_slice_small rest_enc_sl byteT q' enc_rest
+        own_slice_small rest_enc_sl byteT (DfracOwn q') enc_rest
   }}}.
 Proof.
   iIntros "%Φ H HΦ". iNamed "H". wp_call.
@@ -228,7 +228,7 @@ Proof.
   wp_apply (wp_forUpto (λ i, ∃ s,
               "Hm" ∷ own_byte_map mptr (list_to_map (take (uint.nat i) ls)) ∗
               "Hl" ∷ l ↦[slice.T byteT] (slice_val s) ∗
-              "Hs" ∷ own_slice_small s byteT q (encode_byte_maplist (drop (uint.nat i) ls) ++ enc_rest)
+              "Hs" ∷ own_slice_small s byteT (DfracOwn q) (encode_byte_maplist (drop (uint.nat i) ls) ++ enc_rest)
   )%I with "[] [$Hli Hm Hl Hs]"); first word.
   2:{ iExists _. iFrame. }
   { (* core loop *)
@@ -289,13 +289,13 @@ Definition has_u64_map_encoding (enc:list u8) (m:gmap u64 u64) : Prop :=
 
 Lemma wp_EncodeMapU64ToU64 mptr m :
   {{{
-        "Hmap" ∷ own_map mptr 1 m
+        "Hmap" ∷ own_map mptr (DfracOwn 1) m
   }}}
     EncodeMapU64ToU64 #mptr
   {{{
         enc_sl enc, RET (slice_val enc_sl);
-        own_map mptr 1 m ∗
-        own_slice enc_sl byteT 1 enc ∗
+        own_map mptr (DfracOwn 1) m ∗
+        own_slice enc_sl byteT (DfracOwn 1) enc ∗
         ⌜has_u64_map_encoding enc m⌝
   }}}.
 Proof.
@@ -312,7 +312,7 @@ Proof.
       "%Hdisk" ∷ ⌜dom mtodo ## dom mdone⌝ ∗
       "%Henc" ∷ ⌜has_partial_u64_map_encoding enc (size m) mdone⌝ ∗
       "Hl" ∷ l ↦[slice.T byteT] (slice_val s) ∗
-      "Hs" ∷ own_slice s byteT 1 enc
+      "Hs" ∷ own_slice s byteT (DfracOwn 1) enc
     )%I with "Hmap [Hl Hs]").
   { iExists _, _. iFrame. iPureIntro.
     rewrite right_id_L. split; first done.
@@ -356,13 +356,13 @@ Qed.
 Lemma wp_DecodeMapU64ToU64 m enc_sl enc enc_rest q :
   {{{
         "%Henc" ∷ ⌜has_u64_map_encoding enc m⌝ ∗
-        "Henc_sl" ∷ own_slice_small enc_sl byteT q (enc ++ enc_rest)
+        "Henc_sl" ∷ own_slice_small enc_sl byteT (DfracOwn q) (enc ++ enc_rest)
   }}}
     DecodeMapU64ToU64 (slice_val enc_sl)
   {{{
         rest_enc_sl q' mptr, RET (#mptr, slice_val rest_enc_sl);
-        own_map mptr 1 m ∗
-        own_slice_small rest_enc_sl byteT q' enc_rest
+        own_map mptr (DfracOwn 1) m ∗
+        own_slice_small rest_enc_sl byteT (DfracOwn q') enc_rest
   }}}.
 Proof.
   iIntros "%Φ H HΦ". iNamed "H". wp_call.
@@ -374,9 +374,9 @@ Proof.
   wp_apply (wp_ReadInt with "Henc_sl"). iIntros (s') "Hs". wp_store. clear enc_sl.
   wp_apply wp_ref_to; first by val_ty. iIntros (li) "Hli". wp_pures.
   wp_apply (wp_forUpto (λ i, ∃ s,
-              "Hm" ∷ own_map mptr 1 (list_to_map (take (uint.nat i) ls)) ∗
+              "Hm" ∷ own_map mptr (DfracOwn 1) (list_to_map (take (uint.nat i) ls)) ∗
               "Hl" ∷ l ↦[slice.T byteT] (slice_val s) ∗
-              "Hs" ∷ own_slice_small s byteT q (encode_u64_maplist (drop (uint.nat i) ls) ++ enc_rest)
+              "Hs" ∷ own_slice_small s byteT (DfracOwn q) (encode_u64_maplist (drop (uint.nat i) ls) ++ enc_rest)
   )%I with "[] [$Hli Hm Hl Hs]"); first word.
   2:{ iExists _. iFrame. }
   { (* core loop *)

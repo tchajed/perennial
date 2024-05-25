@@ -45,17 +45,17 @@ Section goose_lang_instances.
   Qed.
 
   Global Instance load_primitive_spec E (l: loc) :
-    SPEC ⟨E⟩ (v: val) (q: Qp), {{ ▷ l ↦{q} v }} ! #l {{ RET v; l ↦{q} v }}.
+    SPEC ⟨E⟩ (v: val) dq, {{ ▷ l ↦{dq} v }} ! #l {{ RET v; l ↦{dq} v }}.
   Proof.
-    iSteps as (v q) "Hl".
+    iSteps as (v dq) "Hl".
     wp_apply (wp_load with "Hl").
     iSteps.
   Qed.
 
   Global Instance load_at_spec l E t :
-    SPEC ⟨E⟩ v q, {{ ▷ l ↦[t]{q} v }} ![t] #l {{ RET v; l ↦[t]{q} v }}.
+    SPEC ⟨E⟩ v dq, {{ ▷ l ↦[t]{dq} v }} ![t] #l {{ RET v; l ↦[t]{dq} v }}.
   Proof.
-    iSteps as (v q) "Hl".
+    iSteps as (v dq) "Hl".
     wp_apply (wp_LoadAt with "Hl").
     iSteps.
   Qed.

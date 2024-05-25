@@ -7,6 +7,7 @@ From Perennial.goose_lang.lib Require Import
   typed_map
 .
 From Perennial.program_proof Require Import std_proof.
+From Perennial.Helpers Require Import dfrac.
 
 #[global] Opaque NewSlice SliceGet SliceAppend SliceAppendSlice.
 #[global] Opaque NewMap impl.MapGet impl.MapInsert impl.MapDelete impl.MapLen.
@@ -107,8 +108,9 @@ Section proofs.
       {{ RET (to_val v); own_slice_small s t q vs }}.
   Proof.
     iSteps.
-    wp_apply (wp_SliceGet with "[-]"); [ | iSteps ].
-    eauto with iFrame.
+    wp_apply (wp_SliceGet with "[-]").
+    { iSteps. }
+    iSteps.
   Qed.
 
   #[global] Instance SliceAppend_spec `{!IntoValForType V t} s vs xx :

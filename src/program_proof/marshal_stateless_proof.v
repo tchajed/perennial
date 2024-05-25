@@ -31,13 +31,15 @@ Theorem wp_ReadBytes s q (len: u64) (head tail : list u8) :
     ReadBytes (slice_val s) #len
   {{{ b s' q', RET (slice_val b, slice_val s'); own_slice_small b byteT q' head ∗ own_slice_small s' byteT q' tail }}}.
 Proof.
-  iIntros (Hlen Φ) "[Hs1 Hs2] HΦ". wp_call.
-  wp_apply (wp_SliceTake_small with "Hs1").
+  iIntros (Hlen Φ) "Hs HΦ".
+  iMod (own_slice_small_persist with "Hs") as "#Hs".
+  wp_call.
+  wp_apply (wp_SliceTake_small with "Hs").
   { rewrite /list.untype fmap_app app_length !fmap_length. word. }
   iIntros "Hs1".
-  wp_apply (wp_SliceSkip_small with "Hs2").
+  wp_apply (wp_SliceSkip_small with "Hs").
   { rewrite /list.untype fmap_length app_length /=. word. }
-  iIntros (s') "Hs'". wp_pures. iApply "HΦ".
+  iIntros (s') "Hs2". wp_pures. iApply "HΦ".
   { rewrite /list.untype -fmap_take -fmap_drop.
     rewrite take_app_length' // drop_app_length' //. iFrame. done. }
 Qed.
@@ -46,7 +48,7 @@ Theorem wp_ReadBytesCopy s q (len: u64) (head tail : list u8) :
   length head = uint.nat len →
   {{{ own_slice_small s byteT q (head ++ tail) }}}
     ReadBytesCopy (slice_val s) #len
-  {{{ b s', RET (slice_val b, slice_val s'); own_slice b byteT 1 head ∗ own_slice_small s' byteT q tail }}}.
+  {{{ b s', RET (slice_val b, slice_val s'); own_slice b byteT (DfracOwn 1) head ∗ own_slice_small s' byteT q tail }}}.
 Proof.
   iIntros (Hlen Φ) "Hs HΦ". wp_call.
   wp_apply wp_NewSlice. iIntros (b) "Hb".
@@ -120,9 +122,9 @@ Proof.
 Qed.
 
 Local Theorem wp_reserve s (extra : u64) (vs : list u8) :
-  {{{ own_slice s byteT 1 vs }}}
+  {{{ own_slice s byteT (DfracOwn 1) vs }}}
     reserve (slice_val s) #extra
-  {{{ s', RET slice_val s'; ⌜uint.Z extra ≤ Slice.extra s'⌝ ∗ own_slice s' byteT 1 vs }}}.
+  {{{ s', RET slice_val s'; ⌜uint.Z extra ≤ Slice.extra s'⌝ ∗ own_slice s' byteT (DfracOwn 1) vs }}}.
 Proof.
   iIntros (Φ) "Hs HΦ". wp_lam.
   iDestruct (own_slice_wf with "Hs") as %Hwf.
@@ -150,9 +152,9 @@ Proof.
 Qed.
 
 Theorem wp_WriteInt s x (vs : list u8) :
-  {{{ own_slice s byteT 1 vs }}}
+  {{{ own_slice s byteT (DfracOwn 1) vs }}}
     WriteInt (slice_val s) #x
-  {{{ s', RET slice_val s'; own_slice s' byteT 1 (vs ++ u64_le x) }}}.
+  {{{ s', RET slice_val s'; own_slice s' byteT (DfracOwn 1) (vs ++ u64_le x) }}}.
 Proof.
   iIntros (Φ) "Hs HΦ". wp_lam. wp_pures.
   wp_apply (wp_reserve with "Hs"). clear s. iIntros (s) "[% Hs]". wp_pures.
@@ -178,10 +180,10 @@ Proof.
 Qed.
 
 Theorem wp_WriteBytes s (vs : list u8) data_sl q (data : list u8) :
-  {{{ own_slice s byteT 1 vs ∗ own_slice_small data_sl byteT q data }}}
+  {{{ own_slice s byteT (DfracOwn 1) vs ∗ own_slice_small data_sl byteT q data }}}
     WriteBytes (slice_val s) (slice_val data_sl)
   {{{ s', RET slice_val s';
-    own_slice s' byteT 1 (vs ++ data) ∗
+    own_slice s' byteT (DfracOwn 1) (vs ++ data) ∗
     own_slice_small data_sl byteT q data
   }}}.
 Proof.
@@ -192,10 +194,10 @@ Proof.
 Qed.
 
 Theorem wp_WriteBool s (vs: list u8) (b: bool) :
-  {{{ own_slice s byteT 1 vs }}}
+  {{{ own_slice s byteT (DfracOwn 1) vs }}}
     WriteBool (slice_val s) #b
   {{{ s', RET (slice_val s');
-      own_slice s' byteT 1 (vs ++ [if b then W8 1 else W8 0]) }}}.
+      own_slice s' byteT (DfracOwn 1) (vs ++ [if b then W8 1 else W8 0]) }}}.
 Proof.
   iIntros (Φ) "Hs HΦ". wp_call.
   destruct b; wp_pures.

@@ -109,7 +109,6 @@ Proof.
     wp_apply (release_spec with "[> -HΦ Q HKey Hrep]").
     {
       iFrame "HmuInv Hlocked".
-      iMod (readonly_load with "HValue_sl") as (?) "HValue_sl'".
       iModIntro. iNext.
       iExists _,_,_, _, _, _.
       iFrame.
@@ -141,13 +140,13 @@ Proof.
       { rewrite ?dom_insert_L //; eauto. iPureIntro; congruence. }
       iApply (big_sepS_delete _ _ args.(PR_Key) with "[-]").
       { set_solver. }
-      iSplitL "HValue_sl'".
+      iSplitL "".
       {
         simpl. iRight.
-        iExists _. iExists val_sl.
+        iExists val_sl.
         rewrite lookup_insert.
         rewrite lookup_insert.
-        by iFrame.
+        by iFrame "∗#".
       }
       iDestruct (big_sepS_delete _ _ args.(PR_Key) with "HvalSlices") as "[_ HvalSlices]".
       { set_solver. }
@@ -158,7 +157,7 @@ Proof.
       { set_solver. }
       rewrite lookup_insert_ne; last first.
       { set_solver. }
-      iFrame.
+      iFrame "∗#".
     }
     wp_pures. iModIntro. iApply "HΦ".
     iSplitL "Hrep".
