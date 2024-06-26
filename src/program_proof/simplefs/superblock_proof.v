@@ -2,6 +2,7 @@ From Perennial.program_proof Require Import proof_prelude.
 From Perennial.program_proof Require Import disk_prelude.
 
 From Perennial.program_proof Require Import marshal_stateless_proof.
+From Perennial.goose_lang.lib Require Import typed_slice.
 
 From Goose.github_com Require Import tchajed.simplefs.superblock.
 
@@ -98,6 +99,134 @@ Proof.
   iModIntro.
   rewrite bool_decide_eq_true_2; [ | word ].
   iApply "HΦ"; auto.
+Qed.
+
+Definition magicConst_: Z := 0x94f6c920688f08a6.
+
+Definition encoded_superblock sb : list u8 :=
+  u64_le magicConst_ ++
+  u64_le sb.(log_blocks) ++
+  u64_le sb.(inode_blocks) ++
+  u64_le sb.(data_bitmap_blocks) ++
+  u64_le sb.(data_blocks) ++
+  replicate 4056 (U8 0). (* 4096 - 8*5 *)
+
+Lemma encoded_superblock_len sb : length (encoded_superblock sb) = Z.to_nat BlkSize.
+Proof.
+  rewrite /encoded_superblock /BlkSize. len.
+Qed.
+
+Lemma wp_Superblock__Encode (l : loc) sb :
+  {{{ is_superblock l sb }}}
+    Superblock__Encode #l
+  {{{ s, RET (slice_val s); own_slice s u8T (DfracOwn 1) (encoded_superblock sb) }}}.
+Proof.
+  (*@ func (sb *Superblock) Encode() disk.Block {                             @*)
+  (*@     var buf []byte                                                      @*)
+  (*@     buf = marshal.WriteInt(buf, magicConst)                             @*)
+  (*@     buf = marshal.WriteInt(buf, sb.LogBlocks)                           @*)
+  (*@     buf = marshal.WriteInt(buf, sb.InodeBlocks)                         @*)
+  (*@     buf = marshal.WriteInt(buf, sb.DataBitmapBlocks)                    @*)
+  (*@     buf = marshal.WriteInt(buf, sb.DataBlocks)                          @*)
+  (*@     padding := make([]byte, disk.BlockSize-uint64(len(buf)))            @*)
+  (*@     buf = append(buf, padding...)                                       @*)
+  (*@     return buf                                                          @*)
+  (*@ }                                                                       @*)
+
+  iIntros (Φ) "Hpre HΦ". iNamed "Hpre".
+  wp_rec.
+  wp_apply wp_ref_of_zero; [ auto | ]. iIntros (buf) "buf".
+  wp_pures.
+  wp_load.
+  rewrite zero_slice_val.
+  wp_apply wp_WriteInt.
+  { iApply own_slice_zero. }
+  iIntros (s1) "Hs".
+  wp_store. wp_loadField. wp_load.
+  wp_apply (wp_WriteInt with "Hs").
+  iIntros (s2) "Hs".
+  wp_store. wp_loadField. wp_load.
+  wp_apply (wp_WriteInt with "Hs").
+  iIntros (s3) "Hs".
+  wp_store. wp_loadField. wp_load.
+  wp_apply (wp_WriteInt with "Hs").
+  iIntros (s4) "Hs".
+  wp_store. wp_loadField. wp_load.
+  wp_apply (wp_WriteInt with "Hs").
+  iIntros (s5) "Hs".
+  iDestruct (own_slice_sz with "Hs") as %Hsz5.
+  assert (uint.Z s5.(Slice.sz) = 40) as Hlen_prefix.
+  { move: Hsz5; len. }
+  wp_store. wp_load. wp_apply wp_slice_len.
+  wp_pures. wp_apply wp_NewSlice.
+  iIntros (s_pad) "Hpadding".
+  wp_load. wp_apply (wp_SliceAppendSlice with "[Hs Hpadding]"); first by auto.
+  { iFrame. rewrite own_slice_to_small. iFrame. }
+  iIntros (s6) "[Hs _]".
+  iDestruct (own_slice_sz with "Hs") as %Hsz.
+  wp_store. wp_load.
+  iModIntro. iApply "HΦ".
+  iExactEq "Hs".
+  f_equal.
+  autorewrite with len in Hsz.
+  rewrite -!app_assoc app_nil_l.
+  change (IntoVal_def w8) with (U8 0).
+  rewrite /encoded_superblock.
+  repeat f_equal.
+  word.
+Qed.
+
+Theorem wp_Decode buf_s dq data sb :
+  {{{ own_slice_small buf_s byteT dq data ∗ ⌜data = encoded_superblock sb⌝ ∗ ⌜superblock_wf sb⌝ }}}
+    Decode (slice_val buf_s)
+  {{{ (l: loc), RET #l; is_superblock l sb }}}.
+Proof.
+  (*@ func Decode(b disk.Block) Superblock {                                  @*)
+  (*@     magic, b2 := marshal.ReadInt(b)                                     @*)
+  (*@     if magic != magicConst {                                            @*)
+  (*@         panic("invalid magic number")                                   @*)
+  (*@     }                                                                   @*)
+  (*@     logBlocks, b3 := marshal.ReadInt(b2)                                @*)
+  (*@     inodeBlocks, b4 := marshal.ReadInt(b3)                              @*)
+  (*@     dataBitmapBlocks, b5 := marshal.ReadInt(b4)                         @*)
+  (*@     dataBlocks, _ := marshal.ReadInt(b5)                                @*)
+  (*@     return Superblock{                                                  @*)
+  (*@         LogBlocks:        logBlocks,                                    @*)
+  (*@         InodeBlocks:      inodeBlocks,                                  @*)
+  (*@         DataBitmapBlocks: dataBitmapBlocks,                             @*)
+  (*@         DataBlocks:       dataBlocks,                                   @*)
+  (*@     }                                                                   @*)
+  (*@ }                                                                       @*)
+  iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "(Hs & -> & %Hwf)".
+  wp_rec.
+  wp_apply (wp_ReadInt with "Hs").
+  iIntros (s1) "Hs". wp_pures.
+  wp_apply (wp_ReadInt with "Hs").
+  iIntros (s2) "Hs". wp_pures.
+  wp_apply (wp_ReadInt with "Hs").
+  iIntros (s3) "Hs". wp_pures.
+  wp_apply (wp_ReadInt with "Hs").
+  iIntros (s4) "Hs". wp_pures.
+  wp_apply (wp_ReadInt with "Hs").
+  iIntros (s5) "Hs". wp_pures.
+  (* we need to have a fupd to create the readonly facts *)
+  rewrite -wp_ncfupd.
+  wp_apply (wp_allocStruct).
+  { val_ty. }
+  iIntros (l) "Hsb".
+  iDestruct (struct_fields_split with "Hsb") as "Hfields"; iNamed "Hfields".
+  iMod (struct_field_pointsto_persist with "LogBlocks") as "#?".
+  iMod (struct_field_pointsto_persist with "InodeBlocks") as "#?".
+  iMod (struct_field_pointsto_persist with "DataBitmapBlocks") as "#?".
+  iMod (struct_field_pointsto_persist with "DataBlocks") as "#?".
+  iModIntro.
+  iApply "HΦ".
+  rewrite /is_superblock.
+  (* TODO: iFrame is noticeably slow here, seems like it's processing ["Hs" : replicate
+  4056 (W8 0)]? *)
+  iClear "Hs".
+  iFrame "#".
+  auto.
 Qed.
 
 End proof.

@@ -57,7 +57,7 @@ Definition InitSuperblock: val :=
     let: "nominalDataBlocks" := ("sizeBlocks" - #1) - "inodeBlocks" in
     let: "dataBitmapBlocks" := divRoundup "nominalDataBlocks" (disk.BlockSize * #8) in
     let: "dataBlocks" := (("sizeBlocks" - #1) - "inodeBlocks") - "dataBitmapBlocks" in
-    let: "sb" := struct.mk Superblock [
+    let: "sb" := struct.new Superblock [
       "LogBlocks" ::= #0;
       "InodeBlocks" ::= "inodeBlocks";
       "DataBitmapBlocks" ::= "dataBitmapBlocks";
@@ -83,7 +83,7 @@ Definition Decode: val :=
     let: ("inodeBlocks", "b4") := marshal.ReadInt "b3" in
     let: ("dataBitmapBlocks", "b5") := marshal.ReadInt "b4" in
     let: ("dataBlocks", <>) := marshal.ReadInt "b5" in
-    struct.mk Superblock [
+    struct.new Superblock [
       "LogBlocks" ::= "logBlocks";
       "InodeBlocks" ::= "inodeBlocks";
       "DataBitmapBlocks" ::= "dataBitmapBlocks";

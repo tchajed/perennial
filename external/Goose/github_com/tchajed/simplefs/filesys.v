@@ -10,7 +10,7 @@ From Perennial.goose_lang Require Import ffi.disk_prelude.
 (* block_fs.go *)
 
 Definition blockFs := struct.decl [
-  "sb" :: struct.t superblock.Superblock;
+  "sb" :: ptrT;
   "d" :: disk.Disk;
   "ba" :: struct.t alloc.BlockAllocator;
   "ia" :: struct.t alloc.InodeAllocator
@@ -22,11 +22,11 @@ Definition mkBlockFs: val :=
     disk.Write #0 (superblock.Superblock__Encode "sb");;
     let: "zero_blk" := NewSlice byteT disk.BlockSize in
     let: "i" := ref_to uint64T #0 in
-    (for: (λ: <>, (![uint64T] "i") < (struct.get superblock.Superblock "InodeBlocks" "sb")); (λ: <>, "i" <-[uint64T] ((![uint64T] "i") + #1)) := λ: <>,
+    (for: (λ: <>, (![uint64T] "i") < (struct.loadF superblock.Superblock "InodeBlocks" "sb")); (λ: <>, "i" <-[uint64T] ((![uint64T] "i") + #1)) := λ: <>,
       disk.Write ((superblock.Superblock__InodeStart "sb") + (![uint64T] "i")) "zero_blk";;
       Continue);;
     let: "i" := ref_to uint64T #0 in
-    (for: (λ: <>, (![uint64T] "i") < (struct.get superblock.Superblock "DataBitmapBlocks" "sb")); (λ: <>, "i" <-[uint64T] ((![uint64T] "i") + #1)) := λ: <>,
+    (for: (λ: <>, (![uint64T] "i") < (struct.loadF superblock.Superblock "DataBitmapBlocks" "sb")); (λ: <>, "i" <-[uint64T] ((![uint64T] "i") + #1)) := λ: <>,
       disk.Write ((superblock.Superblock__DataBitmapStart "sb") + (![uint64T] "i")) "zero_blk";;
       Continue);;
     let: "root_inode" := inode.NewInode simplefs.DirType in
@@ -50,7 +50,7 @@ Definition loadBlockFs: val :=
 
 Definition blockFs__Superblock: val :=
   rec: "blockFs__Superblock" "fs" :=
-    struct.fieldRef blockFs "sb" "fs".
+    struct.loadF blockFs "sb" "fs".
 
 (* AllocInode allocates a new inode of the given type. Its length, meta, and
    block pointers are all guaranteed to be zeroed. *)
@@ -61,25 +61,25 @@ Definition blockFs__AllocInode: val :=
 Definition blockFs__FreeInode: val :=
   rec: "blockFs__FreeInode" "fs" "i" :=
     alloc.InodeAllocator__Free (struct.loadF blockFs "ia" "fs") "i";;
-    let: "ino" := inode.ReadInode (struct.loadF blockFs "d" "fs") (struct.fieldRef blockFs "sb" "fs") "i" in
+    let: "ino" := inode.ReadInode (struct.loadF blockFs "d" "fs") (struct.loadF blockFs "sb" "fs") "i" in
     ForSlice uint32T <> "b" (struct.loadF inode.Inode "BlockPtrs" "ino")
       ((if: "b" ≠ #(U32 0)
       then alloc.BlockAllocator__Free (struct.loadF blockFs "ba" "fs") "b"
       else #()));;
     let: "zero_inode" := inode.NewInode simplefs.Invalid in
-    inode.Inode__Write "zero_inode" (struct.loadF blockFs "d" "fs") (struct.fieldRef blockFs "sb" "fs") "i";;
+    inode.Inode__Write "zero_inode" (struct.loadF blockFs "d" "fs") (struct.loadF blockFs "sb" "fs") "i";;
     #().
 
 (* GetInode reads the given inode. Only intended to expose the inode length and
    meta - type and block pointers are handled by `BlockFs`. *)
 Definition blockFs__GetInode: val :=
   rec: "blockFs__GetInode" "fs" "i" :=
-    inode.ReadInode (struct.loadF blockFs "d" "fs") (struct.fieldRef blockFs "sb" "fs") "i".
+    inode.ReadInode (struct.loadF blockFs "d" "fs") (struct.loadF blockFs "sb" "fs") "i".
 
 (* Update an inode to change its length and meta. *)
 Definition blockFs__WriteInode: val :=
   rec: "blockFs__WriteInode" "fs" "i" "ino" :=
-    inode.Inode__Write "ino" (struct.loadF blockFs "d" "fs") (struct.fieldRef blockFs "sb" "fs") "i";;
+    inode.Inode__Write "ino" (struct.loadF blockFs "d" "fs") (struct.loadF blockFs "sb" "fs") "i";;
     #().
 
 Definition blockFs__getBlockNum: val :=
@@ -87,7 +87,7 @@ Definition blockFs__getBlockNum: val :=
     (if: "off" ≥ inode.NUM_DIRECT
     then #(U32 0)
     else
-      let: "ino" := inode.ReadInode (struct.loadF blockFs "d" "fs") (struct.fieldRef blockFs "sb" "fs") "i" in
+      let: "ino" := inode.ReadInode (struct.loadF blockFs "d" "fs") (struct.loadF blockFs "sb" "fs") "i" in
       inode.Inode__GetBlockPtr "ino" "off").
 
 Definition blockFs__ReadBlock: val :=
@@ -107,9 +107,9 @@ Definition blockFs__allocBlockNum: val :=
       (if: (~ "ok")
       then (#(U32 0), #false)
       else
-        let: "ino" := inode.ReadInode (struct.loadF blockFs "d" "fs") (struct.fieldRef blockFs "sb" "fs") "i" in
+        let: "ino" := inode.ReadInode (struct.loadF blockFs "d" "fs") (struct.loadF blockFs "sb" "fs") "i" in
         inode.Inode__SetBlockPtr "ino" "off" "blkPtr2";;
-        inode.Inode__Write "ino" (struct.loadF blockFs "d" "fs") (struct.fieldRef blockFs "sb" "fs") "i";;
+        inode.Inode__Write "ino" (struct.loadF blockFs "d" "fs") (struct.loadF blockFs "sb" "fs") "i";;
         ("blkPtr2", #true))).
 
 Definition blockFs__WriteBlock: val :=

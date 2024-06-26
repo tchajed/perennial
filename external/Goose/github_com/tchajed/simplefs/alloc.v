@@ -15,7 +15,7 @@ Definition BlockAllocator := struct.decl [
 
 Definition NewBlockAllocator: val :=
   rec: "NewBlockAllocator" "d" "sb" :=
-    let: "num_bitmaps" := struct.get superblock.Superblock "DataBitmapBlocks" "sb" in
+    let: "num_bitmaps" := struct.loadF superblock.Superblock "DataBitmapBlocks" "sb" in
     let: "offset" := superblock.Superblock__DataBitmapStart "sb" in
     let: "bitmap_blks" := ref_to (slice.T (slice.T byteT)) (NewSliceWithCap disk.blockT #0 "num_bitmaps") in
     let: "i" := ref_to uint64T #0 in
@@ -25,7 +25,7 @@ Definition NewBlockAllocator: val :=
     let: "bitmap" := simplefs.NewBitmap (![slice.T (slice.T byteT)] "bitmap_blks") in
     let: "free" := ref_to (slice.T uint32T) (NewSlice uint32T #0) in
     let: "i" := ref_to uint32T #(U32 1) in
-    (for: (λ: <>, (![uint32T] "i") < (to_u32 (struct.get superblock.Superblock "DataBlocks" "sb"))); (λ: <>, "i" <-[uint32T] ((![uint32T] "i") + #1)) := λ: <>,
+    (for: (λ: <>, (![uint32T] "i") < (to_u32 (struct.loadF superblock.Superblock "DataBlocks" "sb"))); (λ: <>, "i" <-[uint32T] ((![uint32T] "i") + #1)) := λ: <>,
       (if: (~ (simplefs.Bitmap__Get "bitmap" (to_u64 (![uint32T] "i"))))
       then
         "free" <-[slice.T uint32T] (SliceAppend uint32T (![slice.T uint32T] "free") (![uint32T] "i"));;
@@ -60,7 +60,7 @@ Definition BlockAllocator__Free: val :=
     #().
 
 Definition InodeAllocator := struct.decl [
-  "sb" :: struct.t superblock.Superblock;
+  "sb" :: ptrT;
   "d" :: disk.Disk;
   "free" :: slice.T simplefs.Inum
 ].
@@ -68,7 +68,7 @@ Definition InodeAllocator := struct.decl [
 Definition NewInodeAllocator: val :=
   rec: "NewInodeAllocator" "d" "sb" :=
     let: "free" := ref_to (slice.T simplefs.Inum) (NewSlice simplefs.Inum #0) in
-    let: "inode_blocks" := struct.get superblock.Superblock "InodeBlocks" "sb" in
+    let: "inode_blocks" := struct.loadF superblock.Superblock "InodeBlocks" "sb" in
     let: "offset" := superblock.Superblock__InodeStart "sb" in
     let: "blk_num" := ref_to uint64T #0 in
     (for: (λ: <>, (![uint64T] "blk_num") < "inode_blocks"); (λ: <>, "blk_num" <-[uint64T] ((![uint64T] "blk_num") + #1)) := λ: <>,
@@ -96,15 +96,15 @@ Definition InodeAllocator__Alloc: val :=
     else
       let: "i" := SliceGet simplefs.Inum (struct.loadF InodeAllocator "free" "ia") ((slice.len (struct.loadF InodeAllocator "free" "ia")) - #1) in
       struct.storeF InodeAllocator "free" "ia" (SliceTake (struct.loadF InodeAllocator "free" "ia") ((slice.len (struct.loadF InodeAllocator "free" "ia")) - #1));;
-      let: "ino" := inode.ReadInode (struct.loadF InodeAllocator "d" "ia") (struct.fieldRef InodeAllocator "sb" "ia") "i" in
+      let: "ino" := inode.ReadInode (struct.loadF InodeAllocator "d" "ia") (struct.loadF InodeAllocator "sb" "ia") "i" in
       inode.Inode__SetType "ino" "ty";;
-      inode.Inode__Write "ino" (struct.loadF InodeAllocator "d" "ia") (struct.fieldRef InodeAllocator "sb" "ia") "i";;
+      inode.Inode__Write "ino" (struct.loadF InodeAllocator "d" "ia") (struct.loadF InodeAllocator "sb" "ia") "i";;
       ("i", #true)).
 
 Definition InodeAllocator__Free: val :=
   rec: "InodeAllocator__Free" "ia" "i" :=
-    let: "ino" := inode.ReadInode (struct.loadF InodeAllocator "d" "ia") (struct.fieldRef InodeAllocator "sb" "ia") "i" in
+    let: "ino" := inode.ReadInode (struct.loadF InodeAllocator "d" "ia") (struct.loadF InodeAllocator "sb" "ia") "i" in
     inode.Inode__SetType "ino" simplefs.Invalid;;
-    inode.Inode__Write "ino" (struct.loadF InodeAllocator "d" "ia") (struct.fieldRef InodeAllocator "sb" "ia") "i";;
+    inode.Inode__Write "ino" (struct.loadF InodeAllocator "d" "ia") (struct.loadF InodeAllocator "sb" "ia") "i";;
     struct.storeF InodeAllocator "free" "ia" (SliceAppend simplefs.Inum (struct.loadF InodeAllocator "free" "ia") "i");;
     #().
