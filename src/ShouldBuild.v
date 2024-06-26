@@ -99,3 +99,6 @@ From Perennial.program_proof.tutorial Require
      (* kvservice.full_proof *).
 
 From Perennial.program_proof.cachekv Require proof.
+
+(* simplefs *)
+From Perennial.program_proof Require simplefs_proof.
