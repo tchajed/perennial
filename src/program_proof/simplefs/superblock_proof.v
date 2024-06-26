@@ -1,5 +1,8 @@
 From Perennial.program_proof Require Import proof_prelude.
 From Perennial.program_proof Require Import disk_prelude.
+
+From Perennial.program_proof Require Import marshal_stateless_proof.
+
 From Goose.github_com Require Import tchajed.simplefs.superblock.
 
 Record superblockT := {
@@ -45,7 +48,7 @@ Definition is_superblock (l : loc) (sb: superblockT) : iProp Σ :=
 
 Global Instance is_superblock_persistent l sb : Persistent (is_superblock l sb) := _.
 
-Theorem wp_Superblock__allocatableDataBlocks (l : loc) sb :
+Lemma wp_Superblock__allocatableDataBlocks (l : loc) sb :
   {{{ is_superblock l sb }}}
     Superblock__allocatableDataBlocks #l
   {{{ (x:u64), RET #x; ⌜uint.Z x = allocatable_data_blocks sb⌝ }}}.
@@ -64,7 +67,7 @@ Proof.
   word.
 Qed.
 
-Theorem wp_Superblock__Wf (l : loc) sb :
+Lemma wp_Superblock__Wf (l : loc) sb :
   {{{ is_superblock l sb }}}
     Superblock__Wf #l
   {{{ RET #true; True }}}.
