@@ -72,6 +72,16 @@ Lemma wp_Superblock__Wf (l : loc) sb :
     Superblock__Wf #l
   {{{ RET #true; True }}}.
 Proof.
+  (*@ func (sb *Superblock) Wf() bool {                                       @*)
+  (*@     // allocatableDataBlocks() shouldn't overflow; limit data bitmap blocks so @*)
+  (*@     // number of total bits is <2^32                                    @*)
+  (*@     return (sb.DataBitmapBlocks <= 0x2_0000) &&                         @*)
+  (*@         // should be able to allocate all the data blocks using the data bitmaps @*)
+  (*@         (sb.allocatableDataBlocks() >= sb.DataBlocks) &&                @*)
+  (*@         // block pointers are 32 bits, they should be able to address all blocks @*)
+  (*@         (sb.DataBlocks < 0x1_0000_0000)                                 @*)
+  (*@ }                                                                       @*)
+
   iIntros (Φ) "Hpre HΦ". iPoseProof "Hpre" as "#Hwf".
   iPoseProof "Hwf" as "Hwf2". iNamed "Hwf2".
   pose proof Hwf as Hwf'; destruct Hwf'.
