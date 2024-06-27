@@ -1,3 +1,3 @@
 From Perennial.program_proof.simplefs Require
   superblock_proof
-  bitmap_proof2.
+  bitmap_proof.
