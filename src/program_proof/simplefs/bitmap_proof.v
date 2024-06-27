@@ -27,6 +27,9 @@ Definition block_has_bits (block: Block) (bits: list bool) :=
   ∃ (b: u8), vec_to_list block !! (i `div` 8)%nat = Some b ∧
              Z.testbit (uint.Z b) (i `mod` 8)%nat = bit.
 
+Definition bytes_to_bits (data: list u8): list bool :=
+  concat (byte_to_bits <$> data).
+
 Definition block_to_bits (block: Block): list bool :=
   concat (byte_to_bits <$> vec_to_list block).
 
@@ -157,11 +160,10 @@ Proof.
     apply block_has_to_bits.
 Abort.
 
-Definition own_bitmap (bb: val) (block: Block) (bits: list bool): iProp Σ :=
+Definition own_bitmap (bb: val) (data: list u8) (bits: list bool): iProp Σ :=
   ∃ (s: Slice.t), ⌜bb = (slice_val s, #())%V⌝ ∗
-                   ⌜Z.of_nat (length bits) = BlkBits⌝ ∗
-                   is_block s (DfracOwn 1) block ∗
-                   ⌜bits = block_to_bits block⌝.
+                   own_slice_small s byteT (DfracOwn 1) data ∗
+                   ⌜bits = block_to_bits data⌝.
 
 Lemma wp_newBitmap s block :
   {{{ is_block s (DfracOwn 1) block }}}

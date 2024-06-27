@@ -14,6 +14,7 @@ Definition bitmap := struct.decl [
 
 Definition newBitmap: val :=
   rec: "newBitmap" "block" :=
+    control.impl.Assume ((slice.len "block") < (#1 ≪ #56));;
     struct.mk bitmap [
       "data" ::= "block"
     ].
