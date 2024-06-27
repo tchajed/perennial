@@ -49,16 +49,16 @@ Definition bitmap__Clear: val :=
     #().
 
 Definition Bitmap := struct.decl [
-  "blocks" :: slice.T (struct.t bitmap)
+  "b" :: struct.t bitmap
 ].
 
 Definition NewBitmap: val :=
   rec: "NewBitmap" "blocks" :=
-    let: "bitmapBlocks" := NewSlice (struct.t bitmap) (slice.len "blocks") in
-    ForSlice (slice.T byteT) "i" "block" "blocks"
-      (SliceSet (struct.t bitmap) "bitmapBlocks" "i" (newBitmap "block"));;
+    let: "bitmapData" := ref_to (slice.T byteT) (NewSliceWithCap byteT #0 ((slice.len "blocks") * disk.BlockSize)) in
+    ForSlice (slice.T byteT) <> "block" "blocks"
+      ("bitmapData" <-[slice.T byteT] (SliceAppendSlice byteT (![slice.T byteT] "bitmapData") "block"));;
     struct.mk Bitmap [
-      "blocks" ::= "bitmapBlocks"
+      "b" ::= newBitmap (![slice.T byteT] "bitmapData")
     ].
 
 Definition Bitmap__BlockNum: val :=
@@ -67,31 +67,25 @@ Definition Bitmap__BlockNum: val :=
 
 Definition Bitmap__Block: val :=
   rec: "Bitmap__Block" "b" "i" :=
-    struct.get bitmap "data" (SliceGet (struct.t bitmap) (struct.get Bitmap "blocks" "b") (Bitmap__BlockNum "b" "i")).
+    SliceSubslice byteT (struct.get bitmap "data" (struct.get Bitmap "b" "b")) (Bitmap__BlockNum "b" "i") ((Bitmap__BlockNum "b" "i") + disk.BlockSize).
 
 Definition Bitmap__Set: val :=
   rec: "Bitmap__Set" "b" "i" :=
-    let: "blockNum" := Bitmap__BlockNum "b" "i" in
-    let: "bitIndex" := "i" `rem` BLK_BITS in
-    bitmap__Set (SliceGet (struct.t bitmap) (struct.get Bitmap "blocks" "b") "blockNum") "bitIndex";;
+    bitmap__Set (struct.get Bitmap "b" "b") "i";;
     #().
 
 Definition Bitmap__Get: val :=
   rec: "Bitmap__Get" "b" "i" :=
-    let: "blockNum" := Bitmap__BlockNum "b" "i" in
-    let: "bitIndex" := "i" `rem` BLK_BITS in
-    bitmap__Get (SliceGet (struct.t bitmap) (struct.get Bitmap "blocks" "b") "blockNum") "bitIndex".
+    bitmap__Get (struct.get Bitmap "b" "b") "i".
 
 Definition Bitmap__Clear: val :=
   rec: "Bitmap__Clear" "b" "i" :=
-    let: "blockNum" := Bitmap__BlockNum "b" "i" in
-    let: "bitIndex" := "i" `rem` BLK_BITS in
-    bitmap__Clear (SliceGet (struct.t bitmap) (struct.get Bitmap "blocks" "b") "blockNum") "bitIndex";;
+    bitmap__Clear (struct.get Bitmap "b" "b") "i";;
     #().
 
 Definition Bitmap__Len: val :=
   rec: "Bitmap__Len" "b" :=
-    (slice.len (struct.get Bitmap "blocks" "b")) * BLK_BITS.
+    (slice.len (struct.get bitmap "data" (struct.get Bitmap "b" "b"))) * #8.
 
 (* consts.go *)
 
