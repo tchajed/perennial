@@ -157,19 +157,19 @@ Proof.
     apply block_has_to_bits.
 Abort.
 
-Definition own_blockBitmap (bb: val) (block: Block) (bits: list bool): iProp Σ :=
+Definition own_bitmap (bb: val) (block: Block) (bits: list bool): iProp Σ :=
   ∃ (s: Slice.t), ⌜bb = (slice_val s, #())%V⌝ ∗
                    ⌜Z.of_nat (length bits) = BlkBits⌝ ∗
                    is_block s (DfracOwn 1) block ∗
                    ⌜bits = block_to_bits block⌝.
 
-Lemma wp_newBlockBitmap s block :
+Lemma wp_newBitmap s block :
   {{{ is_block s (DfracOwn 1) block }}}
-    newBlockBitmap (slice_val s)
-  {{{ v bits, RET v; own_blockBitmap v block bits }}}.
+    newBitmap (slice_val s)
+  {{{ v bits, RET v; own_bitmap v block bits }}}.
 Proof.
-  (*@ func newBlockBitmap(block disk.Block) blockBitmap {                     @*)
-  (*@     return blockBitmap{block: block}                                    @*)
+  (*@ func newBlockBitmap(block disk.Block) bitmap {                     @*)
+  (*@     return bitmap{block: block}                                    @*)
   (*@ }                                                                       @*)
   iIntros (Φ) "Hpre HΦ".
   wp_rec.
@@ -184,9 +184,9 @@ Proof.
   - (* apply block_has_to_bits. *) auto.
 Qed.
 
-Lemma symex_wp_blockBitmap__Set s (bytes: list u8) (i : u64) :
+Lemma symex_wp_bitmap__Set s (bytes: list u8) (i : u64) :
   {{{ own_slice_small s byteT (DfracOwn 1) bytes ∗ ⌜length bytes = 4096%nat⌝ ∗ ⌜uint.Z i < BlkBits⌝ }}}
-    blockBitmap__Set (s, #())%V #i
+    bitmap__Set (s, #())%V #i
   {{{ (b: w8), RET #();
       ⌜bytes !! (uint.nat i `div` 8)%nat = Some b⌝ ∗
       own_slice_small s byteT (DfracOwn 1)
@@ -198,10 +198,13 @@ Lemma symex_wp_blockBitmap__Set s (bytes: list u8) (i : u64) :
 Proof.
   iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "(Hbb & %Hbytelen & %Hbound)".
   wp_rec. wp_pures.
+  wp_apply wp_slice_len. wp_pures.
+  iDestruct (own_slice_small_sz with "Hbb") as %Hsz.
+  assert (uint.Z (Slice.sz s) = 4096).
+  { word. }
   rewrite bool_decide_eq_false_2.
   2: {
-    change (word.mul (W64 4096) (W64 8)) with (W64 32768).
-    word.
+    rewrite word.unsigned_mul_nowrap; try word.
   }
   wp_pures.
   assert (exists b:u8, bytes !! (uint.nat i / 8)%nat = Some b) as [b Hlookup].
@@ -279,10 +282,10 @@ Proof.
   rewrite byte_to_bits_lookup.
   rewrite byte_to_bits_lookup.
   rewrite !Some_eq_iff. intros <- <-.
+
   move: Hmodneq.
   assert (i' `mod` 8 < 8)%nat as Hbound.
-  { pose proof (Nat.mod_bound_pos i' 8%nat). lia.
-  }
+  { pose proof (Nat.mod_bound_pos i' 8%nat). lia. }
   bit_off_cases (i' `mod` 8)%nat;
     bit_off_cases (uint.Z i `mod` 8);
     try (intros H; compute in H; exfalso; congruence);
@@ -357,12 +360,12 @@ Proof.
 
 Admitted.
 
-Lemma wp_blockBitmap__Set v block bits (i : u64) :
-  {{{ own_blockBitmap v block bits ∗ ⌜uint.Z i < BlkBits⌝ }}}
-    blockBitmap__Set v #i
-  {{{ block', RET #(); own_blockBitmap v block' (<[uint.nat i := true]> bits) }}}.
+Lemma wp_bitmap__Set v block bits (i : u64) :
+  {{{ own_bitmap v block bits ∗ ⌜uint.Z i < BlkBits⌝ }}}
+    bitmap__Set v #i
+  {{{ block', RET #(); own_bitmap v block' (<[uint.nat i := true]> bits) }}}.
 Proof.
-  (*@ func (b blockBitmap) Set(i uint64) {                                    @*)
+  (*@ func (b bitmap) Set(i uint64) {                                    @*)
   (*@     if i >= BLK_BITS {                                                  @*)
   (*@         panic("out of bounds")                                          @*)
   (*@     }                                                                   @*)
@@ -372,7 +375,7 @@ Proof.
   (*@ }                                                                       @*)
   iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "[Hbb %Hbound]".
   iDestruct "Hbb" as (s) "(-> & %Hlen & Hblock & %Hbits)".
-  wp_apply (symex_wp_blockBitmap__Set with "[$Hblock]").
+  wp_apply (symex_wp_bitmap__Set with "[$Hblock]").
   { iPureIntro. len. }
   iIntros (b) "[%Hbyte_lookup Hbb]".
   rewrite own_slice_small_to_block; [ | len ].
