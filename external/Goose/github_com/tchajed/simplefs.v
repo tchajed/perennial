@@ -12,10 +12,9 @@ Definition blockBitmap := struct.decl [
   "block" :: disk.blockT
 ].
 
-(* TODO: should we use *blockBitmap or mutate the blocks directly? *)
 Definition newBlockBitmap: val :=
   rec: "newBlockBitmap" "block" :=
-    struct.new blockBitmap [
+    struct.mk blockBitmap [
       "block" ::= "block"
     ].
 
@@ -26,7 +25,7 @@ Definition blockBitmap__Set: val :=
     else #());;
     let: "byteIndex" := "i" `quot` #8 in
     let: "bitIndex" := "i" `rem` #8 in
-    SliceSet byteT (struct.loadF blockBitmap "block" "b") "byteIndex" ((SliceGet byteT (struct.loadF blockBitmap "block" "b") "byteIndex") `or` (#(U8 1) ≪ "bitIndex"));;
+    SliceSet byteT (struct.get blockBitmap "block" "b") "byteIndex" ((SliceGet byteT (struct.get blockBitmap "block" "b") "byteIndex") `or` (#(U8 1) ≪ "bitIndex"));;
     #().
 
 Definition blockBitmap__Get: val :=
@@ -36,7 +35,7 @@ Definition blockBitmap__Get: val :=
     else #());;
     let: "byteIndex" := "i" `quot` #8 in
     let: "bitIndex" := "i" `rem` #8 in
-    ((SliceGet byteT (struct.loadF blockBitmap "block" "b") "byteIndex") `and` (#(U8 1) ≪ "bitIndex")) ≠ #(U8 0).
+    ((SliceGet byteT (struct.get blockBitmap "block" "b") "byteIndex") `and` (#(U8 1) ≪ "bitIndex")) ≠ #(U8 0).
 
 Definition blockBitmap__Clear: val :=
   rec: "blockBitmap__Clear" "b" "i" :=
@@ -45,18 +44,18 @@ Definition blockBitmap__Clear: val :=
     else #());;
     let: "byteIndex" := "i" `quot` #8 in
     let: "bitIndex" := "i" `rem` #8 in
-    SliceSet byteT (struct.loadF blockBitmap "block" "b") "byteIndex" ((SliceGet byteT (struct.loadF blockBitmap "block" "b") "byteIndex") `and` (~ (#(U8 1) ≪ "bitIndex")));;
+    SliceSet byteT (struct.get blockBitmap "block" "b") "byteIndex" ((SliceGet byteT (struct.get blockBitmap "block" "b") "byteIndex") `and` (~ (#(U8 1) ≪ "bitIndex")));;
     #().
 
 Definition Bitmap := struct.decl [
-  "blocks" :: slice.T ptrT
+  "blocks" :: slice.T (struct.t blockBitmap)
 ].
 
 Definition NewBitmap: val :=
   rec: "NewBitmap" "blocks" :=
-    let: "bitmapBlocks" := NewSlice ptrT (slice.len "blocks") in
+    let: "bitmapBlocks" := NewSlice (struct.t blockBitmap) (slice.len "blocks") in
     ForSlice (slice.T byteT) "i" "block" "blocks"
-      (SliceSet ptrT "bitmapBlocks" "i" (newBlockBitmap "block"));;
+      (SliceSet (struct.t blockBitmap) "bitmapBlocks" "i" (newBlockBitmap "block"));;
     struct.mk Bitmap [
       "blocks" ::= "bitmapBlocks"
     ].
@@ -67,26 +66,26 @@ Definition Bitmap__BlockNum: val :=
 
 Definition Bitmap__Block: val :=
   rec: "Bitmap__Block" "b" "i" :=
-    struct.loadF blockBitmap "block" (SliceGet ptrT (struct.get Bitmap "blocks" "b") (Bitmap__BlockNum "b" "i")).
+    struct.get blockBitmap "block" (SliceGet (struct.t blockBitmap) (struct.get Bitmap "blocks" "b") (Bitmap__BlockNum "b" "i")).
 
 Definition Bitmap__Set: val :=
   rec: "Bitmap__Set" "b" "i" :=
     let: "blockNum" := Bitmap__BlockNum "b" "i" in
     let: "bitIndex" := "i" `rem` BLK_BITS in
-    blockBitmap__Set (SliceGet ptrT (struct.get Bitmap "blocks" "b") "blockNum") "bitIndex";;
+    blockBitmap__Set (SliceGet (struct.t blockBitmap) (struct.get Bitmap "blocks" "b") "blockNum") "bitIndex";;
     #().
 
 Definition Bitmap__Get: val :=
   rec: "Bitmap__Get" "b" "i" :=
     let: "blockNum" := Bitmap__BlockNum "b" "i" in
     let: "bitIndex" := "i" `rem` BLK_BITS in
-    blockBitmap__Get (SliceGet ptrT (struct.get Bitmap "blocks" "b") "blockNum") "bitIndex".
+    blockBitmap__Get (SliceGet (struct.t blockBitmap) (struct.get Bitmap "blocks" "b") "blockNum") "bitIndex".
 
 Definition Bitmap__Clear: val :=
   rec: "Bitmap__Clear" "b" "i" :=
     let: "blockNum" := Bitmap__BlockNum "b" "i" in
     let: "bitIndex" := "i" `rem` BLK_BITS in
-    blockBitmap__Clear (SliceGet ptrT (struct.get Bitmap "blocks" "b") "blockNum") "bitIndex";;
+    blockBitmap__Clear (SliceGet (struct.t blockBitmap) (struct.get Bitmap "blocks" "b") "blockNum") "bitIndex";;
     #().
 
 Definition Bitmap__Len: val :=
