@@ -345,4 +345,42 @@ Proof.
   apply bytes_to_bits_set; auto.
 Qed.
 
+Lemma wp_bitmap__Get v (bits: list bool) (i: u64) :
+  {{{ own_bitmap v bits ∗ ⌜uint.Z i < Z.of_nat (length bits)⌝ }}}
+    bitmap__Get v #i
+  {{{ (bit: bool), RET #bit; own_bitmap v bits ∗ ⌜bits !! uint.nat i = Some bit⌝ }}}.
+Proof.
+  iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "[Hbm %Hbound]".
+  iNamed "Hbm". subst.
+  autorewrite with len in Hbound.
+  wp_rec.
+  wp_pures.
+  iDestruct (own_slice_small_sz with "Hs") as %Hsz.
+  wp_apply wp_slice_len. wp_pures.
+  rewrite bool_decide_eq_false_2.
+  2: {
+    rewrite word.unsigned_mul_nowrap; try word.
+  }
+  wp_pures.
+Admitted.
+
+Lemma wp_bitmap__Clear v (bits: list bool) (i: u64) :
+  {{{ own_bitmap v bits ∗ ⌜uint.Z i < Z.of_nat (length bits)⌝ }}}
+    bitmap__Clear v #i
+  {{{ RET #(); own_bitmap v (<[uint.nat i := false]> bits) }}}.
+Proof.
+  iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "[Hbm %Hbound]".
+  iNamed "Hbm". subst.
+  autorewrite with len in Hbound.
+  wp_rec.
+  wp_pures.
+  iDestruct (own_slice_small_sz with "Hs") as %Hsz.
+  wp_apply wp_slice_len. wp_pures.
+  rewrite bool_decide_eq_false_2.
+  2: {
+    rewrite word.unsigned_mul_nowrap; try word.
+  }
+  wp_pures.
+Admitted.
+
 End proof.
