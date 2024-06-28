@@ -9,6 +9,8 @@ From Goose.github_com Require Import tchajed.simplefs.bitmap.
 
 From Perennial.program_proof.simplefs Require Import bitmap_byte.
 
+Set Default Proof Using "Type".
+
 #[local] Unset Printing Projections.
 #[local] Ltac Zify.zify_post_hook ::= Z.div_mod_to_equations.
 
@@ -452,6 +454,11 @@ Proof.
   iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "(Hb & Hd & %Hlen)".
   iNamed "Hb". subst.
   wp_rec. wp_pures.
+  wp_apply wp_slice_len. wp_pures.
+  wp_apply wp_ref_to; [ auto | ].
+  iIntros (i_l) "i". wp_pures.
+  wp_apply wp_forUpto.
+  (* TODO: write down loop invariant *)
 Admitted.
 
 End proof.
