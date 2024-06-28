@@ -2,12 +2,15 @@ From Perennial.program_proof Require Import proof_prelude.
 From Perennial.program_proof Require Import disk_prelude.
 From Perennial.goose_lang.lib Require Import typed_slice.
 From Perennial.program_proof Require Import disk_lib.
-From Perennial.Helpers Require Import bytes.
+From Perennial.Helpers Require Import NatDivMod bytes.
 Import Nat.
 
 From Goose.github_com Require Import tchajed.simplefs.bitmap.
 
+From Perennial.program_proof.simplefs Require Import bitmap_byte.
+
 #[local] Unset Printing Projections.
+#[local] Ltac Zify.zify_post_hook ::= Z.div_mod_to_equations.
 
 Definition bytes_to_bits (data: list u8): list bool :=
   concat (byte_to_bits <$> data).
@@ -120,7 +123,7 @@ Proof. reflexivity. Qed.
 
 Definition own_bitmap (bb: val) (bits: list bool): iProp Σ :=
   ∃ (s: Slice.t) data,
-    "%Hval" ∷ ⌜bb = (slice_val s, #())%V⌝ ∗
+    "%Hval_eq" ∷ ⌜bb = (slice_val s, #())%V⌝ ∗
     "Hs" ∷ own_slice_small s byteT (DfracOwn 1) data ∗
     "%Hoverflow" ∷ ⌜Z.of_nat (length data) < 2^56⌝ ∗
     "%Hbits" ∷ ⌜bits = bytes_to_bits data⌝.
@@ -181,88 +184,38 @@ Proof.
   wp_pures.
   wp_apply (wp_SliceSet with "[$Hbb]").
   { iPureIntro. apply lookup_lt_is_Some.
-    word_cleanup. rewrite -> Z2Nat.inj_div by word.
-    apply Nat.Div0.div_lt_upper_bound. len. }
+    word. }
   iIntros "Hbb".
-  word_cleanup.
-  rewrite -> Z2Nat.inj_div by word. change (Z.to_nat 8) with 8%nat.
   wp_pures.
   iModIntro.
   iApply "HΦ".
   iSplit.
-  { iPureIntro. eauto. }
-  iFrame.
+  { eauto. }
+  iExactEq "Hbb". f_equal.
+  f_equal; word.
 Qed.
-
-Lemma split_div_mod_8 (i: nat) :
-  ∃ (i1 i2: nat),
-    (i `div` 8 = i1 ∧
-    i `mod` 8 = i2 ∧
-    i = 8 * i1 + i2 ∧
-    8 * i1 ≤ i ∧
-    0 ≤ i2 < 8)%nat.
-Proof.
-  eexists _, _; split_and!; [ eauto | eauto | .. ].
-  - rewrite {1}(Nat.div_mod i 8) //.
-  - apply Nat.Div0.mul_div_le; lia.
-  - apply Nat.mod_bound_pos; lia.
-  - apply Nat.mod_bound_pos; lia.
-Qed.
-
-Lemma Some_inv {A} (a b: A) : Some a = Some b → a = b.
-Proof. inversion 1; auto. Qed.
-
-Lemma Some_eq_iff {A} (a b: A) : Some a = Some b ↔ a = b.
-Proof. split; [ apply Some_inv | congruence ]. Qed.
-
-Local Ltac Zify.zify_post_hook ::= Z.div_mod_to_equations.
-
-Transparent w8_instance.w8.
-Lemma set_bit_get (b: w8) (i: u64) bit :
-  byte_to_bits (word.or b (word.slu (W8 1) (W8 (uint.Z i `mod` 8))))
-  !! Z.to_nat (uint.Z i `mod` 8) = Some bit → true = bit.
-Proof.
-    byte_cases b; bit_off_cases (uint.Z i `mod` 8);
-      intros H%Some_inv; exact H.
-Qed.
-Opaque w8_instance.w8.
 
 Lemma byte_to_bits_lookup (b: u8) (i: nat) :
   byte_to_bits b !! (i `mod` 8)%nat =
-    Some (Z.testbit (uint.Z b) (i `mod` 8)%nat ).
+    Some (Z.testbit (uint.Z b) (i `mod` 8)%nat).
 Proof.
   rewrite /byte_to_bits.
   rewrite list_lookup_fmap.
   assert (seqZ 0 8 !! (i `mod` 8)%nat = Some (i `mod` 8)).
   { apply lookup_seqZ.
-    rewrite Nat2Z.inj_mod.
-    split; lia. }
-  rewrite !Nat2Z.inj_mod.
+    lia. }
   rewrite H.
+  rewrite !Nat2Z.inj_mod.
   reflexivity.
-Qed.
-
-Opaque Nat.div Nat.modulo.
-
-Lemma testbit_set_bit (b: w8) (i: Z) (i': nat) :
-  0 ≤ i < 8 →
-  (i' < 8)%nat →
-  Z.testbit (uint.Z (word.or b (word.slu (W8 1) (W8 i)))) i' =
-  if decide (i = Z.of_nat i') then true else Z.testbit (uint.Z b) i'.
-Proof.
-  intros Hbound Hbound'.
-  byte_cases b; bit_off_cases i; bit_off_cases i';
-    try reflexivity.
 Qed.
 
 Lemma mod_8_bound (n: nat) :
   (n mod 8 < 8)%nat.
-Proof.
-  apply Nat.mod_bound_pos; lia.
-Qed.
+Proof. lia. Qed.
 
 Hint Resolve mod_8_bound : core.
-Hint Resolve mod_8_bound : word.
+
+Opaque Nat.div Nat.modulo.
 
 Lemma bytes_to_bits_set:
   ∀ (i : w64) (data : list w8),
@@ -293,8 +246,7 @@ Proof.
     + (* same bit *)
       rewrite list_lookup_insert in Hget1; [ | by len ].
       inv Hget1.
-      replace (uint.nat i `mod` 8)%nat with (Z.to_nat (uint.Z i `mod` 8)) in *.
-      2: { rewrite Z2Nat.inj_mod //; word. }
+      replace (uint.nat i `mod` 8)%nat with (Z.to_nat (uint.Z i `mod` 8)) in * by word.
       eapply set_bit_get; eauto.
     + (* same byte but different bit *)
       rewrite list_lookup_insert_ne // in Hget1.
@@ -314,16 +266,7 @@ Proof.
       rewrite H1 H2.
       rewrite e.
       f_equal.
-      (* how did we get into this mess? *)
-      rewrite Nat2Z.inj_mod in H.
-      change 8%nat with (Z.to_nat 8).
-      rewrite -(Z2Nat.inj_mod (uint.Z i)); [ | word .. ].
-      rewrite H.
-      rewrite Z2Nat.inj_mod; try word.
-      change (Z.to_nat 8%nat) with 8%nat.
-      change (Z.to_nat 8) with 8%nat.
-      rewrite Nat2Z.id.
-      auto.
+      word.
   - assert (uint.nat i ≠ i') by congruence.
     rewrite list_lookup_insert_ne // in Hget1.
     rewrite list_lookup_insert_ne // in Hget2.
@@ -388,10 +331,14 @@ Proof.
   wp_pures.
 Admitted.
 
+Definition blocks_to_bits (bs: list Block): list bool :=
+  concat ((λ b, bytes_to_bits (vec_to_list b)) <$> bs).
+
 Lemma concat_bytes_to_bits (bs : list Block) :
   bytes_to_bits (concat ((λ (b:Block), vec_to_list b) <$> bs)) =
-  concat ((λ (b:Block), bytes_to_bits b) <$> bs).
+  blocks_to_bits bs.
 Proof.
+  rewrite /blocks_to_bits.
   induction bs as [|b bs].
   - reflexivity.
   - rewrite /bytes_to_bits.
@@ -407,8 +354,7 @@ Theorem wp_NewBitmapFromBlocks (b_s : Slice.t) (off numBlocks: w64)
       "%Hno_overflow" ∷ ⌜uint.Z off + uint.Z numBlocks < 2^64⌝ }}}
     NewBitmapFromBlocks #() #off #numBlocks
   {{{ v, RET v; uint.Z off d↦∗ bs ∗
-                  let bits := concat ((λ b, bytes_to_bits (vec_to_list b)) <$> bs) in
-                  own_bitmap v bits }}}.
+                  own_bitmap v (blocks_to_bits bs) }}}.
 Proof.
   (*@ func NewBitmapFromBlocks(d disk.Disk, off uint64, numBlocks uint64) Bitmap { @*)
   (*@     var bitmapData = make([]byte, 0, numBlocks*disk.BlockSize)          @*)
@@ -484,5 +430,28 @@ Proof.
     f_equal.
     rewrite concat_bytes_to_bits //.
 Qed.
+
+Definition blkBits: Z := 4096*8.
+
+Theorem wp_Bitmap__Write v (off : u64) (bs0: list Block) bits :
+  {{{ own_bitmap v bits ∗
+      uint.Z off d↦∗ bs0 ∗
+      ⌜(blkBits * (Z.of_nat $ length bs0))%Z = Z.of_nat $ length bits⌝}}}
+    Bitmap__Write v #() #off
+  {{{ bs', RET #(); uint.Z off d↦∗ bs' ∗
+                    ⌜bits = blocks_to_bits bs'⌝ }}}.
+Proof.
+  (*@ func (b Bitmap) Write(d disk.Disk, off uint64) {                        @*)
+  (*@     // assumes len(b.Data) is a multiple of block size                  @*)
+  (*@     numBlocks := uint64(len(b.Data)) / disk.BlockSize                   @*)
+  (*@     for i := uint64(0); i < numBlocks; i++ {                            @*)
+  (*@         d.Write(off+i, b.Data[i*disk.BlockSize:(i+1)*disk.BlockSize])   @*)
+  (*@     }                                                                   @*)
+  (*@ }                                                                       @*)
+
+  iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "(Hb & Hd & %Hlen)".
+  iNamed "Hb". subst.
+  wp_rec. wp_pures.
+Admitted.
 
 End proof.
