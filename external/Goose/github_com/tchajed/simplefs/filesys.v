@@ -2,6 +2,7 @@
 From Perennial.goose_lang Require Import prelude.
 From Goose Require github_com.tchajed.simplefs.
 From Goose Require github_com.tchajed.simplefs.alloc.
+From Goose Require github_com.tchajed.simplefs.directory.
 From Goose Require github_com.tchajed.simplefs.inode.
 From Goose Require github_com.tchajed.simplefs.superblock.
 
@@ -328,11 +329,11 @@ Definition dirFs__GetDirectory: val :=
     else #());;
     let: "buf" := NewSlice byteT (inode.Inode__GetLength "ino") in
     byteFs__Read (struct.loadF dirFs "fs" "d") "i" #0 "buf";;
-    simplefs.DecodeDirectory "buf".
+    directory.DecodeDirectory "buf".
 
 Definition dirFs__WriteDirectory: val :=
   rec: "dirFs__WriteDirectory" "d" "i" "dir" :=
-    let: "buf" := simplefs.Directory__Encode "dir" in
+    let: "buf" := directory.Directory__Encode "dir" in
     let: "in" := byteFs__GetInode (struct.loadF dirFs "fs" "d") "i" in
     inode.Inode__SetLength "in" (slice.len "buf");;
     byteFs__WriteInode (struct.loadF dirFs "fs" "d") "i" "in";;
@@ -483,10 +484,10 @@ Definition Filesys__link: val :=
     (if: "err" ≠ ErrOk
     then "err"
     else
-      (if: simplefs.Directory__Contains "dir" "name"
+      (if: directory.Directory__Contains "dir" "name"
       then ErrExists
       else
-        simplefs.Directory__Insert "dir" "name" "child";;
+        directory.Directory__Insert "dir" "name" "child";;
         dirFs__WriteDirectory (struct.loadF Filesys "fs" "f") "parent" "dir";;
         ErrOk)).
 
@@ -508,7 +509,7 @@ Definition Filesys__removeDir: val :=
     (if: "err" ≠ ErrOk
     then "err"
     else
-      (if: (~ (simplefs.Directory__IsEmpty "dir"))
+      (if: (~ (directory.Directory__IsEmpty "dir"))
       then ErrNotEmpty
       else
         dirFs__Remove (struct.loadF Filesys "fs" "f") "i";;
@@ -516,7 +517,7 @@ Definition Filesys__removeDir: val :=
 
 Definition Filesys__Create: val :=
   rec: "Filesys__Create" "f" "parent" "name" "mode" :=
-    (if: (StringLength "name") > simplefs.MAX_NAME_LEN
+    (if: (StringLength "name") > directory.MAX_NAME_LEN
     then
       (#0, struct.mk Attr [
        ], ErrNameTooLong)
@@ -542,7 +543,7 @@ Definition Filesys__Lookup: val :=
       (#0, struct.mk Attr [
        ], "err")
     else
-      let: ("childInum", "ok") := simplefs.Directory__Lookup "dir" "name" in
+      let: ("childInum", "ok") := directory.Directory__Lookup "dir" "name" in
       (if: (~ "ok")
       then
         (#0, struct.mk Attr [
@@ -557,7 +558,7 @@ Definition Filesys__Unlink: val :=
     (if: "err" ≠ ErrOk
     then "err"
     else
-      let: ("childInum", "ok") := simplefs.Directory__Lookup "dir" "name" in
+      let: ("childInum", "ok") := directory.Directory__Lookup "dir" "name" in
       (if: (~ "ok")
       then ErrNoEnt
       else
@@ -565,7 +566,7 @@ Definition Filesys__Unlink: val :=
         (if: "err2" ≠ ErrOk
         then "err2"
         else
-          simplefs.Directory__Remove "dir" "name";;
+          directory.Directory__Remove "dir" "name";;
           dirFs__WriteDirectory (struct.loadF Filesys "fs" "f") "parent" "dir";;
           ErrOk))).
 
@@ -575,7 +576,7 @@ Definition Filesys__Rmdir: val :=
     (if: "err" ≠ ErrOk
     then "err"
     else
-      let: ("childInum", "ok") := simplefs.Directory__Lookup "dir" "name" in
+      let: ("childInum", "ok") := directory.Directory__Lookup "dir" "name" in
       (if: (~ "ok")
       then ErrNoEnt
       else
@@ -583,7 +584,7 @@ Definition Filesys__Rmdir: val :=
         (if: "err2" ≠ ErrOk
         then "err2"
         else
-          simplefs.Directory__Remove "dir" "name";;
+          directory.Directory__Remove "dir" "name";;
           dirFs__WriteDirectory (struct.loadF Filesys "fs" "f") "parent" "dir";;
           ErrOk))).
 
@@ -636,7 +637,7 @@ Definition Filesys__Setattr: val :=
 
 Definition Filesys__Mkdir: val :=
   rec: "Filesys__Mkdir" "f" "parent" "mode" "name" :=
-    (if: (StringLength "name") > simplefs.MAX_NAME_LEN
+    (if: (StringLength "name") > directory.MAX_NAME_LEN
     then
       (#0, struct.mk Attr [
        ], ErrNameTooLong)
@@ -660,12 +661,12 @@ Definition Filesys__Readdir: val :=
     (if: "err" ≠ ErrOk
     then (slice.nil, "err")
     else
-      let: "dents" := SliceAppendSlice (struct.t simplefs.DirEnt) (NewSlice (struct.t simplefs.DirEnt) #0) (struct.loadF simplefs.Directory "Dents" "dir") in
+      let: "dents" := SliceAppendSlice (struct.t directory.DirEnt) (NewSlice (struct.t directory.DirEnt) #0) (struct.loadF directory.Directory "Dents" "dir") in
       ("dents", ErrOk)).
 
 Definition Filesys__renameRemoveDst: val :=
   rec: "Filesys__renameRemoveDst" "f" "srcInum" "newDir" "dstName" :=
-    let: ("dstInum", "ok") := simplefs.Directory__Lookup "newDir" "dstName" in
+    let: ("dstInum", "ok") := directory.Directory__Lookup "newDir" "dstName" in
     (if: (~ "ok")
     then ErrOk
     else
@@ -688,39 +689,39 @@ Definition Filesys__renameRemoveDst: val :=
 Definition Filesys__renameSameDir: val :=
   rec: "Filesys__renameSameDir" "f" "parent" "oldName" "newName" :=
     let: "dir" := dirFs__GetDirectory (struct.loadF Filesys "fs" "f") "parent" in
-    let: ("childInum", "ok") := simplefs.Directory__Lookup "dir" "oldName" in
+    let: ("childInum", "ok") := directory.Directory__Lookup "dir" "oldName" in
     (if: (~ "ok")
     then ErrNoEnt
     else
-      simplefs.Directory__Remove "dir" "oldName";;
+      directory.Directory__Remove "dir" "oldName";;
       let: "err" := Filesys__renameRemoveDst "f" "childInum" "dir" "newName" in
       (if: "err" ≠ ErrOk
       then "err"
       else
-        simplefs.Directory__Insert "dir" "newName" "childInum";;
+        directory.Directory__Insert "dir" "newName" "childInum";;
         dirFs__WriteDirectory (struct.loadF Filesys "fs" "f") "parent" "dir";;
         ErrOk)).
 
 Definition Filesys__Rename: val :=
   rec: "Filesys__Rename" "f" "oldParent" "oldName" "newParent" "newName" :=
-    (if: (StringLength "newName") > simplefs.MAX_NAME_LEN
+    (if: (StringLength "newName") > directory.MAX_NAME_LEN
     then ErrNameTooLong
     else
       (if: "oldParent" = "newParent"
       then Filesys__renameSameDir "f" "oldParent" "oldName" "newName"
       else
         let: "oldDir" := dirFs__GetDirectory (struct.loadF Filesys "fs" "f") "oldParent" in
-        let: ("childInum", "ok") := simplefs.Directory__Lookup "oldDir" "oldName" in
+        let: ("childInum", "ok") := directory.Directory__Lookup "oldDir" "oldName" in
         (if: (~ "ok")
         then ErrNoEnt
         else
           let: "newDir" := dirFs__GetDirectory (struct.loadF Filesys "fs" "f") "newParent" in
-          simplefs.Directory__Remove "oldDir" "oldName";;
+          directory.Directory__Remove "oldDir" "oldName";;
           let: "err" := Filesys__renameRemoveDst "f" "childInum" "newDir" "newName" in
           (if: "err" ≠ ErrOk
           then "err"
           else
-            simplefs.Directory__Insert "newDir" "newName" "childInum";;
+            directory.Directory__Insert "newDir" "newName" "childInum";;
             dirFs__WriteDirectory (struct.loadF Filesys "fs" "f") "oldParent" "oldDir";;
             dirFs__WriteDirectory (struct.loadF Filesys "fs" "f") "newParent" "newDir";;
             ErrOk)))).
