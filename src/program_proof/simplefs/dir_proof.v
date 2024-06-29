@@ -10,19 +10,48 @@ Set Default Proof Using "Type".
 
 Record dir_ent :=
   mk_dir_ent
-    { path: string;
+    (* in Coq [list] values are easier to work with, while in Go and GooseLang
+    [string] is preferred since it's a value *)
+    { path: list u8;
       inum: w64; }.
+
+Definition dent_size: Z := 256.
+Definition dent_len: Z := 256 - 8.
+(* TODO: code ensures there's at least one padding byte, but this isn't
+necessary (max_name_len = dent_len should work) *)
+Definition max_name_len: Z := 256 - 9.
+
+Record dir_ent_ok (e: dir_ent) :=
+  { dir_ent_nonnull: ∀ i b, e.(path) !! i = Some b → b ≠ W8 0;
+    dir_ent_fits: Z.of_nat (length e.(path)) < max_name_len;
+  }.
+
+Definition pad_path (p: list u8): list u8 :=
+  p ++ repeat (W8 0) (Z.to_nat dent_len - length p)%nat.
+
+Definition encode_dir_ent (e: dir_ent): list u8 :=
+  pad_path e.(path) ++ u64_le e.(inum).
+
+Hint Unfold dent_size max_name_len dent_len : word.
+Hint Unfold max_name_len : word.
+
+Lemma encode_dir_ent_length (e: dir_ent) :
+  dir_ent_ok e → Z.of_nat (length (encode_dir_ent e)) = dent_size.
+Proof.
+  destruct 1.
+  rewrite /encode_dir_ent /pad_path; len.
+Qed.
 
 Section proof.
 Context `{!heapGS Σ}.
 
 Definition dir_ent_val (e: dir_ent) : val :=
-  (#e.(path), (#e.(inum), #())).
+  (#(bytes_to_string e.(path)), (#e.(inum), #())).
 
 Definition dir_ent_from_val (v: val): option dir_ent :=
   match v with
   | ((LitV (LitString p)), (LitV (LitInt i), #()))%V =>
-      Some (mk_dir_ent p i)
+      Some (mk_dir_ent (string_to_bytes p) i)
   | _ => None
   end.
 
@@ -30,9 +59,48 @@ Definition dir_ent_from_val (v: val): option dir_ent :=
 Proof.
   refine {| to_val := dir_ent_val;
            from_val := dir_ent_from_val;
-           IntoVal_def := (mk_dir_ent "" (W64 0));
+           IntoVal_def := (mk_dir_ent [] (W64 0));
          |}.
-  abstract (destruct v; reflexivity).
+  destruct v; simpl.
+  rewrite bytes_to_string_inj //.
 Defined.
+
+Fixpoint non_null_prefix (bs: list w8) :=
+  match bs with
+  | [] => []
+  | b :: bs =>
+      if decide (b = W8 0) then [] else b :: non_null_prefix bs
+  end.
+
+Lemma non_null_prefix_not_null bs :
+  ∀ i b, non_null_prefix bs !! i = Some b →
+         b ≠ U8 0.
+Proof.
+  induction bs; [ done | simpl ].
+  intros i b. destruct (decide _); auto.
+  intros ?%lookup_cons_Some; (intuition subst); eauto.
+Qed.
+
+Theorem wp_tillNullTerminator (s : Slice.t) dq (bs: list w8) :
+  {{{ own_slice s byteT dq bs }}}
+    tillNullTerminator (slice_val s)
+  {{{ (s' : Slice.t), RET (to_val s');
+      own_slice s' byteT dq (non_null_prefix bs) }}}.
+Proof.
+  (*@ func tillNullTerminator(s []byte) []byte {                              @*)
+  (*@     // TODO: this awkward implementation is due to Goose loop limitations @*)
+  (*@     var nullIndex *uint64                                               @*)
+  (*@     for i := uint64(0); i < uint64(len(s)); i++ {                       @*)
+  (*@         if nullIndex == nil && s[i] == 0 {                              @*)
+  (*@             nullIndex = &i                                              @*)
+  (*@         }                                                               @*)
+  (*@     }                                                                   @*)
+  (*@     if nullIndex == nil {                                               @*)
+  (*@         return s                                                        @*)
+  (*@     } else {                                                            @*)
+  (*@         return s[:*nullIndex]                                           @*)
+  (*@     }                                                                   @*)
+  (*@ }                                                                       @*)
+Admitted.
 
 End proof.
