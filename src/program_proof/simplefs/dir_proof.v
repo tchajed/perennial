@@ -33,8 +33,35 @@ Record dir_ent_ok (e: dir_ent) :=
 Definition pad_path (p: list u8): list u8 :=
   p ++ replicate (Z.to_nat dent_len - length p)%nat (W8 0).
 
+Lemma pad_path_length p :
+  length (pad_path p) = (length p + (Z.to_nat dent_len - length p))%nat.
+Proof. rewrite /pad_path. len. Qed.
+
+Hint Rewrite pad_path_length : len.
+
 Definition encode_dir_ent (e: dir_ent): list u8 :=
   pad_path e.(path) ++ u64_le e.(inum).
+
+Lemma encode_dir_ent_inj e1 e2 :
+  dir_ent_ok e1 →
+  dir_ent_ok e2 →
+  encode_dir_ent e1 = encode_dir_ent e2 →
+  e1 = e2.
+Proof.
+  intros [] [].
+  rewrite /encode_dir_ent.
+  intros Heq.
+  destruct e1 as [p1 i1], e2 as [p2 i2]; simpl in *.
+  apply app_inj_2 in Heq as [Hpad_eq Hinum_eq]; [ | by len ].
+  apply (inj u64_le) in Hinum_eq; subst.
+  cut (p1 = p2). { intros; subst; auto. }
+  rewrite /pad_path in Hpad_eq.
+  apply app_inj_1 in Hpad_eq as [-> ]; [ done | ].
+  (* TODO: non-trivial proof: if they had different lengths, the shorter one
+  would have a zero byte in its encoding where its padding started, but the
+  actual paths cannot have zeros *)
+  admit.
+Admitted.
 
 Hint Unfold dent_size max_name_len dent_len : word.
 Hint Unfold max_name_len : word.
@@ -75,6 +102,59 @@ Proof.
      rewrite IHes //.
      rewrite encode_dir_ent_length //.
      lia.
+Qed.
+
+Lemma encode_dir_ents_cons_not_empty e es :
+  encode_dir_ents (e :: es) ≠ [].
+Proof.
+  rewrite /encode_dir_ents.
+  simpl.
+  intros H%(f_equal length).
+  rewrite length_app /= in H.
+  rewrite /encode_dir_ent in H.
+  autorewrite with len in H.
+  lia.
+Qed.
+
+Lemma dir_ents_ok_cons_inv e es :
+  dir_ents_ok (e :: es) ↔
+  dir_ent_ok e ∧
+  Forall (λ e', e'.(path) ≠ e.(path)) es ∧
+  dir_ents_ok es.
+Proof.
+Admitted.
+
+Lemma encode_dir_ents_cons e es :
+  encode_dir_ents (e :: es) = encode_dir_ent e ++ encode_dir_ents es.
+Proof. reflexivity. Qed.
+
+Lemma encode_dir_ents_inj es1 es2 :
+  dir_ents_ok es1 →
+  dir_ents_ok es2 →
+  encode_dir_ents es1 = encode_dir_ents es2 →
+  es1 = es2.
+Proof.
+  generalize dependent es2.
+  induction es1 as [|e1 es1].
+  - intros es2 _ _ Heq.
+    destruct es2; simpl; [ done | ].
+    symmetry in Heq.
+    apply encode_dir_ents_cons_not_empty in Heq; contradiction.
+  - destruct es2 as [|e2 es2].
+    + intros _ _ Heq.
+      apply encode_dir_ents_cons_not_empty in Heq; contradiction.
+    + intros Hok1 Hok2 Heq.
+      assert (dir_ents_ok es1) as Hok_es1.
+      { apply dir_ents_ok_cons_inv in Hok1; intuition auto. }
+      rewrite -> !encode_dir_ents_cons in *.
+      apply dir_ents_ok_cons_inv in Hok1.
+      apply dir_ents_ok_cons_inv in Hok2.
+      apply app_inj_1 in Heq.
+      2: {
+        rewrite !encode_dir_ent_length; intuition eauto.
+      }
+      intuition.
+      f_equal; eauto using encode_dir_ent_inj.
 Qed.
 
 (*! directory gmap theory *)
@@ -193,5 +273,46 @@ Theorem wp_decodeDirEnt s dq (e: dir_ent) (bs: list w8) :
   {{{ RET (to_val e); own_slice s byteT dq bs }}}.
 Proof.
 Admitted.
+
+Definition own_directory l (es: list dir_ent): iProp Σ :=
+  ∃ s, "Dents" ∷ l ↦[Directory :: "Dents"] (to_val s) ∗
+       "Hdents" ∷ own_slice s (struct.t DirEnt) (DfracOwn 1) es ∗
+       "%Hdir_wf" ∷ ⌜dir_ents_ok es⌝.
+
+Theorem wp_Directory__Encode (l : loc) es :
+  {{{ own_directory l es }}}
+    Directory__Encode #l
+  {{{ (s : Slice.t), RET (to_val s);
+      own_slice s byteT (DfracOwn 1) (encode_dir_ents es) ∗
+      own_directory l es
+  }}}.
+Proof.
+  (*@ func (d *Directory) Encode() []byte {                                   @*)
+  (*@     var bytes = []byte{}                                                @*)
+  (*@     for _, dent := range d.Dents {                                      @*)
+  (*@         bytes = append(bytes, dent.Encode()...)                         @*)
+  (*@     }                                                                   @*)
+  (*@     return bytes                                                        @*)
+  (*@ }                                                                       @*)
+Admitted.
+
+Theorem wp_DecodeDirectory dq (s : Slice.t) es :
+  {{{ own_slice_small s byteT dq (encode_dir_ents es) }}}
+    DecodeDirectory (to_val s)
+  {{{ l, RET #l; own_directory l es }}}.
+Proof.
+  (*@ func DecodeDirectory(b []byte) Directory {                              @*)
+  (*@     var dents = []DirEnt{}                                              @*)
+  (*@     numEntries := uint64(len(b)) / DENT_SIZE                            @*)
+  (*@     for i := uint64(0); i < numEntries; i++ {                           @*)
+  (*@         ent := decodeDirEnt(b[i*DENT_SIZE : (i+1)*DENT_SIZE])           @*)
+  (*@         if len(ent.Path) > 0 {                                          @*)
+  (*@             dents = append(dents, ent)                                  @*)
+  (*@         }                                                               @*)
+  (*@     }                                                                   @*)
+  (*@     return Directory{Dents: dents}                                      @*)
+  (*@ }                                                                       @*)
+Admitted.
+
 
 End proof.
