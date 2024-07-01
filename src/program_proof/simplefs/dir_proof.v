@@ -26,7 +26,7 @@ necessary (max_name_len = dent_len should work) *)
 Definition max_name_len: Z := 256 - 9.
 
 Record dir_ent_ok (e: dir_ent) :=
-  { dir_ent_nonnull: ∀ i b, e.(path) !! i = Some b → b ≠ W8 0;
+  { dir_ent_nonnull: Forall (λ b, b ≠ W8 0) e.(path);
     dir_ent_fits: Z.of_nat (length e.(path)) < max_name_len;
   }.
 
@@ -274,17 +274,21 @@ Theorem wp_decodeDirEnt s dq (e: dir_ent) (bs: list w8) :
 Proof.
 Admitted.
 
-Definition own_directory l (es: list dir_ent): iProp Σ :=
+(* [own_directory'] is a low-level fact that is about the encoded directory,
+while [own_directory] asserts ownership of the interpreted directory (a map from
+paths to inodes) *)
+
+Definition own_directory' l (es: list dir_ent): iProp Σ :=
   ∃ s, "Dents" ∷ l ↦[Directory :: "Dents"] (to_val s) ∗
        "Hdents" ∷ own_slice s (struct.t DirEnt) (DfracOwn 1) es ∗
        "%Hdir_wf" ∷ ⌜dir_ents_ok es⌝.
 
 Theorem wp_Directory__Encode (l : loc) es :
-  {{{ own_directory l es }}}
+  {{{ own_directory' l es }}}
     Directory__Encode #l
   {{{ (s : Slice.t), RET (to_val s);
       own_slice s byteT (DfracOwn 1) (encode_dir_ents es) ∗
-      own_directory l es
+      own_directory' l es
   }}}.
 Proof.
   (*@ func (d *Directory) Encode() []byte {                                   @*)
@@ -299,7 +303,7 @@ Admitted.
 Theorem wp_DecodeDirectory dq (s : Slice.t) es :
   {{{ own_slice_small s byteT dq (encode_dir_ents es) }}}
     DecodeDirectory (to_val s)
-  {{{ l, RET #l; own_directory l es }}}.
+  {{{ l, RET #l; own_directory' l es }}}.
 Proof.
   (*@ func DecodeDirectory(b []byte) Directory {                              @*)
   (*@     var dents = []DirEnt{}                                              @*)
@@ -314,5 +318,168 @@ Proof.
   (*@ }                                                                       @*)
 Admitted.
 
+Theorem wp_containsNull (s : string) :
+  {{{ True }}}
+    containsNull #s
+  {{{ RET #(bool_decide (W8 0 ∈ string_to_bytes s)); True }}}.
+Proof.
+  (*@ func containsNull(s string) bool {                                      @*)
+  (*@     // TODO: this is awkward due to Goose loop limitations              @*)
+  (*@     var nullFound = false                                               @*)
+  (*@     b := []byte(s)                                                      @*)
+  (*@     for _, c := range b {                                               @*)
+  (*@         if c == 0 {                                                     @*)
+  (*@             nullFound = true                                            @*)
+  (*@         }                                                               @*)
+  (*@     }                                                                   @*)
+  (*@     return nullFound                                                    @*)
+  (*@ }                                                                       @*)
+Admitted.
+
+Definition own_directory l d: iProp Σ :=
+  ∃ es, own_directory' l es ∗ ⌜interpret_dir_ents es = d⌝.
+
+Theorem wp_Directory__Insert (l: loc) d (name : string) (inum : w64) :
+  {{{ own_directory l d }}}
+    Directory__Insert #l #name #inum
+  {{{ RET #(); own_directory l (<[ string_to_bytes name := inum ]> d) }}}.
+Proof.
+  (*@ func (d *Directory) Insert(name string, inum simplefs.Inum) {           @*)
+  (*@     // preconditions                                                    @*)
+  (*@     machine.Assert(!containsNull(name))                                 @*)
+  (*@     machine.Assert(uint64(len(name)) <= MAX_NAME_LEN)                   @*)
+  (*@                                                                         @*)
+  (*@     var done = false                                                    @*)
+  (*@     for i := uint64(0); i < uint64(len(d.Dents)); i++ {                 @*)
+  (*@         if d.Dents[i].Path == name {                                    @*)
+  (*@             dent := &d.Dents[i]                                         @*)
+  (*@             dent.Inum = inum                                            @*)
+  (*@             done = true                                                 @*)
+  (*@             break                                                       @*)
+  (*@         } else {                                                        @*)
+  (*@             continue                                                    @*)
+  (*@         }                                                               @*)
+  (*@     }                                                                   @*)
+  (*@     if done {                                                           @*)
+  (*@         return                                                          @*)
+  (*@     }                                                                   @*)
+  (*@     // path not in directory                                            @*)
+  (*@                                                                         @*)
+  (*@     d.Dents = append(d.Dents, DirEnt{Path: name, Inum: inum})           @*)
+  (*@ }                                                                       @*)
+
+  iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "(%es & Hd & %Hint)"; subst d.
+Admitted.
+
+Theorem wp_Directory__Remove (l: loc) d (name : string) :
+  {{{ own_directory l d }}}
+    Directory__Remove #l #name
+  {{{ RET #(); own_directory l (map_delete (string_to_bytes name) d) }}}.
+Proof.
+  (*@ func (d *Directory) Remove(name string) {                               @*)
+  (*@     // TODO: not a range loop due to goose limitations                  @*)
+  (*@     for i := uint64(0); i < uint64(len(d.Dents)); i++ {                 @*)
+  (*@         if d.Dents[i].Path == name {                                    @*)
+  (*@             d.Dents = append(d.Dents[:i], d.Dents[i+1:]...)             @*)
+  (*@             break                                                       @*)
+  (*@         }                                                               @*)
+  (*@     }                                                                   @*)
+  (*@ }                                                                       @*)
+Admitted.
+
+Theorem wp_Directory__Lookup (l : loc) d (name : string) :
+  {{{ own_directory l d }}}
+    Directory__Lookup #l #name
+  {{{ (inum: w64) (ok : bool), RET (#inum, #ok); own_directory l d ∗
+      ⌜if ok then d !! string_to_bytes name = Some inum else
+                  d !! string_to_bytes name = None⌝
+ }}}.
+Proof.
+  (*@ func (d *Directory) Lookup(name string) (simplefs.Inum, bool) {         @*)
+  (*@     // TODO: awkward due to goose                                       @*)
+  (*@     var inum = simplefs.Inum(0)                                         @*)
+  (*@     var found = false                                                   @*)
+  (*@     for _, dent := range d.Dents {                                      @*)
+  (*@         if !found && dent.Path == name {                                @*)
+  (*@             inum = dent.Inum                                            @*)
+  (*@             found = true                                                @*)
+  (*@         }                                                               @*)
+  (*@     }                                                                   @*)
+  (*@     return inum, found                                                  @*)
+  (*@ }                                                                       @*)
+Admitted.
+
+Theorem wp_Directory__Contains (l: loc) d (name : string) :
+  {{{ own_directory l d }}}
+    Directory__Contains #l #name
+  {{{ RET #(bool_decide (is_Some (d !! string_to_bytes name)));
+      own_directory l d }}}.
+Proof.
+  (*@ func (d *Directory) Contains(name string) bool {                        @*)
+  (*@     _, ok := d.Lookup(name)                                             @*)
+  (*@     return ok                                                           @*)
+  (*@ }                                                                       @*)
+  iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "Hd".
+  wp_lam. wp_pures.
+  wp_apply (wp_Directory__Lookup with "Hd").
+  iIntros (i ok) "[Hd %Hok]".
+  wp_pures.
+  iModIntro.
+  iDestruct ("HΦ" with "Hd") as "HΦ".
+  iExactEq "HΦ".
+  f_equal.
+  f_equal.
+  destruct ok.
+  - rewrite Hok //.
+  - rewrite Hok //.
+Qed.
+
+Lemma gmap_not_empty {K} `{Countable K} {V} (m: gmap K V) (k: K) :
+  is_Some (m !! k) →
+  m ≠ ∅.
+Proof.
+  destruct 1 as [v Heq].
+  intros ->.
+  rewrite lookup_empty in Heq.
+  congruence.
+Qed.
+
+Theorem wp_Directory__IsEmpty (l : loc) d :
+  {{{ own_directory l d }}}
+    Directory__IsEmpty #l
+  {{{RET #(bool_decide (d = ∅)); own_directory l d }}}.
+Proof.
+  (*@ func (d *Directory) IsEmpty() bool {                                    @*)
+  (*@     return len(d.Dents) == 0                                            @*)
+  (*@ }                                                                       @*)
+  iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "(%es & Hd & %Hint)"; subst d.
+  wp_rec. wp_pures.
+  iNamed "Hd".
+  wp_loadField.
+  iDestruct (own_slice_sz with "Hdents") as %Hsz.
+  wp_apply wp_slice_len.
+  wp_pures.
+  iModIntro.
+  iDestruct ("HΦ" with "[$Dents $Hdents]") as "HΦ".
+  { eauto. }
+  iExactEq "HΦ".
+  f_equal. f_equal.
+  destruct es.
+  - simpl.
+    rewrite !bool_decide_eq_true_2 //.
+    f_equal.
+    f_equal.
+    simpl in Hsz.
+    word.
+  - simpl in Hsz.
+    rewrite !bool_decide_eq_false_2 //.
+    + intros H.
+      inv H as [H']. inv H' as [H''].
+      apply (f_equal uint.Z) in H''.
+      move: H''. word.
+    + apply (gmap_not_empty _ d.(path)).
+      rewrite /=.
+      apply lookup_insert_is_Some; auto.
+Qed.
 
 End proof.
