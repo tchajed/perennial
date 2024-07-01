@@ -9,6 +9,9 @@ Coercion LitString : string >-> base_lit.
 
 Set Default Proof Using "Type".
 
+(*! dir_ent and associated pure theory *)
+
+(* TODO: wrap in Coq Module for namespacing *)
 Record dir_ent :=
   mk_dir_ent
     (* in Coq [list] values are easier to work with, while in Go and GooseLang
@@ -37,11 +40,50 @@ Hint Unfold dent_size max_name_len dent_len : word.
 Hint Unfold max_name_len : word.
 
 Lemma encode_dir_ent_length (e: dir_ent) :
-  dir_ent_ok e → Z.of_nat (length (encode_dir_ent e)) = dent_size.
+  dir_ent_ok e → length (encode_dir_ent e) = Z.to_nat dent_size.
 Proof.
   destruct 1.
   rewrite /encode_dir_ent /pad_path; len.
 Qed.
+
+(*! list dir_ent theory *)
+
+(* An encoded and in-memory directory is a [list dir_ent]. This has the
+a deterministic encoding. *)
+
+Definition encode_dir_ents (es: list dir_ent) : list w8 :=
+  concat (encode_dir_ent <$> es).
+
+Record dir_ents_ok (es: list dir_ent) :=
+  { forall_ents_ok: Forall dir_ent_ok es;
+    paths_unique: NoDup (path <$> es);
+  }.
+
+Hint Resolve forall_ents_ok paths_unique : core.
+
+Lemma encode_dir_ents_length (es: list dir_ent) :
+  Forall dir_ent_ok es →
+  length (encode_dir_ents es) = Z.to_nat (dent_size * (Z.of_nat $ length es)).
+Proof.
+  rewrite /encode_dir_ents.
+  induction es as [|e es]; intros.
+   - simpl; auto.
+   - simpl.
+     rewrite length_app.
+     inversion H as [|?? He Hes]; subst.
+     fold (fmap encode_dir_ent es).
+     rewrite IHes //.
+     rewrite encode_dir_ent_length //.
+     lia.
+Qed.
+
+(*! directory gmap theory *)
+
+Fixpoint interpret_dir_ents (es: list dir_ent) : gmap (list w8) w64 :=
+  match es with
+  | [] => ∅
+  | e::es => <[ e.(path) := e.(inum) ]> (interpret_dir_ents es)
+  end.
 
 Section proof.
 Context `{!heapGS Σ}.
