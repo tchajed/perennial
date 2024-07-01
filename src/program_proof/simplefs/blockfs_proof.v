@@ -6,4 +6,6 @@ From Perennial.goose_lang.lib Require Import typed_slice.
 
 From Perennial.program_proof.simplefs Require Import
   inode_proof
-  bitmap_proof.
+  alloc_proof
+  superblock_proof
+.
