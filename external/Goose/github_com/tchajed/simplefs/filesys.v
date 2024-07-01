@@ -13,8 +13,8 @@ From Perennial.goose_lang Require Import ffi.disk_prelude.
 Definition blockFs := struct.decl [
   "sb" :: ptrT;
   "d" :: disk.Disk;
-  "ba" :: struct.t alloc.BlockAllocator;
-  "ia" :: struct.t alloc.InodeAllocator
+  "ba" :: ptrT;
+  "ia" :: ptrT
 ].
 
 Definition mkBlockFs: val :=

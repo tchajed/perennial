@@ -26,7 +26,7 @@ Definition NewBlockAllocator: val :=
         "free" <-[slice.T uint32T] (SliceAppend uint32T (![slice.T uint32T] "free") (![uint32T] "i"));;
         Continue
       else Continue));;
-    struct.mk BlockAllocator [
+    struct.new BlockAllocator [
       "offset" ::= "offset";
       "bitmap" ::= "bm";
       "free" ::= ![slice.T uint32T] "free";
@@ -77,7 +77,7 @@ Definition NewInodeAllocator: val :=
           Continue
         else Continue));;
       Continue);;
-    struct.mk InodeAllocator [
+    struct.new InodeAllocator [
       "sb" ::= "sb";
       "d" ::= "d";
       "free" ::= ![slice.T simplefs.Inum] "free"
