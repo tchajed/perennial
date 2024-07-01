@@ -17,7 +17,7 @@ Definition FileType : expr := #(U32 2).
 
 Definition InodeType__IsValid: val :=
   rec: "InodeType__IsValid" "t" :=
-    "t" ≠ Invalid.
+    ("t" ≠ Invalid) && ("t" ≤ FileType).
 
 Definition INODE_SIZE : expr := #128.
 

@@ -25,6 +25,7 @@ Definition metaFromBytes: val :=
 
 Definition META_SIZE : expr := #4.
 
+(* chosen to make inode size correct *)
 Definition NUM_DIRECT : expr := #27.
 
 Definition NUM_BLOCK_PTRS : expr := NUM_DIRECT + #1.
