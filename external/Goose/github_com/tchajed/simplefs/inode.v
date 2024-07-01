@@ -30,66 +30,71 @@ Definition NUM_DIRECT : expr := #27.
 Definition NUM_BLOCK_PTRS : expr := NUM_DIRECT + #1.
 
 Definition Inode := struct.decl [
-  "Type" :: simplefs.InodeType;
-  "Length" :: uint64T;
-  "Meta" :: struct.t Meta;
-  "BlockPtrs" :: slice.T uint32T
+  "typ_" :: simplefs.InodeType;
+  "length" :: uint64T;
+  "meta" :: struct.t Meta;
+  "blockPtrs" :: slice.T uint32T
 ].
 
 Definition NewInode: val :=
   rec: "NewInode" "t" :=
     struct.new Inode [
-      "Type" ::= "t";
-      "Length" ::= #0;
-      "Meta" ::= struct.mk Meta [
+      "typ_" ::= "t";
+      "length" ::= #0;
+      "meta" ::= struct.mk Meta [
         "Mode" ::= #(U32 0)
       ];
-      "BlockPtrs" ::= NewSlice uint32T NUM_BLOCK_PTRS
+      "blockPtrs" ::= NewSlice uint32T NUM_BLOCK_PTRS
     ].
 
 Definition Inode__GetLength: val :=
   rec: "Inode__GetLength" "i" :=
-    struct.loadF Inode "Length" "i".
+    struct.loadF Inode "length" "i".
 
 Definition Inode__SetLength: val :=
   rec: "Inode__SetLength" "i" "length" :=
-    struct.storeF Inode "Length" "i" "length";;
+    struct.storeF Inode "length" "i" "length";;
     #().
 
 Definition Inode__GetType: val :=
   rec: "Inode__GetType" "i" :=
-    struct.loadF Inode "Type" "i".
+    struct.loadF Inode "typ_" "i".
 
 Definition Inode__SetType: val :=
   rec: "Inode__SetType" "i" "t" :=
-    struct.storeF Inode "Type" "i" "t";;
+    struct.storeF Inode "typ_" "i" "t";;
     #().
 
 Definition Inode__GetMeta: val :=
   rec: "Inode__GetMeta" "i" :=
-    struct.loadF Inode "Meta" "i".
+    struct.loadF Inode "meta" "i".
 
 Definition Inode__SetMeta: val :=
   rec: "Inode__SetMeta" "i" "meta" :=
-    struct.storeF Inode "Meta" "i" "meta";;
+    struct.storeF Inode "meta" "i" "meta";;
+    #().
+
+Definition Inode__SetMode: val :=
+  rec: "Inode__SetMode" "i" "mode" :=
+    struct.storeF Meta "Mode" (struct.fieldRef Inode "meta" "i") "mode";;
     #().
 
 Definition Inode__GetBlockPtr: val :=
   rec: "Inode__GetBlockPtr" "i" "index" :=
-    SliceGet uint32T (struct.loadF Inode "BlockPtrs" "i") "index".
+    SliceGet uint32T (struct.loadF Inode "blockPtrs" "i") "index".
 
 Definition Inode__SetBlockPtr: val :=
   rec: "Inode__SetBlockPtr" "i" "index" "ptr" :=
-    SliceSet uint32T (struct.loadF Inode "BlockPtrs" "i") "index" "ptr";;
+    SliceSet uint32T (struct.loadF Inode "blockPtrs" "i") "index" "ptr";;
     #().
 
 Definition Inode__AsBytes: val :=
   rec: "Inode__AsBytes" "i" :=
     let: "buf" := ref_to (slice.T byteT) (NewSlice byteT #0) in
-    "buf" <-[slice.T byteT] (marshal.WriteInt32 (![slice.T byteT] "buf") (struct.loadF Inode "Type" "i"));;
-    "buf" <-[slice.T byteT] (marshal.WriteInt (![slice.T byteT] "buf") (struct.loadF Inode "Length" "i"));;
-    "buf" <-[slice.T byteT] (SliceAppendSlice byteT (![slice.T byteT] "buf") (Meta__AsBytes (struct.loadF Inode "Meta" "i")));;
-    ForSlice uint32T <> "ptr" (struct.loadF Inode "BlockPtrs" "i")
+    "buf" <-[slice.T byteT] (marshal.WriteInt32 (![slice.T byteT] "buf") (struct.loadF Inode "typ_" "i"));;
+    "buf" <-[slice.T byteT] (marshal.WriteInt (![slice.T byteT] "buf") (struct.loadF Inode "length" "i"));;
+    "buf" <-[slice.T byteT] (SliceAppendSlice byteT (![slice.T byteT] "buf") (Meta__AsBytes (struct.loadF Inode "meta" "i")));;
+    ForSlice uint32T <> "ptr" (struct.loadF Inode "blockPtrs" "i")
       ("buf" <-[slice.T byteT] (marshal.WriteInt32 (![slice.T byteT] "buf") "ptr"));;
     ![slice.T byteT] "buf".
 
@@ -105,10 +110,10 @@ Definition FromBytes: val :=
       "bytes" <-[slice.T byteT] "b_next";;
       SliceSet uint32T "blockPtrs" "idx" "ptr");;
     struct.new Inode [
-      "Type" ::= "typ";
-      "Length" ::= "length";
-      "Meta" ::= "meta";
-      "BlockPtrs" ::= "blockPtrs"
+      "typ_" ::= "typ";
+      "length" ::= "length";
+      "meta" ::= "meta";
+      "blockPtrs" ::= "blockPtrs"
     ].
 
 Definition ReadInode: val :=
@@ -127,9 +132,4 @@ Definition Inode__Write: val :=
     let: "blk" := disk.Read "blkNum" in
     SliceCopy byteT (SliceSubslice byteT "blk" ("blkOff" * simplefs.INODE_SIZE) (("blkOff" + #1) * simplefs.INODE_SIZE)) (Inode__AsBytes "i");;
     disk.Write "blkNum" "blk";;
-    #().
-
-Definition Inode__SetMode: val :=
-  rec: "Inode__SetMode" "i" "mode" :=
-    struct.storeF Meta "Mode" (struct.fieldRef Inode "Meta" "i") "mode";;
     #().

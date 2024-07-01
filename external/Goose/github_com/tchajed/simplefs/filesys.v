@@ -63,10 +63,14 @@ Definition blockFs__FreeInode: val :=
   rec: "blockFs__FreeInode" "fs" "i" :=
     alloc.InodeAllocator__Free (struct.loadF blockFs "ia" "fs") "i";;
     let: "ino" := inode.ReadInode (struct.loadF blockFs "d" "fs") (struct.loadF blockFs "sb" "fs") "i" in
-    ForSlice uint32T <> "b" (struct.loadF inode.Inode "BlockPtrs" "ino")
-      ((if: "b" ≠ #(U32 0)
-      then alloc.BlockAllocator__Free (struct.loadF blockFs "ba" "fs") "b"
-      else #()));;
+    let: "i" := ref_to uint64T #0 in
+    (for: (λ: <>, (![uint64T] "i") < inode.NUM_BLOCK_PTRS); (λ: <>, "i" <-[uint64T] ((![uint64T] "i") + #1)) := λ: <>,
+      let: "b" := inode.Inode__GetBlockPtr "ino" (![uint64T] "i") in
+      (if: "b" ≠ #(U32 0)
+      then
+        alloc.BlockAllocator__Free (struct.loadF blockFs "ba" "fs") "b";;
+        Continue
+      else Continue));;
     let: "zero_inode" := inode.NewInode simplefs.Invalid in
     inode.Inode__Write "zero_inode" (struct.loadF blockFs "d" "fs") (struct.loadF blockFs "sb" "fs") "i";;
     #().
