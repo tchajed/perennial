@@ -1,13 +1,9 @@
+From Perennial Require Import options.
 From stdpp Require Import base list.
-From Coq Require Import ssreflect.
 
 From Perennial.Helpers Require Import NatDivMod Integers Tactics.
 
-Local Open Scope Z.
-
 #[local] Ltac Zify.zify_post_hook ::= Z.div_mod_to_equations.
-
-Set SsrOldRewriteGoalsOrder.
 
 Definition length_uniform {A: Type} (l: list (list A)) (n: nat) :=
   ∀ i x, l !! i = Some x → length x = n.
@@ -48,7 +44,7 @@ Proof.
   induction l; simpl; auto.
   apply length_uniform_app_inv in Hlen as [Ha Hlen].
   intuition.
-  rewrite length_app.
+  rewrite app_length.
   rewrite H //.
   lia.
 Qed.

@@ -3,8 +3,11 @@ From Perennial.program_proof Require Import disk_prelude.
 
 From Perennial.program_proof Require Import marshal_stateless_proof.
 From Perennial.goose_lang.lib Require Import typed_slice.
+From Perennial.algebra Require Import ghost_var.
 
 From Goose.github_com Require Import tchajed.simplefs.superblock.
+
+Local Open Scope Z.
 
 Record superblockT := {
     log_blocks: u64;
@@ -31,8 +34,29 @@ Record superblock_wf sb : Prop :=
     wf_data_blocks_bound: uint.Z sb.(data_blocks) < 0x100000000
   }.
 
+Class superblockG Σ :=
+  {
+    has_agree_sb :: ghost_varG Σ superblockT;
+  }.
+
 Section proof.
 Context `{!heapGS Σ}.
+Context `{!superblockG Σ}.
+
+(* the superblock is constant so we create a ghost variable that establishes
+it *)
+Definition is_sb γ (sb: superblockT): iProp Σ :=
+  ghost_var γ DfracDiscarded sb.
+
+#[global] Instance is_sb_persistent γ sb : Persistent (is_sb γ sb) := _.
+
+Lemma is_sb_agree γ sb1 sb2 :
+  is_sb γ sb1 -∗ is_sb γ sb2 -∗ ⌜sb1 = sb2⌝.
+Proof.
+  rewrite /is_sb.
+  iIntros "H1 H2". iDestruct (ghost_var_agree with "H1 H2") as %?.
+  auto.
+Qed.
 
 (*@ type Superblock struct {                                                @*)
 (*@     LogBlocks        uint64                                             @*)
@@ -40,17 +64,20 @@ Context `{!heapGS Σ}.
 (*@     DataBitmapBlocks uint64                                             @*)
 (*@     DataBlocks       uint64                                             @*)
 (*@ }                                                                       @*)
-Definition is_superblock (l : loc) (sb: superblockT) : iProp Σ :=
+Definition is_superblock_mem (l : loc) (sb: superblockT) : iProp Σ :=
     "logBlocks" ∷ l ↦[Superblock :: "LogBlocks"]{DfracDiscarded} #(sb.(log_blocks)) ∗
     "inodeBlocks" ∷ l ↦[Superblock :: "InodeBlocks"]{DfracDiscarded} #(sb.(inode_blocks)) ∗
     "dataBitmapBlocks" ∷ l ↦[Superblock :: "DataBitmapBlocks"]{DfracDiscarded} #(sb.(data_bitmap_blocks)) ∗
     "dataBlocks" ∷ l ↦[Superblock :: "DataBlocks"]{DfracDiscarded} #(sb.(data_blocks)) ∗
     "%Hwf" ∷ ⌜superblock_wf sb⌝.
 
-Global Instance is_superblock_persistent l sb : Persistent (is_superblock l sb) := _.
+Definition is_superblock γ l sb: iProp Σ :=
+  "Hsb_mem" ∷ is_superblock_mem l sb ∗ "Hsb" ∷ is_sb γ sb.
+
+Global Instance is_superblock_mem_persistent l sb : Persistent (is_superblock_mem l sb) := _.
 
 Lemma wp_Superblock__allocatableDataBlocks (l : loc) sb :
-  {{{ is_superblock l sb }}}
+  {{{ is_superblock_mem l sb }}}
     Superblock__allocatableDataBlocks #l
   {{{ (x:u64), RET #x; ⌜uint.Z x = allocatable_data_blocks sb⌝ }}}.
 Proof.
@@ -69,7 +96,7 @@ Proof.
 Qed.
 
 Lemma wp_Superblock__Wf (l : loc) sb :
-  {{{ is_superblock l sb }}}
+  {{{ is_superblock_mem l sb }}}
     Superblock__Wf #l
   {{{ RET #true; True }}}.
 Proof.
@@ -117,7 +144,7 @@ Proof.
 Qed.
 
 Lemma wp_Superblock__Encode (l : loc) sb :
-  {{{ is_superblock l sb }}}
+  {{{ is_superblock_mem l sb }}}
     Superblock__Encode #l
   {{{ s, RET (slice_val s); own_slice s u8T (DfracOwn 1) (encoded_superblock sb) }}}.
 Proof.
@@ -176,10 +203,10 @@ Proof.
   word.
 Qed.
 
-Theorem wp_Decode buf_s dq data sb :
+Theorem wp_Decode_mem buf_s dq data sb :
   {{{ own_slice_small buf_s byteT dq data ∗ ⌜data = encoded_superblock sb⌝ ∗ ⌜superblock_wf sb⌝ }}}
     Decode (slice_val buf_s)
-  {{{ (l: loc), RET #l; is_superblock l sb }}}.
+  {{{ (l: loc), RET #l; is_superblock_mem l sb }}}.
 Proof.
   (*@ func Decode(b disk.Block) Superblock {                                  @*)
   (*@     magic, b2 := marshal.ReadInt(b)                                     @*)
@@ -226,6 +253,18 @@ Proof.
   4056 (W8 0)]? *)
   iClear "Hs".
   iFrame "#".
+  auto.
+Qed.
+
+Lemma is_sb_init l sb :
+  is_superblock_mem l sb ==∗ ∃ γ, is_superblock γ l sb.
+Proof.
+  rewrite /is_superblock /named.
+  iIntros "Hmem".
+  iFrame.
+  rewrite /is_sb.
+  iMod (ghost_var_alloc sb) as (γ) "Hvar".
+  iMod (ghost_var_persist with "Hvar") as "$".
   auto.
 Qed.
 

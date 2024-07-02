@@ -1,18 +1,25 @@
 From Perennial.program_proof Require Import proof_prelude.
+From Perennial.program_proof Require Import disk_prelude.
 From Goose.github_com Require Import tchajed.simplefs.
 From Goose.github_com Require Import tchajed.simplefs.inode.
 
-From Perennial.program_proof Require Import disk_prelude.
 From Perennial.program_proof Require Import marshal_stateless_proof.
 From Perennial.goose_lang.lib Require Import typed_slice.
 
-From Perennial.program_proof.simplefs Require Import concat.
+From Perennial.program_proof.simplefs Require Import concat superblock_proof.
+From iris.base_logic.lib Require Import ghost_map.
 
 From RecordUpdate Require Import RecordSet.
 Import RecordSetNotations.
 
-Set Default Proof Using "Type".
+From Perennial Require Import options.
+
 #[local] Unset Printing Projections.
+
+Record inode_names :=
+  { inode_map: gname;
+    sb_var: gname;
+  }.
 
 Module inodeType.
 Inductive t :=
@@ -91,10 +98,15 @@ Qed.
 
 End inode_rep.
 
+Class inodeG Σ :=
+  { inode_superblockG :: superblockG Σ;
+    inode_mapG :: ghost_mapG Σ w64 inode_rep.t;
+  }.
+
 Hint Rewrite inode_rep.encode_length : len.
 
 Section proof.
-Context `{!heapGS Σ}.
+Context `{!heapGS Σ} `{!inodeG Σ}.
 
 Definition is_meta (v: val) (meta: w32) :=
   v = (#meta, #())%V.
@@ -383,5 +395,19 @@ Proof.
   iFrame.
 Qed.
 
+Definition inode_auth (γ: inode_names) : iProp Σ :=
+  ∃ (inodes: gmap w64 inode_rep.t),
+    ghost_map_auth γ.(inode_map) 1 inodes
+.
+
+Definition inode_ptsto (γ: inode_names) (inum: w64) (ino: inode_rep.t): iProp Σ :=
+  ghost_map_elem γ.(inode_map) inum (DfracOwn 1) ino.
+
+Theorem wp_ReadInode (γ: inode_names) (sb_l: loc) sb (inum : w64) ino :
+  {{{ inode_ptsto γ inum ino ∗ is_superblock γ.(sb_var) sb_l sb }}}
+    ReadInode #() #sb_l #inum
+  {{{ (i_l : loc), RET #i_l; own_inode i_l ino }}}.
+Proof.
+Admitted.
 
 End proof.
