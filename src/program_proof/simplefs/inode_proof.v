@@ -9,6 +9,8 @@ From Perennial.goose_lang.lib Require Import typed_slice.
 From Perennial.program_proof.simplefs Require Import concat superblock_proof.
 From iris.base_logic.lib Require Import ghost_map.
 
+From Perennial.Helpers Require Import NatDivMod.
+
 From RecordUpdate Require Import RecordSet.
 Import RecordSetNotations.
 
@@ -95,6 +97,16 @@ Proof.
   erewrite length_concat_uniform; [ | by eauto ].
   len.
 Qed.
+
+Definition zero :=
+  {| typ := inodeType.invalid;
+    len := W64 0;
+    meta := W32 0;
+    block_ptrs := vreplicate _ (W32 0);
+  |}.
+
+Lemma encode_zero : encode zero = replicate 128%nat (W8 0).
+Proof. reflexivity. Qed.
 
 End inode_rep.
 
@@ -395,11 +407,13 @@ Proof.
   iFrame.
 Qed.
 
+Transparent concat.
+
 Definition block_has_inodes (b: Block) (off: Z) (inodes: gmap w64 inode_rep.t) :=
   ∀ (i: w64), off * 32 ≤ uint.Z i < (off + 1) * 32 →
               ∃ ino, inodes !! i = Some ino ∧
                      inode_rep.encode ino =
-                     subslice (Z.to_nat off `mod` 32)%nat (Z.to_nat off `mod` 32 + 32)%nat b.
+                     subslice (Z.to_nat off `mod` 32)%nat (Z.to_nat off `mod` 32 + 128)%nat b.
 
 (* NOTE: normally an "auth" resource like this would be in an invariant and
 accessed through a fancy update for an atomic step. This file system is not
@@ -412,14 +426,13 @@ Definition inode_auth (γ: inode_names) : iProp Σ :=
     ghost_map_auth γ.(inode_map) 1 inodes ∗
     ∃ sb, is_sb γ.(sb_var) sb ∗
           (* for each inode block... *)
-          ∀ (off: w64), ⌜uint.Z off < uint.Z sb.(inode_blocks)⌝ -∗
-             (* notice that [inode_auth] owns all inode disk blocks *)
-             ∃ b, (sb_inode_start sb + uint.Z off) d↦ b ∗
-                  ⌜block_has_inodes b (uint.Z off) inodes⌝
+          [∗ list] off ∈ seq 0 (uint.nat sb.(inode_blocks)),
+             ∃ b, (sb_inode_start sb + Z.of_nat off) d↦ b ∗
+                  ⌜block_has_inodes b off inodes⌝
 .
 
-(* remember that an inode number is in bounds wrt the global superblock
-(accessed via its ghost variable) *)
+(* tracks (persistently) that an inode number is in bounds wrt the global
+superblock (accessed via its ghost variable) *)
 Definition is_valid_ino (γ: inode_names) (inum: w64): iProp Σ :=
   (* remember that this [sb] is globally unique and read-only *)
   ∃ sb, is_sb γ.(sb_var) sb ∗
@@ -428,6 +441,154 @@ Definition is_valid_ino (γ: inode_names) (inum: w64): iProp Σ :=
 Definition inode_ptsto (γ: inode_names) (inum: w64) (ino: inode_rep.t): iProp Σ :=
   ghost_map_elem γ.(inode_map) inum (DfracOwn 1) ino ∗
   is_valid_ino γ inum.
+
+Definition init_inode_map (num_inodes: nat) : gmap w64 inode_rep.t :=
+  list_to_map ((λ n, (W64 (Z.of_nat n), inode_rep.zero)) <$> seq 0 num_inodes).
+
+Lemma fmap_tuple_fst {A B} (f: nat → A) (g: nat → B) (len: nat) :
+  ((λ n, (f n, g n)) <$> seq 0 len).*1 =
+  f <$> seq 0 len.
+Proof.
+  rewrite -list_fmap_compose /compose /=.
+  reflexivity.
+Qed.
+
+Hint Rewrite seq_length : len.
+
+Lemma seq_to_seqZ n m :
+  seq n m = Z.to_nat <$> seqZ (Z.of_nat n) (Z.of_nat m).
+Proof.
+  rewrite /seqZ.
+  apply (list_eq_same_length _ _ m); [ len | len | ].
+  intros i x y Hbound Hget1 Hget2.
+  rewrite -list_fmap_compose /compose /= in Hget2.
+  fmap_Some in Hget2.
+  apply lookup_seq in Hget1; intuition subst.
+  apply lookup_seq in Hget2; intuition subst.
+  lia.
+Qed.
+
+Lemma NoDup_w64_keys {A} (f: nat → A) n :
+  Z.of_nat n < 2^64 →
+  NoDup ((λ n : nat, (W64 n, f n)) <$> seq 0 n).*1.
+Proof.
+  intros Hbound.
+  rewrite fmap_tuple_fst.
+  apply NoDup_fmap_2_strong; [ | apply NoDup_seq ].
+  intros x y Hx%elem_of_seq Hy%elem_of_seq Heq%(f_equal uint.Z).
+  move: Heq; word.
+Qed.
+
+(* same as NoDup_w64_keys but with a w64 length *)
+Lemma NoDup_w64_keys' {A} (f: nat → A) (n: w64) :
+  NoDup ((λ n : nat, (W64 n, f n)) <$> seq 0 (uint.nat n)).*1.
+Proof.
+  apply NoDup_w64_keys.
+  word.
+Qed.
+
+Lemma init_inode_map_lookup_Some (num_inodes: w64) (ino: w64) :
+  uint.Z ino < uint.Z num_inodes →
+  init_inode_map (uint.nat num_inodes) !! ino = Some inode_rep.zero.
+Proof.
+  rewrite /init_inode_map.
+  intros Hbound.
+  apply elem_of_list_to_map_1.
+  - apply NoDup_w64_keys'.
+  - apply elem_of_list_lookup.
+    exists (uint.nat ino).
+    apply list_lookup_fmap_Some.
+    eexists. rewrite lookup_seq; (intuition eauto); try word.
+    f_equal; word.
+  (*
+  word_cleanup.
+  assert (uint.Z num_inodes = Z.of_nat (uint.nat num_inodes)) as HnumZ by lia.
+  rewrite -> HnumZ in *.
+  generalize dependent (uint.nat num_inodes); intros.
+  clear dependent num_inodes.
+
+  induction n.
+  - simpl. rewrite bool_decide_eq_false_2; [ | lia]. auto.
+  - rewrite Nat2Z.id /=.
+    destruct (decide (W64 n = ino)) as [? | Hne]; subst;
+      [ rewrite lookup_insert // | rewrite lookup_insert_ne // ].
+    + rewrite bool_decide_eq_true_2; [ | word ]. auto.
+    + rewrite Nat2Z.id in IHn.
+      rewrite IHn; [ | lia ].
+      case_bool_decide; case_bool_decide; auto; try lia.
+      contradiction Hne; word.
+*)
+Qed.
+
+Lemma big_sepL_replicate_seq {A:Type} (Φ: nat → A → iProp Σ) (x: A) n :
+  big_opL bi_sep Φ (replicate n x) ≡
+    big_opL bi_sep (λ i _, Φ i x) (seq 0 n).
+Proof.
+  generalize dependent Φ.
+  induction n; simpl; auto.
+  intros Φ.
+  rewrite IHn.
+  rewrite (big_sepL_offset _ 1) //.
+Qed.
+
+Lemma vec_to_list_block0 `{ext_ty: ext_types} :
+  vec_to_list block0 =
+  replicate (uint.nat 4096) (W8 0).
+Proof. reflexivity. Qed.
+
+Local Ltac Zify.zify_post_hook ::= Z.div_mod_to_equations.
+
+Lemma init_zero_inodes (γ_sb: gname) sb :
+  is_sb γ_sb sb ∗
+  (1 + uint.nat sb.(log_blocks))%nat d↦∗ replicate (uint.nat sb.(inode_blocks)) block0 -∗
+  |==> ∃ γ, ⌜γ.(sb_var) = γ_sb⌝ ∗
+            inode_auth γ ∗
+            [∗ list] inum ∈ seq 0 (uint.nat sb.(inode_blocks)),
+            inode_ptsto γ (W64 (Z.of_nat inum)) (inode_rep.zero).
+Proof.
+  iIntros "[#Hsb Hd]".
+  iMod (ghost_map_alloc (init_inode_map (uint.nat sb.(inode_blocks)))) as
+    (γ_ino) "[Hauth Hfrags]".
+  iModIntro. iExists (Build_inode_names γ_ino γ_sb); simpl.
+  iSplit; [ done | ].
+  rewrite /inode_auth /=.
+  iFrame "Hauth Hsb".
+  iSplitL "Hd".
+  - rewrite /disk_array.
+    rewrite big_sepL_replicate_seq.
+    iApply (big_sepL_impl with "Hd").
+    iIntros "!>" (k x Hget).
+    apply lookup_seq in Hget; intuition subst.
+    rewrite Nat.add_0_l.
+    iIntros "Hd". iExists block0.
+    iSplit.
+    + iExactEq "Hd". f_equal.
+      rewrite /sb_inode_start.
+      word.
+    + iPureIntro.
+      rewrite /block_has_inodes.
+      intros ino Hbound.
+      exists inode_rep.zero.
+      rewrite init_inode_map_lookup_Some.
+      { split; first done.
+        rewrite inode_rep.encode_zero.
+        rewrite vec_to_list_block0.
+        rewrite subslice_take_drop take_replicate drop_replicate.
+        f_equal.
+        word. }
+      admit. (* nonlinear div inequality *)
+  - rewrite /init_inode_map big_sepM_list_to_map.
+    2: { apply NoDup_w64_keys'. }
+    rewrite big_opL_fmap.
+    iApply (big_sepL_impl with "Hfrags").
+    iIntros "!>" (k x Hget).
+    apply lookup_seq in Hget as [-> Hbound].
+    rewrite !Nat.add_0_l.
+    iIntros "$".
+    rewrite /is_valid_ino.
+    iExists (sb). iFrame "Hsb".
+    iPureIntro. word.
+Admitted.
 
 Definition own_inode γ inum i ino: iProp _ :=
   inode_mem i ino ∗
