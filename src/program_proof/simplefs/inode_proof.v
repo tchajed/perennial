@@ -152,7 +152,7 @@ Proof.
   iApply "HΦ". iFrame.
 Qed.
 
-Definition own_inode (l: loc) (x: inode_rep.t): iProp Σ :=
+Definition inode_mem (l: loc) (x: inode_rep.t): iProp Σ :=
   ∃ (s: Slice.t),
     "typ" ∷ l ↦[Inode :: "typ_"] #(inodeType.rep x.(inode_rep.typ)) ∗
     "length" ∷ l ↦[Inode :: "length"] #x.(inode_rep.len) ∗
@@ -164,7 +164,7 @@ Theorem wp_NewInode (ty_v: u32) (t : inodeType.t) :
   {{{ ⌜ty_v = inodeType.rep t⌝ }}}
     NewInode #ty_v
   {{{ l, RET #l;
-      own_inode l {|
+      inode_mem l {|
           inode_rep.typ := t;
           inode_rep.len := W64 0;
           inode_rep.meta := W32 0;
@@ -188,14 +188,14 @@ Proof.
   iIntros (l) "Hl".
   iDestruct (struct_fields_split with "Hl") as "Hl". iNamed "Hl".
   iApply "HΦ".
-  rewrite /own_inode. iExists _. rewrite /=.
+  rewrite /inode_mem. iExists _. rewrite /=.
   iFrame.
 Qed.
 
 Theorem wp_Inode__GetLength (i : loc) ino :
-  {{{ own_inode i ino }}}
+  {{{ inode_mem i ino }}}
     Inode__GetLength #i
-  {{{ RET #(ino.(inode_rep.len)); own_inode i ino }}}.
+  {{{ RET #(ino.(inode_rep.len)); inode_mem i ino }}}.
 Proof.
   (*@ func (i *Inode) GetLength() uint64 {                                    @*)
   (*@     return i.length                                                     @*)
@@ -206,9 +206,9 @@ Proof.
 Qed.
 
 Theorem wp_Inode__SetLength (i : loc) ino (len': w64) :
-  {{{ own_inode i ino }}}
+  {{{ inode_mem i ino }}}
     Inode__SetLength #i #len'
-  {{{ RET #(); own_inode i (ino <| inode_rep.len := len' |>) }}}.
+  {{{ RET #(); inode_mem i (ino <| inode_rep.len := len' |>) }}}.
 Proof.
   (*@ func (i *Inode) SetLength(length uint64) {                              @*)
   (*@     i.length = length                                                   @*)
@@ -219,10 +219,10 @@ Proof.
 Qed.
 
 Theorem wp_Inode__AsBytes (i : loc) ino :
-  {{{ own_inode i ino }}}
+  {{{ inode_mem i ino }}}
     Inode__AsBytes #i
   {{{ (s : Slice.t), RET (to_val s); own_slice s byteT (DfracOwn 1) (inode_rep.encode ino) ∗
-                                     own_inode i ino }}}.
+                                     inode_mem i ino }}}.
 Proof.
   (*@ func (i *Inode) AsBytes() []byte {                                      @*)
   (*@     var buf = make([]byte, 0)                                           @*)
@@ -305,7 +305,7 @@ Opaque concat.
 Theorem wp_FromBytes (b : Slice.t) bs ino :
   {{{ own_slice b byteT (DfracOwn 1) bs ∗ ⌜bs = inode_rep.encode ino⌝ }}}
     FromBytes (to_val b)
-  {{{ (l : loc), RET #l; own_inode l ino }}}.
+  {{{ (l : loc), RET #l; inode_mem l ino }}}.
 Proof.
   (*@ func FromBytes(b []byte) *Inode {                                       @*)
   (*@     typ, b2 := marshal.ReadInt32(b)                                     @*)
@@ -418,18 +418,29 @@ Definition inode_auth (γ: inode_names) : iProp Σ :=
                   ⌜block_has_inodes b (uint.Z off) inodes⌝
 .
 
+(* remember that an inode number is in bounds wrt the global superblock
+(accessed via its ghost variable) *)
+Definition is_valid_ino (γ: inode_names) (inum: w64): iProp Σ :=
+  (* remember that this [sb] is globally unique and read-only *)
+  ∃ sb, is_sb γ.(sb_var) sb ∗
+        ⌜uint.Z inum < uint.Z sb.(inode_blocks) * 32⌝.
+
 Definition inode_ptsto (γ: inode_names) (inum: w64) (ino: inode_rep.t): iProp Σ :=
-  ghost_map_elem γ.(inode_map) inum (DfracOwn 1) ino.
+  ghost_map_elem γ.(inode_map) inum (DfracOwn 1) ino ∗
+  is_valid_ino γ inum.
+
+Definition own_inode γ inum i ino: iProp _ :=
+  inode_mem i ino ∗
+  inode_ptsto γ inum ino.
 
 Theorem wp_ReadInode (γ: inode_names) (sb_l: loc) sb (inum : w64) ino :
   {{{ inode_auth γ ∗
       inode_ptsto γ inum ino ∗
       is_superblock γ.(sb_var) sb_l sb }}}
     ReadInode #() #sb_l #inum
-  {{{ (i_l : loc), RET #i_l;
+  {{{ (i : loc), RET #i;
       inode_auth γ ∗
-      inode_ptsto γ inum ino ∗
-      own_inode i_l ino }}}.
+      own_inode γ inum i ino }}}.
 Proof.
   (*@ func ReadInode(d disk.Disk, sb *superblock.Superblock, i simplefs.Inum) *Inode { @*)
   (*@     blkNum := sb.InodeStart() + uint64(i)/simplefs.INODES_PER_BLOCK     @*)
@@ -442,6 +453,27 @@ Proof.
 
   iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "(Hauth & Hptsto & #Hsb)".
 
+Admitted.
+
+Theorem wp_Inode__Write γ (i : loc) ino (sb_l : loc) sb (inum : w64) :
+  {{{ inode_auth γ ∗
+      (* permission to write *)
+      (∃ ino0, inode_ptsto γ inum ino0) ∗
+      (* the new in-memory inode *)
+      inode_mem i ino ∗
+      is_superblock γ.(sb_var) sb_l sb
+  }}}
+    Inode__Write #i #() #sb_l #inum
+  {{{ RET #(); inode_auth γ ∗
+               own_inode γ inum i ino }}}.
+Proof.
+  (*@ func (i *Inode) Write(d disk.Disk, sb *superblock.Superblock, inum simplefs.Inum) { @*)
+  (*@     blkNum := sb.InodeStart() + uint64(inum)/simplefs.INODES_PER_BLOCK  @*)
+  (*@     blkOff := uint64(inum) % simplefs.INODES_PER_BLOCK                  @*)
+  (*@     blk := d.Read(blkNum)                                               @*)
+  (*@     copy(blk[blkOff*simplefs.INODE_SIZE:(blkOff+1)*simplefs.INODE_SIZE], i.AsBytes()) @*)
+  (*@     d.Write(blkNum, blk)                                                @*)
+  (*@ }                                                                       @*)
 Admitted.
 
 End proof.
