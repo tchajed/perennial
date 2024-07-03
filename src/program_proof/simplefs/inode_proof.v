@@ -487,18 +487,21 @@ Proof.
   word.
 Qed.
 
-Lemma init_inode_map_lookup_Some (num_inodes: w64) (ino: w64) :
+Lemma init_inode_map_lookup_Some (num_inodes: Z) (ino: w64) :
+  0 ≤ num_inodes < 2^64 →
   uint.Z ino < uint.Z num_inodes →
-  init_inode_map (uint.nat num_inodes) !! ino = Some inode_rep.zero.
+  init_inode_map (Z.to_nat num_inodes) !! ino = Some inode_rep.zero.
 Proof.
   rewrite /init_inode_map.
-  intros Hbound.
+  intros Hword_bound Hbound.
   apply elem_of_list_to_map_1.
-  - apply NoDup_w64_keys'.
+  - apply NoDup_w64_keys.
+    lia.
   - apply elem_of_list_lookup.
     exists (uint.nat ino).
     apply list_lookup_fmap_Some.
     eexists. rewrite lookup_seq; (intuition eauto); try word.
+    { move: Hbound. word. }
     f_equal; word.
   (*
   word_cleanup.
@@ -543,11 +546,14 @@ Lemma init_zero_inodes (γ_sb: gname) sb :
   (1 + uint.nat sb.(log_blocks))%nat d↦∗ replicate (uint.nat sb.(inode_blocks)) block0 -∗
   |==> ∃ γ, ⌜γ.(sb_var) = γ_sb⌝ ∗
             inode_auth γ ∗
-            [∗ list] inum ∈ seq 0 (uint.nat sb.(inode_blocks)),
+            [∗ list] inum ∈ seq 0 (Z.to_nat $ uint.Z sb.(inode_blocks) * 32),
             inode_ptsto γ (W64 (Z.of_nat inum)) (inode_rep.zero).
 Proof.
   iIntros "[#Hsb Hd]".
-  iMod (ghost_map_alloc (init_inode_map (uint.nat sb.(inode_blocks)))) as
+  iAssert (⌜superblock_wf sb⌝)%I as %Hwf.
+  { iDestruct "Hsb" as "[_ $]". }
+  set (num_inodes := Z.to_nat $ uint.Z sb.(inode_blocks) * 32).
+  iMod (ghost_map_alloc (init_inode_map num_inodes)) as
     (γ_ino) "[Hauth Hfrags]".
   iModIntro. iExists (Build_inode_names γ_ino γ_sb); simpl.
   iSplit; [ done | ].
@@ -576,9 +582,17 @@ Proof.
         rewrite subslice_take_drop take_replicate drop_replicate.
         f_equal.
         word. }
-      admit. (* nonlinear div inequality *)
+      { destruct Hwf.
+        word. }
+      word_cleanup.
+      rewrite wrap_small; try lia.
+      destruct Hwf.
+      split; [ lia | ].
+      cut (uint.Z (inode_blocks sb) < (2^64) / 32); word.
   - rewrite /init_inode_map big_sepM_list_to_map.
-    2: { apply NoDup_w64_keys'. }
+    2: { apply NoDup_w64_keys. rewrite /num_inodes.
+         destruct Hwf.
+         word. }
     rewrite big_opL_fmap.
     iApply (big_sepL_impl with "Hfrags").
     iIntros "!>" (k x Hget).
@@ -587,8 +601,10 @@ Proof.
     iIntros "$".
     rewrite /is_valid_ino.
     iExists (sb). iFrame "Hsb".
-    iPureIntro. word.
-Admitted.
+    iPureIntro.
+    destruct Hwf.
+    word.
+Qed.
 
 Definition own_inode γ inum i ino: iProp _ :=
   inode_mem i ino ∗

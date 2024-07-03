@@ -51,7 +51,7 @@ Context `{!superblockG Σ}.
 (* the superblock is constant so we create a ghost variable that establishes
 it *)
 Definition is_sb γ (sb: superblockT): iProp Σ :=
-  ghost_var γ DfracDiscarded sb.
+  ghost_var γ DfracDiscarded sb ∗ ⌜superblock_wf sb⌝.
 
 #[global] Instance is_sb_persistent γ sb : Persistent (is_sb γ sb) := _.
 
@@ -59,7 +59,7 @@ Lemma is_sb_agree γ sb1 sb2 :
   is_sb γ sb1 -∗ is_sb γ sb2 -∗ ⌜sb1 = sb2⌝.
 Proof.
   rewrite /is_sb.
-  iIntros "H1 H2". iDestruct (ghost_var_agree with "H1 H2") as %?.
+  iIntros "[H1 _] [H2 _]". iDestruct (ghost_var_agree with "H1 H2") as %?.
   auto.
 Qed.
 
@@ -327,6 +327,8 @@ Lemma is_sb_init l sb :
 Proof.
   rewrite /is_superblock /named.
   iIntros "Hmem".
+  iAssert (⌜superblock_wf sb⌝)%I as %Hwf.
+  { iNamed "Hmem". auto. }
   iFrame.
   rewrite /is_sb.
   iMod (ghost_var_alloc sb) as (γ) "Hvar".
