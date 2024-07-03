@@ -112,22 +112,53 @@ Lemma wp_Superblock__Wf (l : loc) sb :
   {{{ RET #true; True }}}.
 Proof.
   (*@ func (sb *Superblock) Wf() bool {                                       @*)
-  (*@     // allocatableDataBlocks() shouldn't overflow; limit data bitmap blocks so @*)
-  (*@     // number of total bits is <2^32                                    @*)
-  (*@     return (sb.DataBitmapBlocks <= 0x2_0000) &&                         @*)
+  (*@     return (                                                            @*)
+  (*@     // no overflow in total number of blocks, and reasonable maximum size @*)
+  (*@     std.SumNoOverflow(1, sb.LogBlocks) &&                               @*)
+  (*@         std.SumNoOverflow(1+sb.LogBlocks, sb.InodeBlocks) &&            @*)
+  (*@         std.SumNoOverflow(1+sb.LogBlocks, sb.InodeBlocks) &&            @*)
+  (*@         std.SumNoOverflow(1+sb.LogBlocks+sb.InodeBlocks, sb.DataBitmapBlocks) && @*)
+  (*@         std.SumNoOverflow(1+sb.LogBlocks+sb.InodeBlocks+sb.DataBitmapBlocks, sb.DataBlocks) && @*)
+  (*@         sb.UsedBlocks() < 0x1_0000_0000) &&                             @*)
   (*@         // should be able to allocate all the data blocks using the data bitmaps @*)
   (*@         (sb.allocatableDataBlocks() >= sb.DataBlocks) &&                @*)
   (*@         // block pointers are 32 bits, they should be able to address all blocks @*)
   (*@         (sb.DataBlocks < 0x1_0000_0000)                                 @*)
   (*@ }                                                                       @*)
-
   iIntros (Φ) "Hpre HΦ". iPoseProof "Hpre" as "#Hwf".
   iPoseProof "Hwf" as "Hwf2". iNamed "Hwf2".
   pose proof Hwf as Hwf'; destruct Hwf'.
   wp_rec.
-  wp_loadField. wp_pures.
-  rewrite bool_decide_eq_true_2; [ wp_pures | word ].
-  wp_loadField.
+
+  repeat wp_loadField.
+  wp_apply std_proof.wp_SumNoOverflow.
+  rewrite bool_decide_eq_true_2 //; [ | word ]. wp_pures.
+
+  repeat wp_loadField.
+  wp_apply std_proof.wp_SumNoOverflow.
+  rewrite bool_decide_eq_true_2 //; [ | word ]. wp_pures.
+
+  repeat wp_loadField.
+  wp_apply std_proof.wp_SumNoOverflow.
+  rewrite bool_decide_eq_true_2 //; [ | word ]. wp_pures.
+
+  repeat wp_loadField.
+  wp_apply std_proof.wp_SumNoOverflow.
+  rewrite bool_decide_eq_true_2 //; [ | word ]. wp_pures.
+
+  repeat wp_loadField.
+  wp_apply std_proof.wp_SumNoOverflow.
+  rewrite bool_decide_eq_true_2 //; [ | word ]. wp_pures.
+
+  rewrite
+    /Superblock__UsedBlocks /Superblock__DataStart
+      /Superblock__DataBitmapStart /Superblock__InodeStart
+      /Superblock__LogStart.
+  repeat wp_loadField.
+  wp_pures.
+  rewrite bool_decide_eq_true_2 //; [ | word ]. wp_pures.
+
+  repeat wp_loadField.
   wp_apply (wp_Superblock__allocatableDataBlocks with "Hwf").
   iIntros (x). iIntros (Hx_val).
   wp_pures.
@@ -140,7 +171,7 @@ Proof.
 Qed.
 
 Definition sb_inode_start (sb: superblockT): Z :=
-  1 + uint.Z sb.(inode_blocks).
+  1 + uint.Z sb.(log_blocks).
 
 Theorem wp_Superblock__InodeStart (l : loc) sb :
   {{{ is_superblock_mem l sb }}}
@@ -162,7 +193,6 @@ Proof.
   rewrite /sb_inode_start.
   word_cleanup.
 Qed.
-
 
 Definition magicConst_: Z := 0x94f6c920688f08a6.
 
