@@ -395,19 +395,53 @@ Proof.
   iFrame.
 Qed.
 
+Definition block_has_inodes (b: Block) (off: Z) (inodes: gmap w64 inode_rep.t) :=
+  ∀ (i: w64), off * 32 ≤ uint.Z i < (off + 1) * 32 →
+              ∃ ino, inodes !! i = Some ino ∧
+                     inode_rep.encode ino =
+                     subslice (Z.to_nat off `mod` 32)%nat (Z.to_nat off `mod` 32 + 32)%nat b.
+
+(* NOTE: normally an "auth" resource like this would be in an invariant and
+accessed through a fancy update for an atomic step. This file system is not
+thread safe or crash safe, and does not protect the in-disk inodes with any
+mutex. Instead of using an invariant, we can simply have authoritative access
+owned by the file system object and use it for the duration of any inode
+access. *)
 Definition inode_auth (γ: inode_names) : iProp Σ :=
   ∃ (inodes: gmap w64 inode_rep.t),
-    ghost_map_auth γ.(inode_map) 1 inodes
+    ghost_map_auth γ.(inode_map) 1 inodes ∗
+    ∃ sb, is_sb γ.(sb_var) sb ∗
+          (* for each inode block... *)
+          ∀ (off: w64), ⌜uint.Z off < uint.Z sb.(inode_blocks)⌝ -∗
+             (* notice that [inode_auth] owns all inode disk blocks *)
+             ∃ b, (sb_inode_start sb + uint.Z off) d↦ b ∗
+                  ⌜block_has_inodes b (uint.Z off) inodes⌝
 .
 
 Definition inode_ptsto (γ: inode_names) (inum: w64) (ino: inode_rep.t): iProp Σ :=
   ghost_map_elem γ.(inode_map) inum (DfracOwn 1) ino.
 
 Theorem wp_ReadInode (γ: inode_names) (sb_l: loc) sb (inum : w64) ino :
-  {{{ inode_ptsto γ inum ino ∗ is_superblock γ.(sb_var) sb_l sb }}}
+  {{{ inode_auth γ ∗
+      inode_ptsto γ inum ino ∗
+      is_superblock γ.(sb_var) sb_l sb }}}
     ReadInode #() #sb_l #inum
-  {{{ (i_l : loc), RET #i_l; own_inode i_l ino }}}.
+  {{{ (i_l : loc), RET #i_l;
+      inode_auth γ ∗
+      inode_ptsto γ inum ino ∗
+      own_inode i_l ino }}}.
 Proof.
+  (*@ func ReadInode(d disk.Disk, sb *superblock.Superblock, i simplefs.Inum) *Inode { @*)
+  (*@     blkNum := sb.InodeStart() + uint64(i)/simplefs.INODES_PER_BLOCK     @*)
+  (*@     blkOff := uint64(i) % simplefs.INODES_PER_BLOCK                     @*)
+  (*@     blk := d.Read(blkNum)                                               @*)
+  (*@     inodeData := blk[blkOff*simplefs.INODE_SIZE : (blkOff+1)*simplefs.INODE_SIZE] @*)
+  (*@     ino := FromBytes(inodeData)                                         @*)
+  (*@     return ino                                                          @*)
+  (*@ }                                                                       @*)
+
+  iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "(Hauth & Hptsto & #Hsb)".
+
 Admitted.
 
 End proof.

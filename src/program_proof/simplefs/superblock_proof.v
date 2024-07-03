@@ -31,6 +31,11 @@ Record superblock_wf sb : Prop :=
   {
     wf_data_bitmap_blocks_bound: uint.Z sb.(data_bitmap_blocks) <= 0x2000;
     wf_data_blocks_allocatable: allocatable_data_blocks sb >= uint.Z sb.(data_blocks);
+    (* no overflow anywhere *)
+    wf_used_blocks_bound: 1 + uint.Z sb.(log_blocks) +
+                            uint.Z sb.(inode_blocks) +
+                            uint.Z sb.(data_bitmap_blocks) +
+                            uint.Z sb.(data_blocks) < 0x100000000;
     wf_data_blocks_bound: uint.Z sb.(data_blocks) < 0x100000000
   }.
 
@@ -73,6 +78,12 @@ Definition is_superblock_mem (l : loc) (sb: superblockT) : iProp Σ :=
 
 Definition is_superblock γ l sb: iProp Σ :=
   "Hsb_mem" ∷ is_superblock_mem l sb ∗ "Hsb" ∷ is_sb γ sb.
+
+Lemma is_superblock_get_is_sb γ l sb :
+  is_superblock γ l sb -∗ is_sb γ sb.
+Proof.
+  rewrite /is_superblock. iIntros "[? ?]". iFrame.
+Qed.
 
 Global Instance is_superblock_mem_persistent l sb : Persistent (is_superblock_mem l sb) := _.
 
@@ -127,6 +138,31 @@ Proof.
   rewrite bool_decide_eq_true_2; [ | word ].
   iApply "HΦ"; auto.
 Qed.
+
+Definition sb_inode_start (sb: superblockT): Z :=
+  1 + uint.Z sb.(inode_blocks).
+
+Theorem wp_Superblock__InodeStart (l : loc) sb :
+  {{{ is_superblock_mem l sb }}}
+    Superblock__InodeStart #l
+  {{{ (x: w64), RET #x; ⌜uint.Z x = sb_inode_start sb⌝ }}}.
+Proof.
+  (*@ func (sb *Superblock) InodeStart() uint64 {                             @*)
+  (*@     return sb.LogStart() + sb.LogBlocks                                 @*)
+  (*@ }                                                                       @*)
+  iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "#Hsb".
+  iNamed "Hsb".
+  wp_rec. wp_pures.
+  wp_rec.
+  wp_loadField. wp_pures.
+  iModIntro.
+  iApply "HΦ".
+  iPureIntro.
+  destruct Hwf.
+  rewrite /sb_inode_start.
+  word_cleanup.
+Qed.
+
 
 Definition magicConst_: Z := 0x94f6c920688f08a6.
 
