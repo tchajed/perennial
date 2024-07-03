@@ -194,6 +194,26 @@ Proof.
   word_cleanup.
 Qed.
 
+Definition sb_data_bitmap_start sb: Z :=
+  1 + uint.Z sb.(log_blocks) + uint.Z sb.(inode_blocks).
+
+Theorem wp_Superblock__DataBitmapStart (l : loc) sb :
+  {{{ is_superblock_mem l sb }}}
+    Superblock__DataBitmapStart #l
+  {{{ (x: w64), RET #x; ⌜uint.Z x = sb_data_bitmap_start sb⌝ }}}.
+Proof.
+Admitted.
+
+Definition sb_data_start sb: Z :=
+  1 + uint.Z sb.(log_blocks) + uint.Z sb.(inode_blocks) + uint.Z sb.(data_bitmap_blocks).
+
+Theorem wp_Superblock__DataStart (l : loc) sb :
+  {{{ is_superblock_mem l sb }}}
+    Superblock__DataStart #l
+  {{{ (x: w64), RET #x; ⌜uint.Z x = sb_data_start sb⌝ }}}.
+Proof.
+Admitted.
+
 Definition magicConst_: Z := 0x94f6c920688f08a6.
 
 Definition encoded_superblock sb : list u8 :=
