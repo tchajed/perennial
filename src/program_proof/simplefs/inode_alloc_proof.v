@@ -9,12 +9,15 @@ From Perennial.program_proof.simplefs Require Import
   superblock_proof
   inode_proof.
 
+From RecordUpdate Require Import RecordSet.
+Import RecordSetNotations.
+
 Section proof.
 Context `{!heapGS Σ}.
 Context `{!inodeG Σ}.
 
 Definition free_inode γ (inum: w64): iProp _ :=
-  ∃ i, inode_ptsto γ inum i.
+  inode_ptsto γ inum inode_rep.zero.
 
 Definition own_inode_alloc γ (l: loc): iProp _ :=
   ∃ (sb_l: loc) (free_s: Slice.t),
@@ -51,6 +54,50 @@ Proof.
   (*@     return &InodeAllocator{                                             @*)
   (*@         sb: sb, d: d, free: free,                                       @*)
   (*@     }                                                                   @*)
+  (*@ }                                                                       @*)
+Admitted.
+
+Theorem wp_InodeAllocator__Alloc γ (ia : loc) (tyI : w32) ty :
+  inodeType.rep ty = tyI →
+  {{{ own_inode_alloc γ ia ∗ inode_auth γ }}}
+    InodeAllocator__Alloc #ia #tyI
+  {{{ (inum: w64) (ok: bool), RET (#inum, #ok);
+      own_inode_alloc γ ia ∗
+      inode_auth γ ∗
+      inode_ptsto γ inum (inode_rep.zero <| inode_rep.typ := ty |>) }}}.
+Proof.
+  (*@ func (ia *InodeAllocator) Alloc(ty simplefs.InodeType) (simplefs.Inum, bool) { @*)
+  (*@     // precondition                                                     @*)
+  (*@     machine.Assert(ty != simplefs.Invalid)                              @*)
+  (*@     if len(ia.free) == 0 {                                              @*)
+  (*@         return 0, false                                                 @*)
+  (*@     }                                                                   @*)
+  (*@     i := ia.free[len(ia.free)-1]                                        @*)
+  (*@     ia.free = ia.free[:len(ia.free)-1]                                  @*)
+  (*@     ino := inode.ReadInode(ia.d, ia.sb, i)                              @*)
+  (*@     ino.SetType(ty)                                                     @*)
+  (*@     ino.Write(ia.d, ia.sb, i)                                           @*)
+  (*@     return i, true                                                      @*)
+  (*@ }                                                                       @*)
+Admitted.
+
+Theorem wp_InodeAllocator__Free γ (ia : loc) (inum: w64) i :
+  {{{ own_inode_alloc γ ia ∗ inode_auth γ ∗
+      inode_ptsto γ inum i ∗
+        (* TODO: not sure when/if inode state should be reset; maybe allocator
+        can return a non-deterministic value for everything *)
+      ⌜i.(inode_rep.len) = W64 0 ∧
+       i.(inode_rep.meta) = W32 0 ∧
+       i.(inode_rep.block_ptrs) = vreplicate 28 (W32 0)⌝
+  }}}
+    InodeAllocator__Free #ia #inum
+  {{{ RET #(); own_inode_alloc γ ia ∗ inode_auth γ }}}.
+Proof.
+  (*@ func (ia *InodeAllocator) Free(i simplefs.Inum) {                       @*)
+  (*@     ino := inode.ReadInode(ia.d, ia.sb, i)                              @*)
+  (*@     ino.SetType(simplefs.Invalid)                                       @*)
+  (*@     ino.Write(ia.d, ia.sb, i)                                           @*)
+  (*@     ia.free = append(ia.free, i)                                        @*)
   (*@ }                                                                       @*)
 Admitted.
 

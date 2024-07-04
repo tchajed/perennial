@@ -39,7 +39,18 @@ Definition rep (x: t) : w32 :=
 Definition is_valid (v: w32) :=
   0 < uint.Z v < 3.
 
+(* auto hints *)
+
+Lemma rep_invalid : rep invalid = W32 0.
+Proof. done. Qed.
+Lemma rep_dirType : rep dirType = W32 1.
+Proof. done. Qed.
+Lemma rep_fileType : rep fileType = W32 2.
+Proof. done. Qed.
+
 End inodeType.
+
+Hint Resolve inodeType.rep_invalid inodeType.rep_dirType inodeType.rep_fileType : core.
 
 Section proof.
 Context `{!heapGS Σ}.
