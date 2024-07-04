@@ -23,9 +23,17 @@ Implicit Types (sb: superblockT).
 
 Definition num_inodes sb :=
   uint.Z sb.(inode_blocks) * (BlkSize / InodeSize).
-
 Definition allocatable_data_blocks sb: Z :=
   uint.Z sb.(data_bitmap_blocks) * (BlkSize * 8).
+Definition sb_inode_start (sb: superblockT): Z :=
+  1 + uint.Z sb.(log_blocks).
+Definition sb_data_bitmap_start sb: Z :=
+  1 + uint.Z sb.(log_blocks) + uint.Z sb.(inode_blocks).
+Definition sb_data_start sb: Z :=
+  1 + uint.Z sb.(log_blocks) + uint.Z sb.(inode_blocks) + uint.Z sb.(data_bitmap_blocks).
+
+Hint Unfold num_inodes allocatable_data_blocks
+  sb_inode_start sb_data_bitmap_start sb_data_start : word.
 
 Record superblock_wf sb : Prop :=
   {
@@ -150,12 +158,7 @@ Proof.
   wp_apply std_proof.wp_SumNoOverflow.
   rewrite bool_decide_eq_true_2 //; [ | word ]. wp_pures.
 
-  rewrite
-    /Superblock__UsedBlocks /Superblock__DataStart
-      /Superblock__DataBitmapStart /Superblock__InodeStart
-      /Superblock__LogStart.
-  repeat wp_loadField.
-  wp_pures.
+  repeat (wp_rec || wp_loadField || wp_pures).
   rewrite bool_decide_eq_true_2 //; [ | word ]. wp_pures.
 
   repeat wp_loadField.
@@ -170,9 +173,6 @@ Proof.
   iApply "HΦ"; auto.
 Qed.
 
-Definition sb_inode_start (sb: superblockT): Z :=
-  1 + uint.Z sb.(log_blocks).
-
 Theorem wp_Superblock__InodeStart (l : loc) sb :
   {{{ is_superblock_mem l sb }}}
     Superblock__InodeStart #l
@@ -183,36 +183,40 @@ Proof.
   (*@ }                                                                       @*)
   iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "#Hsb".
   iNamed "Hsb".
-  wp_rec. wp_pures.
-  wp_rec.
-  wp_loadField. wp_pures.
-  iModIntro.
+  repeat (wp_rec || wp_loadField || wp_pures).
   iApply "HΦ".
   iPureIntro.
   destruct Hwf.
-  rewrite /sb_inode_start.
-  word_cleanup.
+  word.
 Qed.
-
-Definition sb_data_bitmap_start sb: Z :=
-  1 + uint.Z sb.(log_blocks) + uint.Z sb.(inode_blocks).
 
 Theorem wp_Superblock__DataBitmapStart (l : loc) sb :
   {{{ is_superblock_mem l sb }}}
     Superblock__DataBitmapStart #l
   {{{ (x: w64), RET #x; ⌜uint.Z x = sb_data_bitmap_start sb⌝ }}}.
 Proof.
-Admitted.
-
-Definition sb_data_start sb: Z :=
-  1 + uint.Z sb.(log_blocks) + uint.Z sb.(inode_blocks) + uint.Z sb.(data_bitmap_blocks).
+  iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "#Hsb".
+  iNamed "Hsb".
+  repeat (wp_rec || wp_loadField || wp_pures).
+  iApply "HΦ".
+  iPureIntro.
+  destruct Hwf.
+  word.
+Qed.
 
 Theorem wp_Superblock__DataStart (l : loc) sb :
   {{{ is_superblock_mem l sb }}}
     Superblock__DataStart #l
   {{{ (x: w64), RET #x; ⌜uint.Z x = sb_data_start sb⌝ }}}.
 Proof.
-Admitted.
+  iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "#Hsb".
+  iNamed "Hsb".
+  repeat (wp_rec || wp_loadField || wp_pures).
+  iApply "HΦ".
+  iPureIntro.
+  destruct Hwf.
+  word.
+Qed.
 
 Definition magicConst_: Z := 0x94f6c920688f08a6.
 
