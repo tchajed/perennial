@@ -487,10 +487,10 @@ Proof.
   word.
 Qed.
 
-Lemma init_inode_map_lookup_Some (num_inodes: Z) (ino: w64) :
-  0 ≤ num_inodes < 2^64 →
-  uint.Z ino < uint.Z num_inodes →
-  init_inode_map (Z.to_nat num_inodes) !! ino = Some inode_rep.zero.
+Lemma init_inode_map_lookup_Some (num_inodes: nat) (ino: w64) :
+  0 ≤ Z.of_nat num_inodes < 2^64 →
+  uint.Z ino < Z.of_nat num_inodes →
+  init_inode_map num_inodes !! ino = Some inode_rep.zero.
 Proof.
   rewrite /init_inode_map.
   intros Hword_bound Hbound.
@@ -500,27 +500,9 @@ Proof.
   - apply elem_of_list_lookup.
     exists (uint.nat ino).
     apply list_lookup_fmap_Some.
-    eexists. rewrite lookup_seq; (intuition eauto); try word.
+    eexists. rewrite lookup_seq; split_and!; eauto.
     { move: Hbound. word. }
     f_equal; word.
-  (*
-  word_cleanup.
-  assert (uint.Z num_inodes = Z.of_nat (uint.nat num_inodes)) as HnumZ by lia.
-  rewrite -> HnumZ in *.
-  generalize dependent (uint.nat num_inodes); intros.
-  clear dependent num_inodes.
-
-  induction n.
-  - simpl. rewrite bool_decide_eq_false_2; [ | lia]. auto.
-  - rewrite Nat2Z.id /=.
-    destruct (decide (W64 n = ino)) as [? | Hne]; subst;
-      [ rewrite lookup_insert // | rewrite lookup_insert_ne // ].
-    + rewrite bool_decide_eq_true_2; [ | word ]. auto.
-    + rewrite Nat2Z.id in IHn.
-      rewrite IHn; [ | lia ].
-      case_bool_decide; case_bool_decide; auto; try lia.
-      contradiction Hne; word.
-*)
 Qed.
 
 Lemma big_sepL_replicate_seq {A:Type} (Φ: nat → A → iProp Σ) (x: A) n :
@@ -546,13 +528,13 @@ Lemma init_zero_inodes (γ_sb: gname) sb :
   (1 + uint.nat sb.(log_blocks))%nat d↦∗ replicate (uint.nat sb.(inode_blocks)) block0 -∗
   |==> ∃ γ, ⌜γ.(sb_var) = γ_sb⌝ ∗
             inode_auth γ ∗
-            [∗ list] inum ∈ seq 0 (Z.to_nat $ uint.Z sb.(inode_blocks) * 32),
+            [∗ list] inum ∈ seq 0 (uint.nat sb.(inode_blocks) * 32)%nat,
             inode_ptsto γ (W64 (Z.of_nat inum)) (inode_rep.zero).
 Proof.
   iIntros "[#Hsb Hd]".
   iAssert (⌜superblock_wf sb⌝)%I as %Hwf.
   { iDestruct "Hsb" as "[_ $]". }
-  set (num_inodes := Z.to_nat $ uint.Z sb.(inode_blocks) * 32).
+  set (num_inodes := (uint.nat sb.(inode_blocks) * 32)%nat).
   iMod (ghost_map_alloc (init_inode_map num_inodes)) as
     (γ_ino) "[Hauth Hfrags]".
   iModIntro. iExists (Build_inode_names γ_ino γ_sb); simpl.
@@ -584,11 +566,7 @@ Proof.
         word. }
       { destruct Hwf.
         word. }
-      word_cleanup.
-      rewrite wrap_small; try lia.
-      destruct Hwf.
-      split; [ lia | ].
-      cut (uint.Z (inode_blocks sb) < (2^64) / 32); word.
+      word.
   - rewrite /init_inode_map big_sepM_list_to_map.
     2: { apply NoDup_w64_keys. rewrite /num_inodes.
          destruct Hwf.
