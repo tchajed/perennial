@@ -63,20 +63,15 @@ Definition InodeAllocator := struct.decl [
 Definition NewInodeAllocator: val :=
   rec: "NewInodeAllocator" "d" "sb" :=
     let: "free" := ref_to (slice.T simplefs.Inum) (NewSlice simplefs.Inum #0) in
-    let: "inode_blocks" := struct.loadF superblock.Superblock "InodeBlocks" "sb" in
-    let: "offset" := superblock.Superblock__InodeStart "sb" in
-    let: "blk_num" := ref_to uint64T #0 in
-    (for: (λ: <>, (![uint64T] "blk_num") < "inode_blocks"); (λ: <>, "blk_num" <-[uint64T] ((![uint64T] "blk_num") + #1)) := λ: <>,
-      let: "blk" := disk.Read ("offset" + (![uint64T] "blk_num")) in
-      let: "i" := ref_to uint64T #0 in
-      (for: (λ: <>, (![uint64T] "i") < simplefs.INODES_PER_BLOCK); (λ: <>, "i" <-[uint64T] ((![uint64T] "i") + #1)) := λ: <>,
-        let: "ino" := inode.FromBytes (SliceSubslice byteT "blk" ((![uint64T] "i") * simplefs.INODE_SIZE) (((![uint64T] "i") + #1) * simplefs.INODE_SIZE)) in
-        (if: (inode.Inode__GetType "ino") = simplefs.Invalid
-        then
-          "free" <-[slice.T simplefs.Inum] (SliceAppend simplefs.Inum (![slice.T simplefs.Inum] "free") (((![uint64T] "blk_num") * simplefs.INODES_PER_BLOCK) + (![uint64T] "i")));;
-          Continue
-        else Continue));;
-      Continue);;
+    let: "i" := ref_to uint64T #0 in
+    (for: (λ: <>, (![uint64T] "i") < (superblock.Superblock__NumInodes "sb")); (λ: <>, "i" <-[uint64T] ((![uint64T] "i") + #1)) := λ: <>,
+      let: "inum" := ![uint64T] "i" in
+      let: "ino" := inode.ReadInode "d" "sb" "inum" in
+      (if: (inode.Inode__GetType "ino") = simplefs.Invalid
+      then
+        "free" <-[slice.T simplefs.Inum] (SliceAppend simplefs.Inum (![slice.T simplefs.Inum] "free") "inum");;
+        Continue
+      else Continue));;
     struct.new InodeAllocator [
       "sb" ::= "sb";
       "d" ::= "d";
