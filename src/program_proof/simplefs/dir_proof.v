@@ -96,7 +96,7 @@ Proof.
   induction es as [|e es]; intros.
    - simpl; auto.
    - simpl.
-     rewrite length_app.
+     rewrite app_length.
      inversion H as [|?? He Hes]; subst.
      fold (fmap encode_dir_ent es).
      rewrite IHes //.
@@ -110,7 +110,7 @@ Proof.
   rewrite /encode_dir_ents.
   simpl.
   intros H%(f_equal length).
-  rewrite length_app /= in H.
+  rewrite app_length /= in H.
   rewrite /encode_dir_ent in H.
   autorewrite with len in H.
   lia.
