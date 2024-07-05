@@ -116,13 +116,42 @@ Proof.
   lia.
 Qed.
 
+Lemma not_elem_Forall {A} (l: list A) (x: A) :
+  x ∉ l ↔ Forall (λ y, y ≠ x) l.
+Proof.
+  rewrite Forall_forall.
+  intuition (subst; eauto).
+Qed.
+
+Lemma not_elem_fmap_Forall {A B} (l: list A) (x: B) (f: A → B) :
+  x ∉ f <$> l ↔ Forall (λ y, f y ≠ x) l.
+Proof.
+  rewrite not_elem_Forall.
+  rewrite Forall_fmap /compose; simpl.
+  auto.
+Qed.
+
+Lemma dir_ents_ok_split es :
+  dir_ents_ok es ↔
+  Forall dir_ent_ok es ∧ NoDup (path <$> es).
+Proof.
+  split.
+  - destruct 1; eauto.
+  - intuition; eauto using dir_ents_ok.
+Qed.
+
 Lemma dir_ents_ok_cons_inv e es :
   dir_ents_ok (e :: es) ↔
   dir_ent_ok e ∧
   Forall (λ e', e'.(path) ≠ e.(path)) es ∧
   dir_ents_ok es.
 Proof.
-Admitted.
+  rewrite !dir_ents_ok_split.
+  rewrite -not_elem_fmap_Forall.
+  rewrite Forall_cons.
+  rewrite fmap_cons NoDup_cons.
+  intuition eauto.
+Qed.
 
 Lemma encode_dir_ents_cons e es :
   encode_dir_ents (e :: es) = encode_dir_ent e ++ encode_dir_ents es.
