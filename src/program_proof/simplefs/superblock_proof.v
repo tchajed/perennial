@@ -71,6 +71,12 @@ Proof.
   auto.
 Qed.
 
+Lemma is_sb_to_wf γ sb :
+  is_sb γ sb -∗ ⌜superblock_wf sb⌝.
+Proof.
+  iIntros "[_ $]".
+Qed.
+
 (*@ type Superblock struct {                                                @*)
 (*@     LogBlocks        uint64                                             @*)
 (*@     InodeBlocks      uint64                                             @*)
