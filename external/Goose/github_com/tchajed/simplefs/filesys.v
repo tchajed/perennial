@@ -18,8 +18,8 @@ Definition blockFs := struct.decl [
 ].
 
 Definition mkBlockFs: val :=
-  rec: "mkBlockFs" "d" :=
-    let: "sb" := superblock.InitSuperblock (disk.Size #()) in
+  rec: "mkBlockFs" "d" "sz" :=
+    let: "sb" := superblock.InitSuperblock "sz" in
     disk.Write #0 (superblock.Superblock__Encode "sb");;
     let: "zero_blk" := NewSlice byteT disk.BlockSize in
     let: "i" := ref_to uint64T #0 in
@@ -410,8 +410,8 @@ Definition AttrFromInode: val :=
     ].
 
 Definition Mkfs: val :=
-  rec: "Mkfs" "d" :=
-    mkBlockFs "d";;
+  rec: "Mkfs" "d" "sz" :=
+    mkBlockFs "d" "sz";;
     #().
 
 Definition Load: val :=

@@ -55,6 +55,7 @@ Definition InitSuperblock: val :=
     (if: "sizeBlocks" < #15
     then Panic "disk too small"
     else #());;
+    control.impl.Assume ("sizeBlocks" < #4294967296);;
     let: "inodeBlocks" := divRoundup ("sizeBlocks" - #1) #10 in
     let: "nominalDataBlocks" := ("sizeBlocks" - #1) - "inodeBlocks" in
     let: "dataBitmapBlocks" := divRoundup "nominalDataBlocks" (disk.BlockSize * #8) in
