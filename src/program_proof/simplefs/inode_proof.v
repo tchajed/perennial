@@ -681,6 +681,129 @@ Proof.
     iExactEq "Hb". repeat f_equal; word. }
 Qed.
 
+Hint Unfold block_bytes : word.
+
+Lemma block_has_inodes_copy (inum : w64) (ino' : inode_rep.t) (inodes : gmap w64 inode_rep.t) (b : Block) :
+  block_has_inodes b (uint.nat inum `div` 32)%nat inodes
+  → ∀ b' : Block,
+  vec_to_list b' = take (uint.nat inum `mod` 32 * 128) b ++
+                     inode_rep.encode ino' ++
+                     drop (uint.nat inum `mod` 32 * 128 + 128) b
+  → block_has_inodes b' (uint.nat inum `div` 32)%nat (<[inum := ino']> inodes).
+Proof.
+  intros Hb_has_inodes b' Hb'_eq.
+  intros i Hi_bound.
+  destruct (decide (inum = i)); subst.
+  - rewrite lookup_insert.
+    eexists; split; [ by eauto | ].
+    rewrite /subslice_inode Hb'_eq.
+    rewrite subslice_drop_take; [ | word ].
+    rewrite drop_app_length'; [ | len ].
+    rewrite take_app_length'; [ | len ].
+    auto.
+  - rewrite lookup_insert_ne //.
+    destruct (Hb_has_inodes i) as [ino'' ?]; intuition auto.
+    eexists; split; [ by eauto | ].
+    cut (subslice_inode b' i = subslice_inode b i).
+    { congruence. }
+    rewrite Hb'_eq /subslice_inode.
+    destruct (decide (uint.Z i < uint.Z inum)).
+    + repeat first [ rewrite -> subslice_drop_take by len |
+                   rewrite -> drop_app_le by len |
+                   rewrite -> take_app_le by len ].
+      repeat rewrite <- subslice_drop_take by len.
+      rewrite -> subslice_take_all by len.
+      auto.
+    + assert (uint.Z i > uint.Z inum).
+      {
+        assert (uint.Z i ≠ uint.Z inum); [ | word ].
+        intros ?.
+        contradiction n; word.
+      }
+
+      apply (list_eq_same_length _ _ 128%nat).
+      { rewrite subslice_length'; len. }
+      { rewrite subslice_length'; len. }
+
+      intros i' b1 b2 Hle.
+      repeat rewrite -> subslice_lookup by len.
+      intros Hget1 Hget2.
+      rewrite -> lookup_app_r in Hget1 by len.
+      rewrite -> lookup_app_r in Hget1 by len.
+      rewrite lookup_drop in Hget1.
+      autorewrite with len in Hget1.
+      match type of (conj Hget1 Hget2) with
+      | (vec_to_list b !! ?n1 = _) ∧ (vec_to_list b !! ?n2 = _) =>
+          assert (n1 = n2); [ | congruence ]
+      end.
+      word.
+Qed.
+
+Lemma inode_auth_insert γ (inum: w64) ino ino' sb :
+  inode_auth γ -∗
+  inode_ptsto γ inum ino -∗
+  is_sb γ.(sb_var) sb -∗
+  |==> ∃ b, "Hb" ∷ (sb_inode_start sb + (uint.nat inum / 32)) d↦b ∗
+        "Hptsto" ∷ inode_ptsto γ inum ino' ∗
+       "%Hinum_bound" ∷ ⌜uint.nat inum / 32 < uint.Z sb.(inode_blocks)⌝ ∗
+       "%Hino_encode" ∷ ⌜inode_rep.encode ino = subslice_inode b inum⌝ ∗
+       "Hauth_wand" ∷ (∀ (b': Block),
+                         ⌜take (uint.nat inum `mod` 32 * 128) b' =
+                          take (uint.nat inum `mod` 32 * 128) b ∧
+                          subslice_inode b' inum = inode_rep.encode ino' ∧
+                          drop (uint.nat inum `mod` 32 * 128 + 128) b' =
+                          drop (uint.nat inum `mod` 32 * 128 + 128) b⌝ ∗
+                         (sb_inode_start sb + (uint.nat inum / 32)) d↦b' -∗
+       inode_auth γ).
+Proof.
+  rewrite /named.
+  iIntros "Hauth Hptsto #Hsb".
+  iDestruct (is_sb_to_wf with "Hsb") as %Hwf.
+  destruct Hwf.
+
+  iDestruct (inode_ptsto_valid with "Hptsto Hsb") as %Hino_valid.
+  iDestruct "Hauth" as (inodes) "[Hauth (%sb2 & Hsb2 & Hblocks)]".
+  iDestruct (is_sb_agree with "Hsb Hsb2") as %<-; iClear "Hsb2".
+
+  iDestruct (inode_ptsto_lookup with "[$] [$]") as %Hget.
+  assert (uint.Z inum / 32 < uint.Z sb.(inode_blocks)) as Hino_blk_bound.
+  { lia. }
+
+  iDestruct (big_sepL_insert_acc _ _ (Z.to_nat $ uint.Z inum / 32) with "Hblocks")
+    as "[(%b & Hb & %Hb_has_inodes) Hblocks]".
+  { apply lookup_seq_lt. word. }
+  replace (0 + Z.to_nat (uint.Z inum `div` 32))%nat with
+    (uint.nat inum `div` 32)%nat in Hb_has_inodes by word.
+
+  iExists (b). iSplitL "Hb".
+  { iModIntro. iExactEq "Hb". repeat f_equal; word. }
+  iDestruct "Hptsto" as "[Hptsto #Hvalid_ino]".
+  iMod (ghost_map_update ino' with "Hauth Hptsto") as "[Hauth Hptsto]".
+  iModIntro.
+  iFrame "Hptsto Hvalid_ino".
+  iSplit; [ iPureIntro; word | ].
+
+  iSplit.
+  { iPureIntro.
+    destruct (Hb_has_inodes inum) as [ino2 [Hino_get Hino_encode]].
+    { word. }
+    assert (ino2 = ino) by congruence; subst ino2.
+    rewrite Hino_encode.
+    repeat f_equal; word. }
+
+  iIntros (b') "[%Hb'_eq Hb]".
+
+  iFrame "Hauth Hsb".
+  iDestruct ("Hblocks" $! (uint.nat inum `div` 32)%nat with "[Hb]") as "Hblocks".
+  { iExists (b').
+    iSplit.
+    - iExactEq "Hb". repeat f_equal; word.
+    - iPureIntro.
+      admit. (* oops, this is wrong; [inodes] needs to change so we can't use
+      [big_sepL_insert_acc] *)
+  }
+Abort.
+
 Theorem wp_ReadInode (γ: inode_names) (sb_l: loc) sb (inum : w64) ino :
   {{{ inode_auth γ ∗
       inode_ptsto γ inum ino ∗
