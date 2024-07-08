@@ -739,6 +739,58 @@ Proof.
       word.
 Qed.
 
+Lemma seq_split_one start len i :
+  (start ≤ i < len)%nat →
+  seq start len = seq start (i-start)%nat ++ [i] ++ seq (i+1) (len - (i-start) - 1).
+Proof.
+  intros Hi.
+  replace len with ((i-start) + 1 + (len-(i-start)-1))%nat at 1 by lia.
+  rewrite !seq_app -app_assoc.
+  f_equal.
+  f_equal.
+  - simpl. f_equal. lia.
+  - f_equal. lia.
+Qed.
+
+Lemma big_sepL_seq_split_one (Φ: nat → iProp Σ) start len i :
+  (start ≤ i < len)%nat →
+  big_opL bi_sep (λ _ k, Φ k) (seq start len) ⊣⊢
+  big_opL bi_sep (λ _ k, Φ k) (seq start (i - start)%nat) ∗
+  Φ i ∗
+  big_opL bi_sep (λ _ k, Φ k) (seq (i+1)%nat (len - (i-start) - 1)).
+Proof.
+  intros H.
+  rewrite (seq_split_one start len i) //.
+  rewrite !big_sepL_app.
+  f_equiv.
+  f_equiv.
+  simpl. rewrite sep_emp //.
+Qed.
+
+Lemma block_has_inodes_insert_other (off0 num start: nat) i ino inodes :
+  (* the block for this inode is not part of the range *)
+  ¬ (off0 ≤ uint.nat i / 32 < off0 + num)%nat →
+  ([∗ list] off ∈ seq off0 num,
+    ∃ b, (start + off)%nat d↦ b ∗ ⌜block_has_inodes b off inodes⌝) -∗
+  ([∗ list] off ∈ seq off0 num,
+    ∃ b, (start + off)%nat d↦ b ∗ ⌜block_has_inodes b off (<[i := ino]> inodes)⌝).
+Proof.
+  intros Hother_block.
+  iIntros "H".
+  iApply (big_sepL_impl with "H").
+  iIntros "!>" (k off Hget) "Hb".
+  iDestruct "Hb" as (b) "[Hb %Hhas_inodes]".
+  iExists _; iFrame.
+  iPureIntro.
+  apply lookup_seq in Hget as [-> Hbound].
+  intros i' Hi'.
+  destruct (Hhas_inodes i') as [ino' [Hino' Hencode]]; auto.
+  exists ino'.
+  rewrite lookup_insert_ne //.
+  intros <-.
+  lia.
+Qed.
+
 Lemma inode_auth_insert γ (inum: w64) ino ino' sb :
   inode_auth γ -∗
   inode_ptsto γ inum ino -∗
