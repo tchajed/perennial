@@ -419,12 +419,18 @@ Qed.
 
 Transparent concat.
 
+Definition subslice_inode (b: list w8) (inum: w64): list w8 :=
+    subslice
+    (uint.nat inum `mod` 32 * 128)%nat
+    (uint.nat inum `mod` 32 * 128 + 128)%nat b.
+
+(* says that block [b] located at disk block address [off] contains the right
+inodes from the map [inodes] *)
 Definition block_has_inodes (b: Block) (off: Z) (inodes: gmap w64 inode_rep.t) :=
-  (* TODO: calculations seem wrong, did I multiply by 128 in the right places? *)
-  ∀ (i: w64), off * 32 ≤ uint.Z i < (off + 1) * 32 →
+  (* Quantify over [i], the inode numbers for this block. 32 = INODE_PER_BLOCK. *)
+  ∀ (i: w64), off * 32 ≤ uint.Z i < off * 32 + 32 →
               ∃ ino, inodes !! i = Some ino ∧
-                     inode_rep.encode ino =
-                     subslice (Z.to_nat off `mod` 32)%nat (Z.to_nat off `mod` 32 + 128)%nat b.
+                     inode_rep.encode ino = subslice_inode b i.
 
 (* NOTE: normally an "auth" resource like this would be in an invariant and
 accessed through a fancy update for an atomic step. This file system is not
@@ -572,7 +578,7 @@ Proof.
       { split; first done.
         rewrite inode_rep.encode_zero.
         rewrite vec_to_list_block0.
-        rewrite subslice_take_drop take_replicate drop_replicate.
+        rewrite /subslice_inode subslice_take_drop take_replicate drop_replicate.
         f_equal.
         word. }
       { destruct Hwf.
@@ -626,6 +632,55 @@ Proof. reflexivity. Qed.
 
 Hint Unfold sb_inode_start : word.
 
+Lemma inode_auth_lookup γ (inum: w64) ino sb :
+  inode_auth γ -∗
+  inode_ptsto γ inum ino -∗
+  is_sb γ.(sb_var) sb -∗
+  ∃ b, "Hb" ∷ (sb_inode_start sb + (uint.nat inum / 32)) d↦b ∗
+        "Hptsto" ∷ inode_ptsto γ inum ino ∗
+       "%Hinum_bound" ∷ ⌜uint.nat inum / 32 < uint.Z sb.(inode_blocks)⌝ ∗
+       "%Hino_encode" ∷ ⌜inode_rep.encode ino = subslice_inode b inum⌝ ∗
+       "Hauth_wand" ∷ ((sb_inode_start sb + (uint.nat inum / 32)) d↦b -∗
+       inode_auth γ).
+Proof.
+  rewrite /named.
+  iIntros "Hauth Hptsto #Hsb".
+  iDestruct (is_sb_to_wf with "Hsb") as %Hwf.
+  destruct Hwf.
+
+  iDestruct (inode_ptsto_valid with "Hptsto Hsb") as %Hino_valid.
+  iDestruct "Hauth" as (inodes) "[Hauth (%sb2 & Hsb2 & Hblocks)]".
+  iDestruct (is_sb_agree with "Hsb Hsb2") as %<-; iClear "Hsb2".
+
+  iDestruct (inode_ptsto_lookup with "[$] [$]") as %Hget.
+  assert (uint.Z inum / 32 < uint.Z sb.(inode_blocks)) as Hino_blk_bound.
+  { lia. }
+
+  iDestruct (big_sepL_lookup_acc _ _ (Z.to_nat $ uint.Z inum / 32) with "Hblocks")
+    as "[(%b & Hb & %Hb_has_inodes) Hblocks]".
+  { apply lookup_seq_lt. word. }
+
+  iExists (b). iSplitL "Hb".
+  { iExactEq "Hb". repeat f_equal; word. }
+  iFrame "Hptsto".
+  iSplit; [ iPureIntro; word | ].
+
+  iSplit.
+  { iPureIntro.
+    destruct (Hb_has_inodes inum) as [ino' [Hino_get Hino_encode]].
+    { word. }
+    assert (ino' = ino) by congruence; subst ino'.
+    rewrite Hino_encode.
+    repeat f_equal; word. }
+
+  iIntros "Hb".
+  iFrame "Hauth Hsb".
+  iDestruct ("Hblocks" with "[Hb]") as "$".
+  { iExists (b).
+    iSplit; [ | done ].
+    iExactEq "Hb". repeat f_equal; word. }
+Qed.
+
 Theorem wp_ReadInode (γ: inode_names) (sb_l: loc) sb (inum : w64) ino :
   {{{ inode_auth γ ∗
       inode_ptsto γ inum ino ∗
@@ -645,37 +700,22 @@ Proof.
   (*@ }                                                                       @*)
 
   iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "(Hauth & Hptsto & #Hsb)".
-  iDestruct "Hsb" as "[Hsb_mem Hsb]". rewrite /named.
+  iNamed "Hsb".
   iDestruct (is_sb_to_wf with "Hsb") as %Hwf.
   destruct Hwf.
+  iDestruct (inode_auth_lookup with "[$] [$] Hsb") as "H"; iNamed "H".
+
   wp_rec. wp_pures. wp_apply (wp_Superblock__InodeStart with "[$]").
   iIntros (ino_start Hino_start).
   wp_pures.
 
   iDestruct (inode_ptsto_valid with "Hptsto Hsb") as %Hino_valid.
-  iDestruct "Hauth" as (inodes) "[Hauth (%sb2 & Hsb2 & Hblocks)]".
-  iDestruct (is_sb_agree with "Hsb Hsb2") as %<-; iClear "Hsb2".
-
-  iDestruct (inode_ptsto_lookup with "[$] [$]") as %Hget.
-  assert (uint.Z inum / 32 < uint.Z sb.(inode_blocks)) as Hino_blk_bound.
-  { lia. }
-
-  iDestruct (big_sepL_lookup_acc _ _ (Z.to_nat $ uint.Z inum / 32) with "Hblocks")
-    as "[(%b & Hb & %Hb_has_inodes) Hblocks]".
-  { apply lookup_seq_lt. word. }
   change (word.divu (W64 4096) (W64 128)) with (W64 32).
-  wp_apply (wp_Read with "[Hb]").
-  { iExactEq "Hb". f_equal.
-    word.
-  }
+  wp_apply (wp_Read_eq with "[$Hb]").
+  { iPureIntro. word. }
   iIntros (b_s) "[Hb Hb_s]".
   (* done with the disk points-to, reassemble blocks authoritative resource *)
-  iDestruct ("Hblocks" with "[Hb]") as "Hblocks".
-  {
-    iExists b. iSplit; [ | done ].
-    iExactEq "Hb". repeat f_equal.
-    word.
-  }
+  iDestruct ("Hauth_wand" with "Hb") as "Hauth".
 
   replace (uint.Z (word.add ino_start (word.divu inum (W64 32)))) with
     (uint.Z ino_start + uint.Z inum / 32) by word.
@@ -700,17 +740,14 @@ Proof.
         ].
     word_cleanup.
     rewrite Z.mul_add_distr_r. rewrite Z.mul_1_l.
-    destruct (Hb_has_inodes b (uint.Z inum `mod` 32 * 128)
+    rewrite Hino_encode /subslice_inode.
+    f_equal; word.
   }
-
-             (* wp_FromBytes *)
-
-  (* inode_auth needs a way to split off one disk block (ideally encapsulating
-  that ino / 32 is the right block and ino % 32 is the offset in that block),
-  then we'll be able to read/write one inode within that block just using pure
-  [block_has_inodes]. *)
-
-Admitted.
+  iIntros (l) "Hinode".
+  wp_pures.
+  iModIntro.
+  iApply "HΦ". iFrame.
+Qed.
 
 Theorem wp_Inode__Write γ (i : loc) ino (sb_l : loc) sb (inum : w64) :
   {{{ inode_auth γ ∗
