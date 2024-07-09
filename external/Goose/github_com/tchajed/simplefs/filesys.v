@@ -59,11 +59,18 @@ Definition blockFs__Superblock: val :=
   rec: "blockFs__Superblock" "fs" :=
     struct.loadF blockFs "sb" "fs".
 
-(* AllocInode allocates a new inode of the given type. Its length, meta, and
+(* AllocInode allocates a new inode of the given type and meta. Its length and
    block pointers are all guaranteed to be zeroed. *)
 Definition blockFs__AllocInode: val :=
-  rec: "blockFs__AllocInode" "fs" "ty" :=
-    alloc.InodeAllocator__Alloc (struct.loadF blockFs "ia" "fs") "ty".
+  rec: "blockFs__AllocInode" "fs" "ty" "meta" :=
+    let: ("inum", "ok") := alloc.InodeAllocator__Alloc (struct.loadF blockFs "ia" "fs") "ty" in
+    (if: (~ "ok")
+    then (#0, #false)
+    else
+      let: "ino" := inode.ReadInode (struct.loadF blockFs "d" "fs") (struct.loadF blockFs "sb" "fs") "inum" in
+      inode.Inode__SetMeta "ino" "meta";;
+      inode.Inode__Write "ino" (struct.loadF blockFs "d" "fs") (struct.loadF blockFs "sb" "fs") "inum";;
+      ("inum", #true)).
 
 Definition blockFs__FreeInode: val :=
   rec: "blockFs__FreeInode" "fs" "i" :=
@@ -87,9 +94,19 @@ Definition blockFs__GetInode: val :=
   rec: "blockFs__GetInode" "fs" "i" :=
     inode.ReadInode (struct.loadF blockFs "d" "fs") (struct.loadF blockFs "sb" "fs") "i".
 
-(* Update an inode to change its length and meta. *)
-Definition blockFs__WriteInode: val :=
-  rec: "blockFs__WriteInode" "fs" "i" "ino" :=
+(* Change the meta of an inode. *)
+Definition blockFs__SetMeta: val :=
+  rec: "blockFs__SetMeta" "fs" "i" "meta" :=
+    let: "ino" := blockFs__GetInode "fs" "i" in
+    inode.Inode__SetMeta "ino" "meta";;
+    inode.Inode__Write "ino" (struct.loadF blockFs "d" "fs") (struct.loadF blockFs "sb" "fs") "i";;
+    #().
+
+(* Change the length of an inode. *)
+Definition blockFs__SetLength: val :=
+  rec: "blockFs__SetLength" "fs" "i" "length" :=
+    let: "ino" := blockFs__GetInode "fs" "i" in
+    inode.Inode__SetLength "ino" "length";;
     inode.Inode__Write "ino" (struct.loadF blockFs "d" "fs") (struct.loadF blockFs "sb" "fs") "i";;
     #().
 
@@ -148,22 +165,29 @@ Definition byteFs__Superblock: val :=
   rec: "byteFs__Superblock" "b" :=
     blockFs__Superblock (struct.loadF byteFs "fs" "b").
 
+Definition byteFs__GetInode: val :=
+  rec: "byteFs__GetInode" "b" "inum" :=
+    blockFs__GetInode (struct.loadF byteFs "fs" "b") "inum".
+
+(* Change the meta of an inode. *)
+Definition byteFs__SetMeta: val :=
+  rec: "byteFs__SetMeta" "fs" "inum" "meta" :=
+    blockFs__SetMeta (struct.loadF byteFs "fs" "fs") "inum" "meta";;
+    #().
+
+(* Change the length of an inode. *)
+Definition byteFs__SetLength: val :=
+  rec: "byteFs__SetLength" "fs" "inum" "length" :=
+    blockFs__SetLength (struct.loadF byteFs "fs" "fs") "inum" "length";;
+    #().
+
 Definition byteFs__AllocInode: val :=
-  rec: "byteFs__AllocInode" "b" "ty" :=
-    blockFs__AllocInode (struct.loadF byteFs "fs" "b") "ty".
+  rec: "byteFs__AllocInode" "b" "ty" "meta" :=
+    blockFs__AllocInode (struct.loadF byteFs "fs" "b") "ty" "meta".
 
 Definition byteFs__FreeInode: val :=
   rec: "byteFs__FreeInode" "b" "i" :=
     blockFs__FreeInode (struct.loadF byteFs "fs" "b") "i";;
-    #().
-
-Definition byteFs__GetInode: val :=
-  rec: "byteFs__GetInode" "b" "i" :=
-    blockFs__GetInode (struct.loadF byteFs "fs" "b") "i".
-
-Definition byteFs__WriteInode: val :=
-  rec: "byteFs__WriteInode" "b" "i" "in" :=
-    blockFs__WriteInode (struct.loadF byteFs "fs" "b") "i" "in";;
     #().
 
 Definition byteFs__readWithinBlock: val :=
@@ -306,29 +330,29 @@ Definition dirFs__Superblock: val :=
   rec: "dirFs__Superblock" "d" :=
     byteFs__Superblock (struct.loadF dirFs "fs" "d").
 
+Definition dirFs__GetInode: val :=
+  rec: "dirFs__GetInode" "d" "inum" :=
+    byteFs__GetInode (struct.loadF dirFs "fs" "d") "inum".
+
+Definition dirFs__SetMeta: val :=
+  rec: "dirFs__SetMeta" "d" "inum" "meta" :=
+    byteFs__SetMeta (struct.loadF dirFs "fs" "d") "inum" "meta";;
+    #().
+
 Definition dirFs__CreateDir: val :=
-  rec: "dirFs__CreateDir" "d" :=
-    let: ("i", "ok") := byteFs__AllocInode (struct.loadF dirFs "fs" "d") simplefs.DirType in
+  rec: "dirFs__CreateDir" "d" "meta" :=
+    let: ("i", "ok") := byteFs__AllocInode (struct.loadF dirFs "fs" "d") simplefs.DirType "meta" in
     (if: (~ "ok")
     then (#0, #false)
     else ("i", #true)).
 
 Definition dirFs__CreateFile: val :=
-  rec: "dirFs__CreateFile" "d" :=
-    byteFs__AllocInode (struct.loadF dirFs "fs" "d") simplefs.FileType.
+  rec: "dirFs__CreateFile" "d" "meta" :=
+    byteFs__AllocInode (struct.loadF dirFs "fs" "d") simplefs.FileType "meta".
 
 Definition dirFs__Remove: val :=
   rec: "dirFs__Remove" "d" "i" :=
     byteFs__FreeInode (struct.loadF dirFs "fs" "d") "i";;
-    #().
-
-Definition dirFs__GetInode: val :=
-  rec: "dirFs__GetInode" "d" "i" :=
-    byteFs__GetInode (struct.loadF dirFs "fs" "d") "i".
-
-Definition dirFs__WriteInode: val :=
-  rec: "dirFs__WriteInode" "d" "i" "inode" :=
-    byteFs__WriteInode (struct.loadF dirFs "fs" "d") "i" "inode";;
     #().
 
 Definition dirFs__GetDirectory: val :=
@@ -344,9 +368,7 @@ Definition dirFs__GetDirectory: val :=
 Definition dirFs__WriteDirectory: val :=
   rec: "dirFs__WriteDirectory" "d" "i" "dir" :=
     let: "buf" := directory.Directory__Encode "dir" in
-    let: "in" := byteFs__GetInode (struct.loadF dirFs "fs" "d") "i" in
-    inode.Inode__SetLength "in" (slice.len "buf");;
-    byteFs__WriteInode (struct.loadF dirFs "fs" "d") "i" "in";;
+    byteFs__SetLength (struct.loadF dirFs "fs" "d") "i" (slice.len "buf");;
     byteFs__Write (struct.loadF dirFs "fs" "d") "i" #0 "buf";;
     #().
 
@@ -367,11 +389,9 @@ Definition dirFs__Read: val :=
 
 Definition dirFs__Write: val :=
   rec: "dirFs__Write" "d" "i" "off" "buf" :=
-    let: "in" := byteFs__GetInode (struct.loadF dirFs "fs" "d") "i" in
-    (if: ("off" + (slice.len "buf")) > (inode.Inode__GetLength "in")
-    then
-      inode.Inode__SetLength "in" ("off" + (slice.len "buf"));;
-      dirFs__WriteInode "d" "i" "in"
+    let: "ino" := byteFs__GetInode (struct.loadF dirFs "fs" "d") "i" in
+    (if: ("off" + (slice.len "buf")) > (inode.Inode__GetLength "ino")
+    then byteFs__SetLength (struct.loadF dirFs "fs" "d") "i" ("off" + (slice.len "buf"))
     else #());;
     byteFs__Write (struct.loadF dirFs "fs" "d") "i" "off" "buf";;
     #().
@@ -458,35 +478,35 @@ Definition Filesys__getDirectory: val :=
 
 Definition Filesys__createFile: val :=
   rec: "Filesys__createFile" "f" "mode" :=
-    let: ("inodeNum", "ok") := dirFs__CreateFile (struct.loadF Filesys "fs" "f") in
+    let: ("inodeNum", "ok") := dirFs__CreateFile (struct.loadF Filesys "fs" "f") (struct.mk inode.Meta [
+      "Mode" ::= "mode"
+    ]) in
     (if: (~ "ok")
     then
       (#0, struct.mk Attr [
        ], ErrNoSpace)
     else
-      let: "ino" := dirFs__GetInode (struct.loadF Filesys "fs" "f") "inodeNum" in
-      let: "meta" := struct.mk inode.Meta [
-        "Mode" ::= "mode"
-      ] in
-      inode.Inode__SetMeta "ino" "meta";;
-      dirFs__WriteInode (struct.loadF Filesys "fs" "f") "inodeNum" "ino";;
-      ("inodeNum", AttrFromInode "ino", ErrOk)).
+      ("inodeNum", struct.mk Attr [
+         "Ty" ::= simplefs.FileType;
+         "Size" ::= #0;
+         "Mode" ::= "mode"
+       ], ErrOk)).
 
 Definition Filesys__createDirectory: val :=
   rec: "Filesys__createDirectory" "f" "mode" :=
-    let: ("inodeNum", "ok") := dirFs__CreateDir (struct.loadF Filesys "fs" "f") in
+    let: ("inodeNum", "ok") := dirFs__CreateDir (struct.loadF Filesys "fs" "f") (struct.mk inode.Meta [
+      "Mode" ::= "mode"
+    ]) in
     (if: (~ "ok")
     then
       (#0, struct.mk Attr [
        ], ErrNoSpace)
     else
-      let: "ino" := dirFs__GetInode (struct.loadF Filesys "fs" "f") "inodeNum" in
-      let: "meta" := struct.mk inode.Meta [
-        "Mode" ::= "mode"
-      ] in
-      inode.Inode__SetMeta "ino" "meta";;
-      dirFs__WriteInode (struct.loadF Filesys "fs" "f") "inodeNum" "ino";;
-      ("inodeNum", AttrFromInode "ino", ErrOk)).
+      ("inodeNum", struct.mk Attr [
+         "Ty" ::= simplefs.DirType;
+         "Size" ::= #0;
+         "Mode" ::= "mode"
+       ], ErrOk)).
 
 Definition Filesys__link: val :=
   rec: "Filesys__link" "f" "parent" "name" "child" :=
@@ -633,17 +653,19 @@ Definition Filesys__Getattr: val :=
 
 Definition Filesys__Setattr: val :=
   rec: "Filesys__Setattr" "f" "i" "mode" :=
-    let: ("inode", "err") := Filesys__getInode "f" "i" in
+    let: ("ino", "err") := Filesys__getInode "f" "i" in
     (if: "err" ≠ ErrOk
     then
       (struct.mk Attr [
        ], "err")
     else
       (if: "mode" ≠ #null
-      then inode.Inode__SetMode "inode" (![uint32T] "mode")
+      then
+        dirFs__SetMeta (struct.loadF Filesys "fs" "f") "i" (struct.mk inode.Meta [
+          "Mode" ::= ![uint32T] "mode"
+        ])
       else #());;
-      dirFs__WriteInode (struct.loadF Filesys "fs" "f") "i" "inode";;
-      (AttrFromInode "inode", ErrOk)).
+      (AttrFromInode "ino", ErrOk)).
 
 Definition Filesys__Mkdir: val :=
   rec: "Filesys__Mkdir" "f" "parent" "mode" "name" :=

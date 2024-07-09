@@ -76,23 +76,28 @@ current inode data. *)
 Definition bfile_ptsto γ i f: iProp _ :=
   ∃ ino, own_bfile γ i ino f.
 
-(* Note that [own_blockFs] exposes the exact logical state of the file system.
-It owns the entire disk, including all inode points-to facts, which permits
-looking up inodes without explicitly having ownership. *)
-Definition own_blockFs (γ: blockfs_names) (l: loc) (bfiles: gmap w64 block_file.t) : iProp _ :=
+(* partial ownership over block fs that does not assert completeness, doesn't
+own [bfile_ptsto] facts, and exposes the [free] set *)
+Definition own_blockFs_internal (γ: blockfs_names) (l: loc) sb free: iProp _ :=
   ∃ (sb_l ba_l ia_l: loc),
   "#sb_l" ∷ l ↦[blockFs :: "sb"]□ #sb_l ∗
   "#d" ∷ l ↦[blockFs :: "d"]□ #() ∗
   "#ba_l" ∷ l ↦[blockFs :: "ba"]□ #ba_l ∗
   "#ia_l" ∷ l ↦[blockFs :: "ia"]□ #ia_l ∗
   (* "Hauth" ∷ blockfs_auth γ ∗ *)
-  ∃ (sb: superblockT), "#sb" ∷ is_superblock (sb_var γ) sb_l sb ∗
+  "#sb" ∷ is_superblock (sb_var γ) sb_l sb ∗
   "Hba" ∷ own_block_alloc (sb_var γ) ba_l ∗
   "Hinodes" ∷ inode_auth γ.(inode_var) ∗
-  ∃ free,
-  "%Hinum_complete" ∷ ⌜∀ inum, sb_valid_inum sb inum →
-                                 inum ∈ free ∨ inum ∈ dom bfiles⌝ ∗
-  "Hia" ∷ own_inode_alloc γ.(inode_var) ia_l free ∗
+  "Hia" ∷ own_inode_alloc γ.(inode_var) ia_l free.
+
+(* Note that [own_blockFs] exposes the exact logical state of the file system.
+It owns the entire disk, including all inode points-to facts, which permits
+looking up inodes without explicitly having ownership. *)
+Definition own_blockFs (γ: blockfs_names) (l: loc) (bfiles: gmap w64 block_file.t) : iProp _ :=
+  ∃ sb free,
+  "Hbfs" ∷ own_blockFs_internal γ l sb free ∗
+  "%Hinum_complete" ∷
+    ⌜∀ inum, sb_valid_inum sb inum → inum ∈ free ∨ inum ∈ dom bfiles⌝ ∗
   "Hfiles" ∷ [∗ map] inum↦f ∈ bfiles, bfile_ptsto γ inum f
 .
 
@@ -188,5 +193,20 @@ Proof.
   (*@ }                                                                       @*)
 Admitted.
 
+Theorem wp_blockFs__Superblock γ (l: loc) bfiles :
+  {{{ own_blockFs γ l bfiles }}}
+    blockFs__Superblock #l
+  {{{ (sb_l : loc) sb, RET #sb_l;
+      own_blockFs γ l bfiles ∗
+      is_superblock (sb_var γ) sb_l sb }}}.
+Proof.
+  (*@ func (fs *blockFs) Superblock() *superblock.Superblock {                @*)
+  (*@     return fs.sb                                                        @*)
+  (*@ }                                                                       @*)
+  iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "Hfs". iNamed "Hfs". iNamed "Hbfs".
+  wp_call. wp_loadField. iApply "HΦ".
+  iSplitL; [ | iFrame "#" ].
+  iFrame "∗#%".
+Qed.
 
 End proof.
