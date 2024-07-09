@@ -209,6 +209,54 @@ Proof.
   iFrame "∗#%".
 Qed.
 
+Theorem wp_blockFs__AllocInode γ (fs : loc) (tyI: w32) (ty : inodeType.t) (mode : w32) bfiles :
+  {{{ ⌜inodeType.rep ty = tyI⌝ ∗
+      ⌜ty ≠ inodeType.invalid⌝ ∗
+      own_blockFs γ fs bfiles
+  }}}
+    blockFs__AllocInode #fs #tyI (#mode, #())
+  {{{ (inum: w64) (ok : bool), RET (#inum, #ok);
+      (⌜ok = true⌝ -∗
+      own_blockFs γ fs
+        (<[ inum := block_file.mk ty 0 mode (vreplicate _ block0) ]> bfiles)) ∗
+      (⌜ok = false⌝ -∗
+      own_blockFs γ fs bfiles)
+  }}}.
+Proof.
+  (*@ func (fs *blockFs) AllocInode(ty simplefs.InodeType, meta inode.Meta) (simplefs.Inum, bool) { @*)
+  (*@     inum, ok := fs.ia.Alloc(ty)                                         @*)
+  (*@     if !ok {                                                            @*)
+  (*@         return 0, false                                                 @*)
+  (*@     }                                                                   @*)
+  (*@     ino := inode.ReadInode(fs.d, fs.sb, inum)                           @*)
+  (*@     ino.SetMeta(meta)                                                   @*)
+  (*@     ino.Write(fs.d, fs.sb, inum)                                        @*)
+  (*@     return inum, true                                                   @*)
+  (*@ }                                                                       @*)
+Admitted.
+
+Theorem wp_blockFs__FreeInode γ (fs : loc) (i: w64) bfiles f :
+  {{{ own_blockFs γ fs bfiles ∗
+      ⌜bfiles !! i = Some f⌝
+  }}}
+    blockFs__FreeInode #fs #i
+  {{{ RET #(); own_blockFs γ fs (delete i bfiles)
+  }}}.
+Proof.
+  (*@ func (fs *blockFs) FreeInode(i simplefs.Inum) {                         @*)
+  (*@     fs.ia.Free(i)                                                       @*)
+  (*@     // need to get block pointers and free them                         @*)
+  (*@     ino := inode.ReadInode(fs.d, fs.sb, i)                              @*)
+  (*@     for i := uint64(0); i < inode.NUM_BLOCK_PTRS; i++ {                 @*)
+  (*@         b := ino.GetBlockPtr(i)                                         @*)
+  (*@         if b != 0 {                                                     @*)
+  (*@             fs.ba.Free(b)                                               @*)
+  (*@         }                                                               @*)
+  (*@     }                                                                   @*)
+  (*@     zero_inode := inode.NewInode(simplefs.Invalid)                      @*)
+  (*@     zero_inode.Write(fs.d, fs.sb, i)                                    @*)
+  (*@ }                                                                       @*)
+Admitted.
 
 End proof.
 
