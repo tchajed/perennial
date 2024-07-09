@@ -17,8 +17,9 @@ Definition blockFs := struct.decl [
   "ia" :: ptrT
 ].
 
-Definition mkBlockFs: val :=
-  rec: "mkBlockFs" "d" "sz" :=
+(* Zero the relevant parts of the disk and write the superblock. *)
+Definition zeroDisk: val :=
+  rec: "zeroDisk" "d" "sz" :=
     let: "sb" := superblock.InitSuperblock "sz" in
     disk.Write #0 (superblock.Superblock__Encode "sb");;
     let: "zero_blk" := NewSlice byteT disk.BlockSize in
@@ -30,6 +31,11 @@ Definition mkBlockFs: val :=
     (for: (λ: <>, (![uint64T] "i") < (struct.loadF superblock.Superblock "DataBitmapBlocks" "sb")); (λ: <>, "i" <-[uint64T] ((![uint64T] "i") + #1)) := λ: <>,
       disk.Write ((superblock.Superblock__DataBitmapStart "sb") + (![uint64T] "i")) "zero_blk";;
       Continue);;
+    "sb".
+
+Definition mkBlockFs: val :=
+  rec: "mkBlockFs" "d" "sz" :=
+    let: "sb" := zeroDisk "d" "sz" in
     let: "root_inode" := inode.NewInode simplefs.DirType in
     inode.Inode__SetMeta "root_inode" (struct.mk inode.Meta [
       "Mode" ::= #(U32 493)

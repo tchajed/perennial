@@ -59,11 +59,6 @@ Lemma is_block_to_typed s dq (b: Block) :
   own_slice_small s byteT dq (vec_to_list b).
 Proof. reflexivity. Qed.
 
-Lemma is_block_full_to_typed s (b: Block) :
-  is_block_full s b =
-  own_slice s byteT (DfracOwn 1) (vec_to_list b).
-Proof. reflexivity. Qed.
-
 Definition own_bitmap (bb: val) (bits: list bool): iProp Σ :=
   ∃ (s: Slice.t) data,
     "%Hval_eq" ∷ ⌜bb = (slice_val s, #())%V⌝ ∗

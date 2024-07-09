@@ -50,6 +50,9 @@ Proof. done. Qed.
 
 End inodeType.
 
+#[global] Instance inodeType_eq_dec : EqDecision inodeType.t.
+Proof. solve_decision. Defined.
+
 Hint Resolve inodeType.rep_invalid inodeType.rep_dirType inodeType.rep_fileType : core.
 
 Section proof.
@@ -93,6 +96,9 @@ Record t := mk {
     meta: w32; (* a meta is just a w32 mode for simplicity *)
     block_ptrs: vec w32 28;
 }.
+
+#[global] Instance inode_rep_eq_dec : EqDecision inode_rep.t.
+Proof. solve_decision. Defined.
 
 #[global] Instance eta : Settable _ :=
   settable! (mk) <typ; len; meta; block_ptrs>.
@@ -437,7 +443,12 @@ accessed through a fancy update for an atomic step. This file system is not
 thread safe or crash safe, and does not protect the in-disk inodes with any
 mutex. Instead of using an invariant, we can simply have authoritative access
 owned by the file system object and use it for the duration of any inode
-access. *)
+access.
+
+This resource does not mention any heap state (only ghost and disk), so it is
+actually preserved across a crash. Thus it is sound to initialize it once and
+then reuse it between shutdown and restart.
+ *)
 Definition inode_auth (γ: inode_names) : iProp Σ :=
   ∃ (inodes: gmap w64 inode_rep.t),
     ghost_map_auth γ.(inode_map) 1 inodes ∗
@@ -453,7 +464,7 @@ superblock (accessed via its ghost variable) *)
 Definition is_valid_ino (γ: inode_names) (inum: w64): iProp Σ :=
   (* remember that this [sb] is globally unique and read-only *)
   ∃ sb, is_sb γ.(sb_var) sb ∗
-        ⌜uint.Z inum < uint.Z sb.(inode_blocks) * 32⌝.
+        ⌜sb_valid_inum sb inum⌝.
 
 Definition inode_ptsto (γ: inode_names) (inum: w64) (ino: inode_rep.t): iProp Σ :=
   ghost_map_elem γ.(inode_map) inum (DfracOwn 1) ino ∗
@@ -540,9 +551,12 @@ Proof. reflexivity. Qed.
 
 Local Ltac Zify.zify_post_hook ::= Z.div_mod_to_equations.
 
+(* Initialize the inode ghost state for on-disk zero inodes. A more
+sophisticated theorem would also handle the on-disk encoded form of arbitrary
+inodes, but we don't prove that. *)
 Lemma init_zero_inodes (γ_sb: gname) sb :
   is_sb γ_sb sb ∗
-  (1 + uint.nat sb.(log_blocks))%nat d↦∗ replicate (uint.nat sb.(inode_blocks)) block0 -∗
+  (sb_inode_start sb)%nat d↦∗ replicate (uint.nat sb.(inode_blocks)) block0 -∗
   |==> ∃ γ, ⌜γ.(sb_var) = γ_sb⌝ ∗
             inode_auth γ ∗
             [∗ list] inum ∈ seq 0 (uint.nat sb.(inode_blocks) * 32)%nat,
@@ -568,8 +582,6 @@ Proof.
     iIntros "Hd". iExists block0.
     iSplit.
     + iExactEq "Hd". f_equal.
-      rewrite /sb_inode_start.
-      word.
     + iPureIntro.
       rewrite /block_has_inodes.
       intros ino Hbound.

@@ -7,8 +7,9 @@ From Perennial.algebra Require Import ghost_var.
 
 From Goose.github_com Require Import tchajed.simplefs.superblock.
 
-Local Open Scope Z.
-Local Ltac Zify.zify_post_hook ::= Z.div_mod_to_equations.
+#[local] Open Scope Z.
+#[local] Ltac Zify.zify_post_hook ::= Z.div_mod_to_equations.
+#[local] Unset Printing Projections.
 
 Record superblockT := {
     log_blocks: u64;
@@ -35,8 +36,12 @@ Definition sb_data_start sb: Z :=
 Definition sb_used_blocks sb: Z :=
   sb_data_start sb + uint.Z sb.(data_blocks).
 
-Hint Unfold num_inodes allocatable_data_blocks
+#[global] Hint Unfold num_inodes allocatable_data_blocks
   sb_inode_start sb_data_bitmap_start sb_data_start sb_used_blocks : word.
+
+Definition sb_valid_inum sb (inum: w64) :=
+  uint.Z inum < uint.Z sb.(inode_blocks) * 32.
+#[global] Hint Unfold sb_valid_inum : word.
 
 Record superblock_wf sb : Prop :=
   {
@@ -138,12 +143,6 @@ Proof.
   rewrite div_roundup_exact //.
   destruct (decide _); lia.
 Qed.
-
-#[local] Unset Printing Projections.
-
-Opaque w64_instance.w64.
-Opaque W64.
-Opaque word.divu.
 
 Lemma wp_mkSuperblockNoWf (sz: w64) :
   {{{ True }}}
@@ -346,7 +345,7 @@ Qed.
 
 Definition magicConst_: Z := 0x94f6c920688f08a6.
 
-Definition encoded_superblock sb : list u8 :=
+Definition sb_encode sb : list u8 :=
   u64_le magicConst_ ++
   u64_le sb.(log_blocks) ++
   u64_le sb.(inode_blocks) ++
@@ -354,15 +353,15 @@ Definition encoded_superblock sb : list u8 :=
   u64_le sb.(data_blocks) ++
   replicate 4056 (U8 0). (* 4096 - 8*5 *)
 
-Lemma encoded_superblock_len sb : length (encoded_superblock sb) = Z.to_nat BlkSize.
+Lemma sb_encode_len sb : length (sb_encode sb) = Z.to_nat BlkSize.
 Proof.
-  rewrite /encoded_superblock /BlkSize. len.
+  rewrite /sb_encode /BlkSize. len.
 Qed.
 
 Lemma wp_Superblock__Encode (l : loc) sb :
   {{{ is_superblock_mem l sb }}}
     Superblock__Encode #l
-  {{{ s, RET (slice_val s); own_slice s u8T (DfracOwn 1) (encoded_superblock sb) }}}.
+  {{{ s, RET (slice_val s); own_slice s u8T (DfracOwn 1) (sb_encode sb) }}}.
 Proof.
   (*@ func (sb *Superblock) Encode() disk.Block {                             @*)
   (*@     var buf []byte                                                      @*)
@@ -414,13 +413,13 @@ Proof.
   autorewrite with len in Hsz.
   rewrite -!app_assoc app_nil_l.
   change (IntoVal_def w8) with (U8 0).
-  rewrite /encoded_superblock.
+  rewrite /sb_encode.
   repeat f_equal.
   word.
 Qed.
 
 Theorem wp_Decode_mem buf_s dq data sb :
-  {{{ own_slice_small buf_s byteT dq data ∗ ⌜data = encoded_superblock sb⌝ ∗ ⌜superblock_wf sb⌝ }}}
+  {{{ own_slice_small buf_s byteT dq data ∗ ⌜data = sb_encode sb⌝ ∗ ⌜superblock_wf sb⌝ }}}
     Decode (slice_val buf_s)
   {{{ (l: loc), RET #l; is_superblock_mem l sb }}}.
 Proof.

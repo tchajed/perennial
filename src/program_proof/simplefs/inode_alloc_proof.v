@@ -19,24 +19,39 @@ Context `{!inodeG Σ}.
 Definition free_inode γ (inum: w64): iProp _ :=
   inode_ptsto γ inum inode_rep.zero.
 
-Definition own_inode_alloc γ (l: loc): iProp _ :=
+(* TODO: inode allocator owns all free inodes, which means to find out if an
+inode is valid or not requires both [own_inode_alloc] and [inode_ptsto] facts
+for the rest of the disk. *)
+
+(* [own_inode_alloc] exposes its free set to maintain the fact that every [inode_ptsto]
+is either owned by the file system or the allocator, and none are lost *)
+Definition own_inode_alloc γ (l: loc) (free: gset w64) : iProp _ :=
   ∃ (sb_l: loc) (free_s: Slice.t),
   "sb" ∷ l ↦[InodeAllocator :: "sb"] #sb_l ∗
   "d" ∷ l ↦[InodeAllocator :: "d"] #() ∗
   "free" ∷ l ↦[InodeAllocator :: "free"] free_s ∗
-  ∃ (sb: superblockT) (free: list w64),
+  ∃ (sb: superblockT) (free_list: list w64),
+    ⌜list_to_set free_list = free⌝ ∗
     "#Hsb" ∷ is_superblock γ.(sb_var) sb_l sb ∗
-    "Hfree" ∷ own_slice free_s uint64T (DfracOwn 1) free ∗
-    "Hfree_inodes" ∷ [∗ list] inum ∈ free, free_inode γ inum
+    "Hfree" ∷ own_slice free_s uint64T (DfracOwn 1) free_list ∗
+    "Hfree_inodes" ∷ [∗ list] inum ∈ free_list, free_inode γ inum
 .
 
-Theorem wp_NewInodeAllocator γ (sb_l: loc) sb :
+Theorem wp_NewInodeAllocator γ (sb_l: loc) sb (inodes: gmap w64 inode_rep.t) :
   {{{ is_superblock γ.(sb_var) sb_l sb ∗
-      [∗ list] inum ∈ seq 0 (uint.nat sb.(inode_blocks) * 32)%nat,
-        inode_ptsto γ (W64 (Z.of_nat inum)) inode_rep.zero
+      inode_auth γ ∗
+      ⌜∀ inum, sb_valid_inum sb inum → inum ∈ dom inodes⌝ ∗
+      ([∗ map] inum↦ino ∈ inodes, inode_ptsto γ inum ino)
   }}}
     NewInodeAllocator #() #sb_l
-  {{{ (l: loc), RET #l; own_inode_alloc γ l }}}.
+  {{{ (l: loc), RET #l;
+      (let free := filter (λ '(_, i), i.(inode_rep.typ) = inodeType.invalid) inodes in
+      own_inode_alloc γ l (dom free)) ∗
+      inode_auth γ ∗
+      (* allocator owns all invalid inodes, but rest are returned to caller *)
+      let valid_inodes := filter (λ '(_, i), i.(inode_rep.typ) ≠ inodeType.invalid) inodes in
+      ([∗ map] inum↦ino ∈ valid_inodes, inode_ptsto γ inum ino)
+  }}}.
 Proof.
   (*@ func NewInodeAllocator(d disk.Disk, sb *superblock.Superblock) *InodeAllocator { @*)
   (*@     var free = []simplefs.Inum{}                                        @*)
@@ -57,14 +72,18 @@ Proof.
   (*@ }                                                                       @*)
 Admitted.
 
-Theorem wp_InodeAllocator__Alloc γ (ia : loc) (tyI : w32) ty :
+Theorem wp_InodeAllocator__Alloc γ (ia : loc) free (tyI : w32) ty :
   inodeType.rep ty = tyI →
-  {{{ own_inode_alloc γ ia ∗ inode_auth γ }}}
+  {{{ own_inode_alloc γ ia free ∗ inode_auth γ }}}
     InodeAllocator__Alloc #ia #tyI
   {{{ (inum: w64) (ok: bool), RET (#inum, #ok);
-      own_inode_alloc γ ia ∗
       inode_auth γ ∗
-      inode_ptsto γ inum (inode_rep.zero <| inode_rep.typ := ty |>) }}}.
+      (⌜ok = true⌝ -∗
+      ⌜inum ∈ free⌝ ∗
+      own_inode_alloc γ ia (free ∖ {[inum]}) ∗
+      (inode_ptsto γ inum (inode_rep.zero <| inode_rep.typ := ty |>))) ∗
+      (⌜ok = false⌝ -∗
+      own_inode_alloc γ ia free) }}}.
 Proof.
   (*@ func (ia *InodeAllocator) Alloc(ty simplefs.InodeType) (simplefs.Inum, bool) { @*)
   (*@     // precondition                                                     @*)
@@ -81,8 +100,8 @@ Proof.
   (*@ }                                                                       @*)
 Admitted.
 
-Theorem wp_InodeAllocator__Free γ (ia : loc) (inum: w64) i :
-  {{{ own_inode_alloc γ ia ∗ inode_auth γ ∗
+Theorem wp_InodeAllocator__Free γ (ia : loc) free (inum: w64) i :
+  {{{ own_inode_alloc γ ia free ∗ inode_auth γ ∗
       inode_ptsto γ inum i ∗
         (* TODO: not sure when/if inode state should be reset; maybe allocator
         can return a non-deterministic value for everything *)
@@ -91,7 +110,7 @@ Theorem wp_InodeAllocator__Free γ (ia : loc) (inum: w64) i :
        i.(inode_rep.block_ptrs) = vreplicate 28 (W32 0)⌝
   }}}
     InodeAllocator__Free #ia #inum
-  {{{ RET #(); own_inode_alloc γ ia ∗ inode_auth γ }}}.
+  {{{ RET #(); own_inode_alloc γ ia (free ∪ {[inum]}) ∗ inode_auth γ }}}.
 Proof.
   (*@ func (ia *InodeAllocator) Free(i simplefs.Inum) {                       @*)
   (*@     ino := inode.ReadInode(ia.d, ia.sb, i)                              @*)
