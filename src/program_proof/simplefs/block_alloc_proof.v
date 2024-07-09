@@ -21,6 +21,13 @@ Definition free_block γsb_var (a: w32): iProp _ :=
   "%Hbound" ∷ ⌜0 < uint.Z a < uint.Z sb.(data_blocks)⌝ ∗
   "Hdisk_ptsto" ∷ ∃ b, (uint.Z a + sb_data_start sb) d↦ b.
 
+Lemma free_block_nonzero γ a :
+  free_block γ a -∗ ⌜uint.Z a ≠ 0⌝.
+Proof.
+  iNamed 1.
+  iPureIntro. word.
+Qed.
+
 Lemma free_block_conflict γ a :
   free_block γ a -∗ free_block γ a -∗ ⌜False⌝.
 Proof.
