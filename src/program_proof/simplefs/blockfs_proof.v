@@ -15,6 +15,8 @@ From Perennial.program_proof.simplefs Require Import
 
 From iris.base_logic.lib Require Import ghost_map.
 
+From RecordUpdate Require Import RecordUpdate.
+
 #[local] Open Scope Z.
 #[local] Unset Printing Projections.
 
@@ -26,6 +28,7 @@ Record t :=
       meta: w32;
       data: vec Block 28;
     }.
+#[global] Instance etaX : Settable _ := settable! mk <typ; len; meta; data>.
 End block_file.
 
 Record blockfs_names :=
@@ -255,6 +258,61 @@ Proof.
   (*@     }                                                                   @*)
   (*@     zero_inode := inode.NewInode(simplefs.Invalid)                      @*)
   (*@     zero_inode.Write(fs.d, fs.sb, i)                                    @*)
+  (*@ }                                                                       @*)
+Admitted.
+
+#[local] Theorem wp_blockFs__GetInode' γ (fs : loc) (i : w64) bfiles :
+  {{{ own_blockFs γ fs bfiles }}}
+    blockFs__GetInode #fs #i
+  {{{ (l : loc) ino sb free, RET #l;
+     inode_mem l ino ∗
+     (⌜ino.(inode_rep.typ) ≠ inodeType.invalid⌝ -∗
+      ∃ f, ⌜bfiles !! i = Some f⌝ ∗
+     own_blockFs_internal γ fs sb free ∗
+     ⌜∀ inum : w64, sb_valid_inum sb inum → inum ∈ free ∨ inum ∈ dom bfiles⌝ ∗
+     ([∗ map] inum↦f ∈ (delete i bfiles), bfile_ptsto γ inum f)%I ∗
+     own_bfile γ i ino f) ∗
+     (⌜ino.(inode_rep.typ) = inodeType.invalid⌝ -∗
+      ⌜bfiles !! i = None⌝ ∗
+      (* return the whole own_blockFs since there's nothing you can do on an invalid inode *)
+      own_blockFs γ fs bfiles
+     )
+  }}}.
+Proof.
+  (*@ func (fs *blockFs) GetInode(i simplefs.Inum) *inode.Inode {             @*)
+  (*@     return inode.ReadInode(fs.d, fs.sb, i)                              @*)
+  (*@ }                                                                       @*)
+Admitted.
+
+Theorem wp_blockFs__SetLength γ (fs : loc) (i : w64) (length : u64) bfiles f :
+  {{{ own_blockFs γ fs bfiles ∗ ⌜bfiles !! i = Some f⌝ }}}
+    blockFs__SetLength #fs #i #length
+  {{{ RET #(); own_blockFs γ fs
+                 (let f' := f <| block_file.len := length|> in
+                  <[ i := f' ]> bfiles) }}}.
+Proof.
+  (*@ func (fs *blockFs) SetLength(i simplefs.Inum, length uint64) {          @*)
+  (*@     ino := fs.GetInode(i)                                               @*)
+  (*@     ino.SetLength(length)                                               @*)
+  (*@     ino.Write(fs.d, fs.sb, i)                                           @*)
+  (*@ }                                                                       @*)
+Admitted.
+
+Theorem wp_blockFs__ReadBlock γ (fs : loc) (i : w64) (off : u64) bfiles f :
+  {{{ own_blockFs γ fs bfiles ∗ ⌜bfiles !! i = Some f⌝ ∗ ⌜uint.Z off < 28⌝ }}}
+    blockFs__SetLength #fs #i #off
+  {{{ (b_s: Slice.t) (b: Block), RET (to_val b_s);
+      is_block_full b_s b ∗
+      ⌜vec_to_list f.(block_file.data) !! (uint.nat off) = Some b⌝ ∗
+      own_blockFs γ fs bfiles }}}.
+Proof.
+  (*@ func (fs *blockFs) ReadBlock(i simplefs.Inum, off uint64) disk.Block {  @*)
+  (*@     blkPtr := fs.getBlockNum(i, off)                                    @*)
+  (*@     if blkPtr == 0 {                                                    @*)
+  (*@         // zero block                                                   @*)
+  (*@         return make(disk.Block, disk.BlockSize)                         @*)
+  (*@     }                                                                   @*)
+  (*@     return fs.d.Read(fs.sb.DataStart() + uint64(blkPtr))                @*)
   (*@ }                                                                       @*)
 Admitted.
 
