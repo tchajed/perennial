@@ -318,7 +318,7 @@ Proof.
   iFrame "∗ %".
 Qed.
 
-Theorem wp_blockFs__SetLength γ (fs : loc) (i : w64) (length : u64) bfiles f :
+Theorem wp_blockFs__SetLength γ (fs : loc) (i : w64) (length : w64) bfiles f :
   {{{ own_blockFs γ fs bfiles ∗ ⌜bfiles !! i = Some f⌝ }}}
     blockFs__SetLength #fs #i #length
   {{{ RET #(); own_blockFs γ fs
@@ -328,6 +328,20 @@ Proof.
   (*@ func (fs *blockFs) SetLength(i simplefs.Inum, length uint64) {          @*)
   (*@     ino := fs.GetInode(i)                                               @*)
   (*@     ino.SetLength(length)                                               @*)
+  (*@     ino.Write(fs.d, fs.sb, i)                                           @*)
+  (*@ }                                                                       @*)
+Admitted.
+
+Theorem wp_blockFs__SetMeta γ (fs : loc) (i : w64) (meta : w32) bfiles f :
+  {{{ own_blockFs γ fs bfiles ∗ ⌜bfiles !! i = Some f⌝ }}}
+    blockFs__SetMeta #fs #i (#meta, #())
+  {{{ RET #(); own_blockFs γ fs
+                 (let f' := f <| block_file.meta := meta|> in
+                  <[ i := f' ]> bfiles) }}}.
+Proof.
+  (*@ func (fs *blockFs) SetMeta(i simplefs.Inum, meta inode.Meta) {          @*)
+  (*@     ino := fs.GetInode(i)                                               @*)
+  (*@     ino.SetMeta(meta)                                                   @*)
   (*@     ino.Write(fs.d, fs.sb, i)                                           @*)
   (*@ }                                                                       @*)
 Admitted.

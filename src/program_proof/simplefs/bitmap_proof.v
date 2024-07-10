@@ -124,11 +124,10 @@ Proof.
     rewrite word.unsigned_mul_nowrap; try word.
   }
   wp_pures.
-  assert (exists b:u8, bytes !! (uint.nat i / 8)%nat = Some b) as [b Hlookup].
-  { apply list_lookup_lt. apply Nat.Div0.div_lt_upper_bound. len. }
-  word_cleanup.
-  wp_apply (wp_SliceGet with "[$Hbb]").
+  list_elem bytes (uint.nat i / 8)%nat as b.
+  wp_apply (wp_SliceGet _ _ _ _ _ _ _ b with "[$Hbb]").
   { word_cleanup.
+    iPureIntro.
     rewrite Z2Nat.inj_div //. word. }
   iIntros "Hbb".
   wp_pures.
@@ -178,6 +177,8 @@ Lemma mod_8_bound (n: nat) :
 Proof. lia. Qed.
 
 Hint Resolve mod_8_bound : core.
+
+Opaque Nat.div Nat.modulo.
 
 Lemma byte_to_bits_insert_one (i : w64) (data : list w8) (b : w8) (bit: bool) :
   data !! (uint.nat i / 8)%nat = Some b
@@ -284,19 +285,48 @@ Lemma wp_Bitmap__Clear v (bits: list bool) (i: u64) :
     Bitmap__Clear v #i
   {{{ RET #(); own_bitmap v (<[uint.nat i := false]> bits) }}}.
 Proof.
+
   iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "[Hbm %Hbound]".
   iNamed "Hbm". subst.
   autorewrite with len in Hbound.
-  wp_rec.
-  wp_pures.
-  iDestruct (own_slice_small_sz with "Hs") as %Hsz.
+  wp_call.
   wp_apply wp_slice_len. wp_pures.
+  iDestruct (own_slice_small_sz with "Hs") as %Hsz.
   rewrite bool_decide_eq_false_2.
   2: {
     rewrite word.unsigned_mul_nowrap; try word.
   }
   wp_pures.
-Admitted.
+  list_elem data (uint.nat i / 8)%nat as b.
+  wp_apply (wp_SliceGet _ _ _ _ _ _ _ b with "[$Hs]").
+  { word_cleanup.
+    iPureIntro.
+    rewrite Z2Nat.inj_div //. word. }
+  iIntros "Hs".
+  wp_pures.
+  wp_apply (wp_clearBit); [ iPureIntro; word | ].
+  iIntros (b' Hb'_bits).
+  wp_pures.
+  wp_apply (wp_SliceSet with "[$Hs]").
+  { iPureIntro. apply lookup_lt_is_Some.
+    word. }
+  iIntros "Hs".
+  wp_pures.
+  iModIntro.
+  iApply "HΦ".
+  iFrame.
+  iSplit; first done.
+  iSplit.
+  { iPureIntro. len. }
+  iPureIntro.
+
+  rewrite /bytes_to_bits.
+  rewrite list_fmap_insert.
+  rewrite Hb'_bits.
+  word_cleanup.
+  erewrite byte_to_bits_insert_one; eauto.
+  repeat (f_equal; try word).
+Qed.
 
 Definition blocks_to_bits (bs: list Block): list bool :=
   concat ((λ b, bytes_to_bits (vec_to_list b)) <$> bs).
