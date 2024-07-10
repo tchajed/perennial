@@ -26,19 +26,20 @@ Record t :=
       typ: inodeType.t;
       len: w64;
       meta: w32;
-      data: vec Block 28;
+      (* this is a fixed 27 blocks *)
+      data: list Block;
     }.
 #[global] Instance etaX : Settable _ := settable! mk <typ; len; meta; data>.
 End block_file.
 
 Record blockfs_names :=
-  { inode_var: inode_names;
-    (* TODO: doesn't seem like this will be needed *)
-    files_var: gname;
+  {
+    (* :> makes this a coercion so we can use (γ: blockfs_names) for inode
+    abstractions *)
+    inode_var :> inode_names;
   }.
 
-Definition sb_var (γ: blockfs_names) :=
-  γ.(inode_var).(inode_proof.sb_var).
+Definition sb_var (γ: blockfs_names) := γ.(inode_proof.sb_var).
 
 Class blockfsG Σ :=
   { fs_inodeG :: inodeG Σ;
@@ -49,9 +50,7 @@ Section proof.
 Context `{!heapGS Σ}.
 Context `{!blockfsG Σ}.
 
-Definition blockfs_auth (γ: blockfs_names): iProp Σ :=
-  ∃ (inodes: gmap w64 block_file.t),
-    ghost_map_auth γ.(files_var) 1 inodes.
+Implicit Types (γ: blockfs_names).
 
 Definition bfile_metadata (f: block_file.t) :=
   (f.(block_file.typ), f.(block_file.len), f.(block_file.meta)).
@@ -59,17 +58,24 @@ Definition bfile_metadata (f: block_file.t) :=
 Definition inode_metadata (ino: inode_rep.t) :=
   (ino.(inode_rep.typ), ino.(inode_rep.len), ino.(inode_rep.meta)).
 
-Definition own_bfile γ (i: w64) (ino: inode_rep.t) (f: block_file.t): iProp Σ :=
+Definition own_bfile (γ: blockfs_names) (i: w64) (ino: inode_rep.t) (f: block_file.t): iProp Σ :=
   ∃ sb, "Hsb2" ∷ is_sb (sb_var γ) sb ∗
-    (* TODO: doesn't seem like this ghost state is needed since [own_bfile] can
-    own all the relevant data *)
-    (* ghost_map_elem γ.(files_var) inum (DfracOwn 1) f ∗ *)
-    "Hino_ptsto" ∷ inode_ptsto γ.(inode_var) i ino ∗
+    "Hino_ptsto" ∷ inode_ptsto γ i ino ∗
     "%Hmetadata" ∷ ⌜inode_metadata ino = bfile_metadata f⌝ ∗
-    "Hblocks" ∷ [∗ list] a; b ∈ ino.(inode_rep.block_ptrs); f.(block_file.data),
+    "Hblocks" ∷ [∗ list] a; b ∈ (vtake 27%fin ino.(inode_rep.block_ptrs)); f.(block_file.data),
     ⌜uint.Z a = 0 → b = block0⌝ ∗
     (⌜uint.Z a ≠ 0⌝ → (sb_data_start sb + uint.Z a) d↦ b)
 .
+
+Lemma own_bfile_data_length γ i ino f :
+  own_bfile γ i ino f -∗ ⌜length f.(block_file.data) = 27%nat⌝.
+Proof.
+  iNamed 1.
+  iDestruct (big_sepL2_length with "Hblocks") as %Hlen.
+  iPureIntro.
+  autorewrite with len in Hlen.
+  auto.
+Qed.
 
 (* unclear if this is needed or if [own_bfile] is needed more often; if [ino] is
 existentially quantified (and more fundamentally if [inodes_ptsto] is fully
@@ -90,8 +96,8 @@ Definition own_blockFs_internal (γ: blockfs_names) (l: loc) sb free: iProp _ :=
   (* "Hauth" ∷ blockfs_auth γ ∗ *)
   "#sb" ∷ is_superblock (sb_var γ) sb_l sb ∗
   "Hba" ∷ own_block_alloc (sb_var γ) ba_l ∗
-  "Hinodes" ∷ inode_auth γ.(inode_var) ∗
-  "Hia" ∷ own_inode_alloc γ.(inode_var) ia_l free.
+  "Hinodes" ∷ inode_auth γ ∗
+  "Hia" ∷ own_inode_alloc γ ia_l free.
 
 (* Note that [own_blockFs] exposes the exact logical state of the file system.
 It owns the entire disk, including all inode points-to facts, which permits
@@ -148,7 +154,7 @@ Definition init_fs γ sb: iProp _ :=
     "data_bitmaps" ∷ sb_zero_data_bitmap sb ∗
     "inodes" ∷
       ([∗ map] inum↦ino ∈ init_inodes sb,
-        inode_ptsto γ.(inode_var) inum ino) ∗
+        inode_ptsto γ inum ino) ∗
     "data_blocks" ∷ sb_data_blocks sb.
 
 Theorem wp_mkBlockFs (sz : w64) (bs: list Block) :
@@ -177,10 +183,10 @@ Proof.
 Admitted.
 
 Definition root_bfile: block_file.t :=
-  block_file.mk inodeType.dirType (W64 0) (W32 493) (vreplicate _ block0).
+  block_file.mk inodeType.dirType (W64 0) (W32 493) (replicate 27 block0).
 
 (* only specified for a newly created file system *)
-Theorem wp_loadBlockFs γ sb :
+Theorem wp_loadBlockFs (γ: blockfs_names) sb :
   {{{ init_fs γ sb }}}
     loadBlockFs #()
   {{{ (l : loc), RET #l;
@@ -221,7 +227,7 @@ Theorem wp_blockFs__AllocInode γ (fs : loc) (tyI: w32) (ty : inodeType.t) (mode
   {{{ (inum: w64) (ok : bool), RET (#inum, #ok);
       (⌜ok = true⌝ -∗
       own_blockFs γ fs
-        (<[ inum := block_file.mk ty 0 mode (vreplicate _ block0) ]> bfiles)) ∗
+        (<[ inum := block_file.mk ty 0 mode (replicate 27 block0) ]> bfiles)) ∗
       (⌜ok = false⌝ -∗
       own_blockFs γ fs bfiles)
   }}}.
@@ -284,6 +290,34 @@ Proof.
   (*@ }                                                                       @*)
 Admitted.
 
+#[local] Theorem wp_blockFs__GetInode_valid γ (fs : loc) (i : w64) bfiles f :
+  {{{ own_blockFs γ fs bfiles ∗ ⌜bfiles !! i = Some f⌝ }}}
+    blockFs__GetInode #fs #i
+  {{{ (l : loc) ino sb free, RET #l;
+     inode_mem l ino ∗
+     own_blockFs_internal γ fs sb free ∗
+     ⌜∀ inum : w64, sb_valid_inum sb inum → inum ∈ free ∨ inum ∈ dom bfiles⌝ ∗
+     ([∗ map] inum↦f ∈ (delete i bfiles), bfile_ptsto γ inum f)%I ∗
+     own_bfile γ i ino f
+  }}}.
+Proof.
+  (*@ func (fs *blockFs) GetInode(i simplefs.Inum) *inode.Inode {             @*)
+  (*@     return inode.ReadInode(fs.d, fs.sb, i)                              @*)
+  (*@ }                                                                       @*)
+  iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "[Hfs %Hget]".
+  wp_apply (wp_blockFs__GetInode' with "Hfs").
+  iIntros (????) "(Hino & Hvalid & Hinvalid)".
+  iApply "HΦ".
+  iFrame.
+  destruct (decide (inode_rep.typ ino = inodeType.invalid)).
+  { iExFalso.
+    iDestruct ("Hinvalid" with "[//]") as "[%Hget_none _]".
+    congruence. }
+  iDestruct ("Hvalid" with "[//]") as (f') "(%Hget2 & $ & % & Hptsto & Hown)".
+  assert (f' = f) by congruence; subst.
+  iFrame "∗ %".
+Qed.
+
 Theorem wp_blockFs__SetLength γ (fs : loc) (i : w64) (length : u64) bfiles f :
   {{{ own_blockFs γ fs bfiles ∗ ⌜bfiles !! i = Some f⌝ }}}
     blockFs__SetLength #fs #i #length
@@ -299,11 +333,11 @@ Proof.
 Admitted.
 
 Theorem wp_blockFs__ReadBlock γ (fs : loc) (i : w64) (off : u64) bfiles f :
-  {{{ own_blockFs γ fs bfiles ∗ ⌜bfiles !! i = Some f⌝ ∗ ⌜uint.Z off < 28⌝ }}}
+  {{{ own_blockFs γ fs bfiles ∗ ⌜bfiles !! i = Some f⌝ ∗ ⌜uint.Z off < 27⌝ }}}
     blockFs__SetLength #fs #i #off
   {{{ (b_s: Slice.t) (b: Block), RET (to_val b_s);
       is_block_full b_s b ∗
-      ⌜vec_to_list f.(block_file.data) !! (uint.nat off) = Some b⌝ ∗
+      ⌜f.(block_file.data) !! (uint.nat off) = Some b⌝ ∗
       own_blockFs γ fs bfiles }}}.
 Proof.
   (*@ func (fs *blockFs) ReadBlock(i simplefs.Inum, off uint64) disk.Block {  @*)
@@ -315,6 +349,76 @@ Proof.
   (*@     return fs.d.Read(fs.sb.DataStart() + uint64(blkPtr))                @*)
   (*@ }                                                                       @*)
 Admitted.
+
+Theorem wp_blockFs__allocBlockNum γ (fs : loc) (i : w64) (ino_l : loc) ino (off : u64) sb free bfiles f :
+  {{{
+     inode_mem ino_l ino ∗
+     own_blockFs_internal γ fs sb free ∗
+     ⌜∀ inum : w64, sb_valid_inum sb inum → inum ∈ free ∨ inum ∈ dom bfiles⌝ ∗
+     ([∗ map] inum↦f ∈ (delete i bfiles), bfile_ptsto γ inum f)%I ∗
+     own_bfile γ i ino f ∗
+     ⌜uint.Z off < 27⌝
+}}}
+    blockFs__allocBlockNum #fs #i #ino_l #off
+  {{{ (ptr: w32) (ok: bool), RET (#ptr, #ok);
+      (⌜ok = false⌝ -∗ own_blockFs γ fs bfiles) ∗
+      (* return essentially the same file system, with [ino] possibly changed to
+      allocate a disk block *)
+     (⌜ok = true⌝ -∗
+      ∃ ino',
+      "Hfs" ∷ (inode_mem ino_l ino' ∗
+     own_blockFs_internal γ fs sb free ∗
+     ⌜∀ inum : w64, sb_valid_inum sb inum → inum ∈ free ∨ inum ∈ dom bfiles⌝ ∗
+     ([∗ map] inum↦f ∈ (delete i bfiles), bfile_ptsto γ inum f)%I ∗
+     own_bfile γ i ino' f ∗
+     ⌜inode_metadata ino' = inode_metadata ino⌝) ∗
+      (* state that ptr is the right offset and is non-zero, so that [own_bfile]
+      will have a disk points-to for it *)
+    "%Halloc" ∷ (⌜uint.Z ptr ≠ 0 ∧
+                vec_to_list ino'.(inode_rep.block_ptrs) !! (uint.nat off) = Some ptr⌝)
+       )
+    }}}.
+Proof.
+  (*@ func (fs *blockFs) allocBlockNum(i simplefs.Inum, ino *inode.Inode, off uint64) (uint32, bool) { @*)
+  (*@     blkPtr := fs.getBlockNum(ino, off)                                  @*)
+  (*@     if blkPtr != 0 {                                                    @*)
+  (*@         return blkPtr, true                                             @*)
+  (*@     }                                                                   @*)
+  (*@     blkPtr2, ok := fs.ba.Alloc()                                        @*)
+  (*@     if !ok {                                                            @*)
+  (*@         return 0, false                                                 @*)
+  (*@     }                                                                   @*)
+  (*@     ino.SetBlockPtr(off, uint32(blkPtr2))                               @*)
+  (*@     ino.Write(fs.d, fs.sb, i)                                           @*)
+  (*@     return blkPtr2, true                                                @*)
+  (*@ }                                                                       @*)
+Admitted.
+
+Theorem wp_blockFs__WriteBlock γ (fs : loc) (i : w64) (off : u64)
+  (b_s: Slice.t) dq (b : Block) bfiles f :
+  {{{ own_blockFs γ fs bfiles ∗ is_block b_s dq b ∗ ⌜bfiles !! i = Some f⌝ }}}
+    blockFs__WriteBlock #fs #i #off (to_val b_s)
+  {{{ (ok: bool), RET #ok;
+      let data' := <[ uint.nat off := b ]> f.(block_file.data) in
+      let f' := f <| block_file.data := data' |> in
+      own_blockFs γ fs (<[ i :=  f']> bfiles)
+  }}}.
+Proof.
+  (*@ func (fs *blockFs) WriteBlock(i simplefs.Inum, off uint64, b disk.Block) bool { @*)
+  (*@     if off >= inode.NUM_DIRECT {                                        @*)
+  (*@         // exceeds size of file                                         @*)
+  (*@         return false                                                    @*)
+  (*@     }                                                                   @*)
+  (*@     ino := fs.GetInode(i)                                               @*)
+  (*@     blkPtr, ok := fs.allocBlockNum(i, ino, off)                         @*)
+  (*@     if !ok {                                                            @*)
+  (*@         return false                                                    @*)
+  (*@     }                                                                   @*)
+  (*@     fs.d.Write(fs.sb.DataStart()+uint64(blkPtr), b)                     @*)
+  (*@     return true                                                         @*)
+  (*@ }                                                                       @*)
+Admitted.
+
 
 End proof.
 

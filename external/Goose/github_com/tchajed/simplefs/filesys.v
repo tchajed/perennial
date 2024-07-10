@@ -127,11 +127,7 @@ Definition blockFs__ReadBlock: val :=
       else disk.Read ((superblock.Superblock__DataStart (struct.loadF blockFs "sb" "fs")) + (to_u64 "blkPtr")))).
 
 Definition blockFs__allocBlockNum: val :=
-  rec: "blockFs__allocBlockNum" "fs" "i" "off" :=
-    (if: "off" ≥ inode.NUM_DIRECT
-    then Panic "allocBlockNum precondition: offset out of bounds"
-    else #());;
-    let: "ino" := blockFs__GetInode "fs" "i" in
+  rec: "blockFs__allocBlockNum" "fs" "i" "ino" "off" :=
     let: "blkPtr" := blockFs__getBlockNum "fs" "ino" "off" in
     (if: "blkPtr" ≠ #(U32 0)
     then ("blkPtr", #true)
@@ -146,12 +142,16 @@ Definition blockFs__allocBlockNum: val :=
 
 Definition blockFs__WriteBlock: val :=
   rec: "blockFs__WriteBlock" "fs" "i" "off" "b" :=
-    let: ("blkPtr", "ok") := blockFs__allocBlockNum "fs" "i" "off" in
-    (if: (~ "ok")
+    (if: "off" ≥ inode.NUM_DIRECT
     then #false
     else
-      disk.Write ((superblock.Superblock__DataStart (struct.loadF blockFs "sb" "fs")) + (to_u64 "blkPtr")) "b";;
-      #true).
+      let: "ino" := blockFs__GetInode "fs" "i" in
+      let: ("blkPtr", "ok") := blockFs__allocBlockNum "fs" "i" "ino" "off" in
+      (if: (~ "ok")
+      then #false
+      else
+        disk.Write ((superblock.Superblock__DataStart (struct.loadF blockFs "sb" "fs")) + (to_u64 "blkPtr")) "b";;
+        #true)).
 
 (* byte_fs.go *)
 

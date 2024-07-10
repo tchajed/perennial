@@ -234,6 +234,22 @@ Proof.
   iFrame.
 Qed.
 
+Theorem wp_Inode__GetBlockPtr (i : loc) ino (off: w64) (ptr: w32) :
+  {{{ inode_mem i ino ∗ ⌜vec_to_list ino.(inode_rep.block_ptrs) !! uint.nat off = Some ptr⌝ }}}
+    Inode__GetBlockPtr #i #off
+  {{{ RET #ptr; inode_mem i ino }}}.
+Proof.
+  (*@ func (i *Inode) GetBlockPtr(index uint64) uint32 {                      @*)
+  (*@     return i.blockPtrs[index]                                           @*)
+  (*@ }                                                                       @*)
+  iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "[Hino %Hget]". iNamed "Hino".
+  wp_call. wp_loadField.
+  wp_apply (wp_SliceGet with "[$HblockPtrs //]").
+  iIntros "HblockPtrs".
+  iApply "HΦ".
+  iFrame.
+Qed.
+
 Theorem wp_Inode__SetLength (i : loc) ino (len': w64) :
   {{{ inode_mem i ino }}}
     Inode__SetLength #i #len'
