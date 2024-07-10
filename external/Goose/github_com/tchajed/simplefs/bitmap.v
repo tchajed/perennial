@@ -3,6 +3,8 @@ From Perennial.goose_lang Require Import prelude.
 
 From Perennial.goose_lang Require Import ffi.disk_prelude.
 
+(* bitmap.go *)
+
 Definition Bitmap := struct.decl [
   "Data" :: slice.T byteT
 ].
@@ -23,6 +25,12 @@ Definition NewBitmapFromBlocks: val :=
       Continue);;
     newBitmap (![slice.T byteT] "bitmapData").
 
+(* setBit from byte.go *)
+
+Definition setBit: val :=
+  rec: "setBit" "b" "i" :=
+    "b" `or` (#(U8 1) ≪ "i").
+
 Definition Bitmap__Set: val :=
   rec: "Bitmap__Set" "b" "i" :=
     (if: "i" ≥ ((slice.len (struct.get Bitmap "Data" "b")) * #8)
@@ -30,8 +38,12 @@ Definition Bitmap__Set: val :=
     else #());;
     let: "byteIndex" := "i" `quot` #8 in
     let: "bitIndex" := "i" `rem` #8 in
-    SliceSet byteT (struct.get Bitmap "Data" "b") "byteIndex" ((SliceGet byteT (struct.get Bitmap "Data" "b") "byteIndex") `or` (#(U8 1) ≪ "bitIndex"));;
+    SliceSet byteT (struct.get Bitmap "Data" "b") "byteIndex" (setBit (SliceGet byteT (struct.get Bitmap "Data" "b") "byteIndex") "bitIndex");;
     #().
+
+Definition getBit: val :=
+  rec: "getBit" "b" "i" :=
+    ("b" `and` (#(U8 1) ≪ "i")) ≠ #(U8 0).
 
 Definition Bitmap__Get: val :=
   rec: "Bitmap__Get" "b" "i" :=
@@ -40,7 +52,11 @@ Definition Bitmap__Get: val :=
     else #());;
     let: "byteIndex" := "i" `quot` #8 in
     let: "bitIndex" := "i" `rem` #8 in
-    ((SliceGet byteT (struct.get Bitmap "Data" "b") "byteIndex") `and` (#(U8 1) ≪ "bitIndex")) ≠ #(U8 0).
+    getBit (SliceGet byteT (struct.get Bitmap "Data" "b") "byteIndex") "bitIndex".
+
+Definition clearBit: val :=
+  rec: "clearBit" "b" "i" :=
+    "b" `and` (~ (#(U8 1) ≪ "i")).
 
 Definition Bitmap__Clear: val :=
   rec: "Bitmap__Clear" "b" "i" :=
@@ -49,7 +65,7 @@ Definition Bitmap__Clear: val :=
     else #());;
     let: "byteIndex" := "i" `quot` #8 in
     let: "bitIndex" := "i" `rem` #8 in
-    SliceSet byteT (struct.get Bitmap "Data" "b") "byteIndex" ((SliceGet byteT (struct.get Bitmap "Data" "b") "byteIndex") `and` (~ (#(U8 1) ≪ "bitIndex")));;
+    SliceSet byteT (struct.get Bitmap "Data" "b") "byteIndex" (clearBit (SliceGet byteT (struct.get Bitmap "Data" "b") "byteIndex") "bitIndex");;
     #().
 
 Definition Bitmap__Len: val :=
@@ -67,3 +83,5 @@ Definition Bitmap__Write: val :=
       disk.Write ("off" + (![uint64T] "i")) (SliceSubslice byteT (struct.get Bitmap "Data" "b") ((![uint64T] "i") * disk.BlockSize) (((![uint64T] "i") + #1) * disk.BlockSize));;
       Continue);;
     #().
+
+(* byte.go *)

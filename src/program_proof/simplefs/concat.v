@@ -1,7 +1,7 @@
 From Perennial Require Import options.
 From stdpp Require Import base list.
 
-From Perennial.Helpers Require Import NatDivMod Integers Tactics.
+From Perennial.Helpers Require Import NatDivMod Integers Tactics ListSplice ListLen.
 
 #[local] Ltac Zify.zify_post_hook ::= Z.div_mod_to_equations.
 
@@ -84,4 +84,59 @@ Proof.
       f_equal.
       rewrite -(Nat_mod_add_modulus (i-n) n).
       replace (i - n + n)%nat with i by lia; auto.
+Qed.
+
+Lemma take_concat_uniform {A: Type} (l: list (list A)) (n: nat) i :
+  length_uniform l n →
+  concat (take i l) = take (i * n) (concat l).
+Proof.
+  intros H.
+  generalize dependent l.
+  induction i; simpl; intros.
+  - rewrite take_0 //.
+  - destruct l as [|a l]; simpl.
+    + rewrite take_nil //.
+    + apply length_uniform_app_inv in H as [Ha Hlen].
+      rewrite IHi //.
+      rewrite take_app.
+      f_equal.
+      * rewrite take_ge //; len.
+      * f_equal; lia.
+Qed.
+
+Lemma drop_concat_uniform {A: Type} (l: list (list A)) (n: nat) i :
+  length_uniform l n →
+  concat (drop i l) = drop (i * n) (concat l).
+Proof.
+  intros H.
+  generalize dependent l.
+  induction i; simpl; intros.
+  - rewrite drop_0 //.
+  - destruct l as [|a l]; simpl.
+    + rewrite drop_nil //.
+    + apply length_uniform_app_inv in H as [Ha Hlen].
+      rewrite IHi //.
+      rewrite drop_app_ge; [ | len ].
+      f_equal; lia.
+Qed.
+
+Lemma insert_concat_uniform {A: Type} (l: list (list A)) (n: nat) (i: nat) (x: list A) :
+  length_uniform l n →
+  (i < length l)%nat →
+  length x = n →
+  concat (<[i := x]> l) =
+  list_splice (concat l) (n * i) x.
+Proof.
+  intros Huniform Hi Hx.
+  rewrite insert_take_drop //.
+  rewrite !concat_app.
+  rewrite list_splice_in_bounds.
+  2: {
+    rewrite (length_concat_uniform _ n) //.
+    nia.
+  }
+  erewrite take_concat_uniform; eauto.
+  cbn [concat].
+  erewrite drop_concat_uniform; eauto.
+  repeat (f_equal; try nia).
 Qed.

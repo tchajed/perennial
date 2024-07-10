@@ -2,12 +2,12 @@ From Perennial.program_proof Require Import proof_prelude.
 From Perennial.program_proof Require Import disk_prelude.
 From Perennial.goose_lang.lib Require Import typed_slice.
 From Perennial.program_proof Require Import disk_lib.
-From Perennial.Helpers Require Import NatDivMod bytes.
+From Perennial.Helpers Require Import NatDivMod bytes ListSplice.
 Import Nat.
 
 From Goose.github_com Require Import tchajed.simplefs.bitmap.
 
-From Perennial.program_proof.simplefs Require Import bitmap_byte.
+From Perennial.program_proof.simplefs Require Import bitmap_byte bytes_proof.
 From Perennial.program_proof.simplefs Require Import concat.
 
 Set Default Proof Using "Type".
@@ -120,6 +120,7 @@ Proof.
     rewrite Z2Nat.inj_div //. word. }
   iIntros "Hbb".
   wp_pures.
+  rewrite /setBit. wp_pures.
   wp_apply (wp_SliceSet with "[$Hbb]").
   { iPureIntro. apply lookup_lt_is_Some.
     word. }
@@ -145,6 +146,19 @@ Proof.
   rewrite H.
   rewrite !Nat2Z.inj_mod.
   reflexivity.
+Qed.
+
+Lemma byte_to_bits_lookup_total (b: w8) (i: w64) :
+  uint.Z i < 8 →
+  byte_to_bits b !!! (uint.nat i) = Z.testbit (uint.Z b) (uint.Z i).
+Proof.
+  intros.
+  rewrite /byte_to_bits.
+  rewrite list_lookup_total_alt.
+  rewrite list_lookup_fmap.
+  rewrite lookup_seqZ_lt; [ | lia ]. simpl.
+  replace (0 + uint.nat i) with (uint.Z i) by word.
+  auto.
 Qed.
 
 Lemma mod_8_bound (n: nat) :
@@ -205,10 +219,52 @@ Proof.
       rewrite e.
       f_equal.
       word.
-  - assert (uint.nat i ≠ i') by congruence.
+  - (* an unchanged byte *)
+    assert (uint.nat i ≠ i') by congruence.
     rewrite list_lookup_insert_ne // in Hget1.
     rewrite list_lookup_insert_ne // in Hget2.
     apply bytes_to_bits_lookup_Some in Hget1 as [b'' [Hgetb'' Hb'']].
+    congruence.
+Qed.
+
+Lemma byte_to_bits_insert_one (i : w64) (data : list w8) (b : w8) (bit: bool) :
+  data !! (uint.nat i / 8)%nat = Some b
+  → <[uint.nat i:=bit]> (concat (byte_to_bits <$> data)) =
+      concat
+        (<[(uint.nat i / 8)%nat:=<[Z.to_nat (uint.Z i `mod` 8):=bit]>
+             (byte_to_bits b)]>
+           (byte_to_bits <$> data)).
+Proof.
+  intros Hget_b.
+  erewrite insert_concat_uniform; eauto; len.
+  2: {
+    apply lookup_lt_Some in Hget_b; auto.
+  }
+  fold (bytes_to_bits data).
+
+  apply (list_eq_same_length _ _ (8 * length data)%nat); len.
+  intros k b1 b2 Hk Hget1 Hget2.
+  destruct (decide (8 * (uint.nat i / 8) ≤ k < 8 * (uint.nat i / 8) + 8)%nat).
+  - (* looking up modified byte *)
+    rewrite lookup_list_splice_new in Hget2; [ | len | len ].
+    assert ((uint.nat i / 8)%nat = (k / 8)%nat) as Hik_div_8 by lia.
+    replace (k - 8 * (uint.nat i / 8))%nat with (k `mod` 8)%nat in Hget2 by word.
+    destruct (decide ((k mod 8)%nat = (Z.to_nat (uint.Z i `mod` 8)))).
+    + (* modified bit *)
+      rewrite e in Hget2.
+      rewrite list_lookup_insert in Hget2; len.
+      assert (k = uint.nat i) by word; subst.
+      rewrite list_lookup_insert in Hget1; len.
+      congruence.
+    + (* some other bit *)
+      rewrite list_lookup_insert_ne in Hget1; [ | word ].
+      rewrite list_lookup_insert_ne in Hget2; [ | word ].
+      apply bytes_to_bits_lookup_Some in Hget1 as [b' [Hgetb' H]].
+      congruence.
+  - (* looking up another bit *)
+    rewrite lookup_list_splice_old in Hget2; [ | len ].
+    assert (k ≠ uint.nat i) by word.
+    rewrite list_lookup_insert_ne // in Hget1.
     congruence.
 Qed.
 
@@ -228,7 +284,11 @@ Proof.
   iSplit.
   { iPureIntro. len. }
   iPureIntro.
-  apply bytes_to_bits_set; auto.
+
+  rewrite /bytes_to_bits.
+  rewrite list_fmap_insert.
+  rewrite setBit_pure; [ | lia ].
+  eapply byte_to_bits_insert_one; eauto.
 Qed.
 
 Lemma wp_Bitmap__Get v (bits: list bool) (i: u64) :
