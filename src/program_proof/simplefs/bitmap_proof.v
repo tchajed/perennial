@@ -51,6 +51,18 @@ Proof.
   eauto.
 Qed.
 
+Lemma bytes_to_bits_lookup_is_Some (bytes: list w8) (i: nat) (bit: bool) (b: w8) :
+  bytes !! (i `div` 8)%nat = Some b →
+  byte_to_bits b !! (i `mod` 8)%nat = Some bit →
+  bytes_to_bits bytes !! i = Some bit.
+Proof.
+  rewrite /bytes_to_bits => Hget_b Hget_bit.
+  erewrite lookup_concat_uniform; eauto.
+  rewrite list_lookup_fmap.
+  rewrite Hget_b.
+  auto.
+Qed.
+
 Section proof.
 Context `{!heapGS Σ}.
 
@@ -248,7 +260,24 @@ Proof.
     rewrite word.unsigned_mul_nowrap; try word.
   }
   wp_pures.
-Admitted.
+  list_elem data (uint.nat i / 8)%nat as b.
+  wp_apply (wp_SliceGet with "[$Hs]").
+  { iPureIntro. word_cleanup.
+    replace (Z.to_nat (uint.Z i `div` 8)) with (uint.nat i / 8)%nat by word;
+      eauto. }
+  iIntros "Hs".
+  wp_apply (wp_getBit).
+  { iPureIntro. word. }
+  iIntros (bit Hbit).
+  iApply "HΦ".
+  iFrame.
+  iSplit; [ done | ].
+  iPureIntro.
+  eapply bytes_to_bits_lookup_is_Some; eauto.
+  replace (uint.nat (word.modu i (W64 8)))
+    with (uint.nat i `mod` 8)%nat
+    in Hbit by word; auto.
+Qed.
 
 Lemma wp_Bitmap__Clear v (bits: list bool) (i: u64) :
   {{{ own_bitmap v bits ∗ ⌜uint.Z i < Z.of_nat (length bits)⌝ }}}

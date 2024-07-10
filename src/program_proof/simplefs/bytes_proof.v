@@ -39,8 +39,8 @@ Qed.
 
 Lemma getBit_pure (b: w8) (i: w64) :
   uint.Z i < 8 →
-  byte_to_bits b !!! uint.nat i =
-  bool_decide (word.and b (word.slu (W8 1) (W8 (uint.Z i))) ≠ W8 0).
+  byte_to_bits b !! uint.nat i =
+  Some (bool_decide (word.and b (word.slu (W8 1) (W8 (uint.Z i))) ≠ W8 0)).
 Proof.
   intros.
   bit_off_cases (uint.Z i); byte_cases b; vm_compute; reflexivity.
@@ -49,16 +49,15 @@ Qed.
 Theorem wp_getBit (b : w8) (i : u64) :
   {{{ ⌜uint.Z i < 8⌝ }}}
     getBit #b #i
-  {{{ RET #(LitBool $ byte_to_bits b !!! (uint.nat i)); True }}}.
+  {{{ (bit:bool), RET #bit; ⌜byte_to_bits b !! (uint.nat i) = Some bit⌝ }}}.
 Proof.
   (*@ func getBit(b byte, i uint64) bool {                                    @*)
   (*@     return b&(1<<i) != 0                                                @*)
   (*@ }                                                                       @*)
   iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "%".
   wp_call. iModIntro.
-  iDestruct ("HΦ" with "[//]") as "HΦ".
-  iExactEq "HΦ".
-  repeat f_equal.
+  iApply "HΦ".
+  iPureIntro.
   rewrite -bool_decide_not bool_decide_byte_val_neq.
   rewrite getBit_pure //.
 Qed.
