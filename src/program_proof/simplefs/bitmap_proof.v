@@ -167,66 +167,6 @@ Proof. lia. Qed.
 
 Hint Resolve mod_8_bound : core.
 
-Opaque Nat.div Nat.modulo.
-
-Lemma bytes_to_bits_set:
-  ∀ (i : w64) (data : list w8),
-  uint.Z i < length (bytes_to_bits data)
-  → length data < 2 ^ 56
-  → ∀ b : w8,
-  data !! (uint.nat i `div` 8)%nat = Some b
-  → <[uint.nat i:=true]> (bytes_to_bits data) =
-      bytes_to_bits
-        (<[(uint.nat i `div` 8)%nat:=word.or b
-                                       (word.slu (W8 1) (W8 (uint.Z i `mod` 8)))]>
-           data).
-Proof.
-  intros i data Hbound Hoverflow b Hget_b.
-  eapply (list_eq_same_length _ _ (length data * 8)%nat); [ | | ].
-  { len. }
-  { len. }
-  pose proof (lookup_lt_Some _ _ _ Hget_b) as Hbound'.
-  intros i' bit1 bit2 Hi'_bound Hget1 Hget2.
-  apply bytes_to_bits_lookup_Some in Hget2 as (b2 & Hget2 & Hb2).
-  destruct (decide (uint.nat i `div` 8 = i' `div` 8)%nat).
-  - (* same byte *)
-    rewrite <- e in *.
-    rewrite list_lookup_insert in Hget2; [ | len ].
-    inv Hget2.
-
-    destruct (decide (uint.nat i = i')); subst.
-    + (* same bit *)
-      rewrite list_lookup_insert in Hget1; [ | by len ].
-      inv Hget1.
-      replace (uint.nat i `mod` 8)%nat with (Z.to_nat (uint.Z i `mod` 8)) in * by word.
-      eapply set_bit_get; eauto.
-    + (* same byte but different bit *)
-      rewrite list_lookup_insert_ne // in Hget1.
-      apply bytes_to_bits_lookup_Some in Hget1 as [b'' [Hgetb'' Hb'']].
-      assert (b = b'') by congruence; subst.
-      inv Hgetb''.
-
-      rewrite byte_to_bits_lookup in Hb2.
-      rewrite byte_to_bits_lookup in Hb''.
-      inv Hb2.
-      rewrite testbit_set_bit; [ | word | auto ].
-      rewrite decide_False //.
-      intros H.
-      contradiction n.
-      pose proof (Nat.div_mod (uint.nat i) 8 ltac:(lia)).
-      pose proof (Nat.div_mod i' 8 ltac:(lia)).
-      rewrite H1 H2.
-      rewrite e.
-      f_equal.
-      word.
-  - (* an unchanged byte *)
-    assert (uint.nat i ≠ i') by congruence.
-    rewrite list_lookup_insert_ne // in Hget1.
-    rewrite list_lookup_insert_ne // in Hget2.
-    apply bytes_to_bits_lookup_Some in Hget1 as [b'' [Hgetb'' Hb'']].
-    congruence.
-Qed.
-
 Lemma byte_to_bits_insert_one (i : w64) (data : list w8) (b : w8) (bit: bool) :
   data !! (uint.nat i / 8)%nat = Some b
   → <[uint.nat i:=bit]> (concat (byte_to_bits <$> data)) =
