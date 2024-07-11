@@ -447,14 +447,15 @@ Proof.
     rewrite concat_bytes_to_bits //.
 Qed.
 
-Definition blkBits: Z := 4096*8.
+Definition blkBits: Z := 32768. (* 4096*8 *)
 
 Theorem wp_Bitmap__Write v (d_v: val) (off : u64) (bs0: list Block) bits :
   {{{ own_bitmap v bits ∗
       uint.Z off d↦∗ bs0 ∗
-      ⌜(blkBits * (Z.of_nat $ length bs0))%Z = Z.of_nat $ length bits⌝}}}
+      ⌜(32768 * (Z.of_nat $ length bs0))%Z = Z.of_nat $ length bits⌝}}}
     Bitmap__Write v d_v #off
-  {{{ bs', RET #(); uint.Z off d↦∗ bs' ∗
+  {{{ bs', RET #(); own_bitmap v bits ∗
+                    uint.Z off d↦∗ bs' ∗
                     ⌜bits = blocks_to_bits bs'⌝ }}}.
 Proof.
   (*@ func (b Bitmap) Write(d disk.Disk, off uint64) {                        @*)
@@ -464,15 +465,34 @@ Proof.
   (*@         d.Write(off+i, b.Data[i*disk.BlockSize:(i+1)*disk.BlockSize])   @*)
   (*@     }                                                                   @*)
   (*@ }                                                                       @*)
-
   iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "(Hb & Hd & %Hlen)".
   iNamed "Hb". subst.
   wp_rec. wp_pures.
   wp_apply wp_slice_len. wp_pures.
   wp_apply wp_ref_to; [ auto | ].
   iIntros (i_l) "i". wp_pures.
-  wp_apply wp_forUpto.
-  (* TODO: write down loop invariant *)
+  iDestruct (own_slice_small_sz with "Hs") as %Hsz.
+  wp_apply (wp_forUpto'
+              (λ i,
+                ∃ (bs_i: list Block),
+                "Hs" ∷ own_slice_small s byteT (DfracOwn 1) data ∗
+                  "Hd" ∷ uint.Z off d↦∗ (bs_i ++ drop (uint.nat i) bs0) ∗
+                  "%Hlen_bs" ∷ ⌜length bs_i = uint.nat i⌝ ∗
+                  "%Hbits_i" ∷ ⌜bytes_to_bits (take (uint.nat i * Z.to_nat 32768) data) =
+                    blocks_to_bits bs_i⌝
+              )%I
+              with "[$i $Hs Hd]").
+  { iSplit; first (iPureIntro; word).
+    iExists [].
+    rewrite app_nil_l drop_0.
+    iFrame.
+    iPureIntro; auto. }
+  { clear Φ.
+    iIntros "!>" (i Φ) "(HI & (i & %Hi)) HΦ".
+    iNamed "HI".
+    wp_pures.
+    wp_load.
+    wp_load.
 Admitted.
 
 End proof.

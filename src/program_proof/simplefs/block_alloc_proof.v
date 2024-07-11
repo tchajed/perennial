@@ -42,15 +42,15 @@ Qed.
 
 Definition own_block_alloc γsb_var (l: loc): iProp _ :=
   ∃ (offset: w64) (bm_v: val) (free_s: Slice.t),
-  "offset" ∷ l ↦[BlockAllocator :: "offset"] #offset ∗
+  "#offset" ∷ l ↦[BlockAllocator :: "offset"]□ #offset ∗
   "bitmap" ∷ l ↦[BlockAllocator :: "bitmap"] bm_v ∗
   "free" ∷ l ↦[BlockAllocator :: "free"] free_s ∗
-  "d" ∷ l ↦[BlockAllocator :: "d"] (ExtV tt) ∗
+  "#d" ∷ l ↦[BlockAllocator :: "d"]□ (ExtV tt) ∗
   ∃ (bits: list bool) (bit_data: list Block) (sb: superblockT) (free: list w32),
   "Hbitmap" ∷ own_bitmap bm_v bits ∗
   "%Hbits_len" ∷ ⌜Z.of_nat (length bits) = (uint.Z sb.(data_bitmap_blocks) * 32768)%Z⌝ ∗
-  "#Hoffset" ∷ is_sb γsb_var sb ∗
-               ⌜uint.Z offset = sb_data_bitmap_start sb⌝ ∗
+  "#Hsb" ∷ is_sb γsb_var sb ∗
+  "%Hoffset" ∷ ⌜uint.Z offset = sb_data_bitmap_start sb⌝ ∗
   (* this invariant will require that the on-disk bitmap reflects the
   in-memory one *)
   "Hdisk_bs" ∷ uint.Z offset d↦∗ bit_data ∗
@@ -158,9 +158,13 @@ Proof.
   - iIntros "(I & i)". iNamed "I". iDestruct "free" as "free_local".
     wp_load.
     iDestruct (own_bitmap_val_ty with "Hbm") as %Hbm_ty.
+    iApply wp_fupd.
     wp_apply (wp_allocStruct); [ val_ty | ].
     iIntros (l) "Hba".
     iApply struct_fields_split in "Hba". iNamed "Hba".
+    iMod (struct_field_pointsto_persist with "offset") as "offset".
+    iMod (struct_field_pointsto_persist with "d") as "d".
+    iModIntro.
     iApply "HΦ".
     iExists _, _, _; iFrame "offset bitmap free d".
     iExists _, _, _, _; iFrame "Hbm Hdisk Hfree Hsb".
@@ -192,6 +196,42 @@ Proof.
   (*@     ba.bitmap.Write(ba.d, ba.offset)                                    @*)
   (*@     return i, true                                                      @*)
   (*@ }                                                                       @*)
+  iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "Hba".
+  wp_call.
+  iNamed "Hba".
+  wp_loadField.
+  wp_apply wp_slice_len. wp_pures.
+  wp_if_destruct; wp_pures.
+  { iModIntro. iApply "HΦ".
+    iFrame "∗#".
+    iIntros "%"; congruence. }
+  iNamed "Hba".
+  iDestruct (own_slice_sz with "Hfree_list") as %Hfree_sz.
+  wp_loadField. wp_apply wp_slice_len. wp_loadField.
+  assert (uint.Z free_s.(Slice.sz) ≠ 0).
+  { change 0 with (uint.Z (W64 0)).
+    intros H%(inj uint.Z).
+    congruence. }
+  list_elem free (length free - 1)%nat as last_free.
+  iDestruct (own_slice_split with "Hfree_list") as "[Hfree_list Hcap]".
+  wp_apply (wp_SliceGet with "[$Hfree_list]").
+  { iPureIntro.
+    word_cleanup.
+    replace (Z.to_nat (uint.Z free_s.(Slice.sz) - 1)) with (length free - 1)%nat by word.
+    eauto.
+  }
+  iIntros "Hfree_list".
+  repeat (wp_loadField || wp_apply wp_slice_len).
+  iDestruct (own_slice_cap_wf with "Hcap") as %Hcap.
+  wp_apply wp_SliceTake.
+  { word. }
+  wp_storeField.
+  wp_loadField.
+  (* need to split off last element of Hfree_bs to get that anything in free is
+  in bounds in [bits] (with the value false), and also to get the [free_block]
+  ownership *)
+  wp_apply (wp_Bitmap__Set with "[$Hbitmap]").
+  { iPureIntro. word_cleanup.
 Admitted.
 
 Theorem wp_BlockAllocator__Free γ (ba : loc) (a : u32) :
