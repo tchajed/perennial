@@ -6,6 +6,11 @@ From Perennial.program_proof Require Import disk_prelude.
 From Perennial.program_proof Require Import marshal_stateless_proof.
 From Perennial.goose_lang.lib Require Import typed_slice.
 
+From Perennial.program_proof.simplefs Require Import concat.
+
+From RecordUpdate Require Import RecordSet.
+Import RecordSetNotations.
+
 Set Default Proof Using "Type".
 
 Module inodeType.
@@ -61,13 +66,31 @@ Qed.
 End proof.
 
 Module inode_rep.
-Record t := {
+Record t := mk {
     typ: inodeType.t;
     len: w64;
     meta: w32; (* a meta is just a w32 mode for simplicity *)
     block_ptrs: vec w32 28;
 }.
+
+#[global] Instance eta : Settable _ :=
+  settable! (mk) <typ; len; meta; block_ptrs>.
+
+Definition encode (x: t) : list w8 :=
+  u32_le (inodeType.rep x.(typ)) ++ u64_le x.(len) ++ u32_le x.(meta) ++
+  concat (u32_le <$> vec_to_list x.(block_ptrs)).
+
+Lemma encode_length x : length (encode x) = 128%nat.
+Proof.
+  rewrite /encode.
+  len.
+  erewrite length_concat_uniform; [ | by eauto ].
+  len.
+Qed.
+
 End inode_rep.
+
+Hint Rewrite inode_rep.encode_length : len.
 
 Section proof.
 Context `{!heapGS Σ}.
@@ -116,5 +139,70 @@ Proof.
   iApply "HΦ". iFrame.
 Qed.
 
+Definition own_inode (l: loc) (x: inode_rep.t): iProp Σ :=
+  ∃ (s: Slice.t),
+    "typ" ∷ l ↦[Inode :: "typ_"] #(inodeType.rep x.(inode_rep.typ)) ∗
+    "length" ∷ l ↦[Inode :: "length"] #x.(inode_rep.len) ∗
+    "meta" ∷ l ↦[Inode :: "meta"] (#x.(inode_rep.meta), #()) ∗
+    "blockPtrs" ∷ l ↦[Inode :: "blockPtrs"] to_val s ∗
+    "HblockPtrs" ∷ own_slice_small s uint32T (DfracOwn 1) (vec_to_list x.(inode_rep.block_ptrs)).
+
+Theorem wp_NewInode (ty_v: u32) (t : inodeType.t) :
+  {{{ ⌜ty_v = inodeType.rep t⌝ }}}
+    NewInode #ty_v
+  {{{ l, RET #l;
+      own_inode l {|
+          inode_rep.typ := t;
+          inode_rep.len := W64 0;
+          inode_rep.meta := W32 0;
+          inode_rep.block_ptrs := fun_to_vec (λ _ : fin 28, W32 0)
+        |} }}}.
+Proof.
+  (*@ func NewInode(t simplefs.InodeType) *Inode {                            @*)
+  (*@     return &Inode{                                                      @*)
+  (*@         typ_:      t,                                                   @*)
+  (*@         length:    0,                                                   @*)
+  (*@         meta:      Meta{Mode: 0},                                       @*)
+  (*@         blockPtrs: make([]uint32, NUM_BLOCK_PTRS),                      @*)
+  (*@     }                                                                   @*)
+  (*@ }                                                                       @*)
+  iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as %->.
+  wp_rec. wp_pures.
+  wp_apply wp_NewSlice.
+  iIntros (s) "Hs".
+  iApply own_slice_to_small in "Hs".
+  wp_apply wp_allocStruct; [ val_ty | ].
+  iIntros (l) "Hl".
+  iDestruct (struct_fields_split with "Hl") as "Hl". iNamed "Hl".
+  iApply "HΦ".
+  rewrite /own_inode. iExists _. rewrite /=.
+  iFrame.
+Qed.
+
+Theorem wp_Inode__GetLength (i : loc) ino :
+  {{{ own_inode i ino }}}
+    Inode__GetLength #i
+  {{{ RET #(ino.(inode_rep.len)); own_inode i ino }}}.
+Proof.
+  (*@ func (i *Inode) GetLength() uint64 {                                    @*)
+  (*@     return i.length                                                     @*)
+  (*@ }                                                                       @*)
+  iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "Hino". iNamed "Hino".
+  wp_rec. wp_loadField. iApply "HΦ".
+  iFrame.
+Qed.
+
+Theorem wp_Inode__SetLength (i : loc) ino (len': w64) :
+  {{{ own_inode i ino }}}
+    Inode__SetLength #i #len'
+  {{{ RET #(); own_inode i (ino <| inode_rep.len := len' |>) }}}.
+Proof.
+  (*@ func (i *Inode) SetLength(length uint64) {                              @*)
+  (*@     i.length = length                                                   @*)
+  (*@ }                                                                       @*)
+  iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "Hino". iNamed "Hino".
+  wp_rec. wp_storeField. iModIntro. iApply "HΦ".
+  iFrame.
+Qed.
 
 End proof.
