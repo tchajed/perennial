@@ -104,17 +104,20 @@ Definition FromBytes: val :=
     let: ("typ", "b2") := marshal.ReadInt32 "b" in
     let: ("length", "b3") := marshal.ReadInt "b2" in
     let: ("meta", "b4") := metaFromBytes "b3" in
-    let: "blockPtrs" := NewSlice uint32T NUM_BLOCK_PTRS in
+    let: "blockPtrs" := ref_to (slice.T uint32T) (NewSliceWithCap uint32T #0 NUM_BLOCK_PTRS) in
     let: "bytes" := ref_to (slice.T byteT) "b4" in
-    ForSlice uint32T "idx" <> "blockPtrs"
-      (let: ("ptr", "b_next") := marshal.ReadInt32 (![slice.T byteT] "bytes") in
+    let: "bound" := NUM_BLOCK_PTRS in
+    let: "i" := ref_to uint64T #0 in
+    (for: (λ: <>, (![uint64T] "i") < "bound"); (λ: <>, "i" <-[uint64T] ((![uint64T] "i") + #1)) := λ: <>,
+      let: ("ptr", "b_next") := marshal.ReadInt32 (![slice.T byteT] "bytes") in
       "bytes" <-[slice.T byteT] "b_next";;
-      SliceSet uint32T "blockPtrs" "idx" "ptr");;
+      "blockPtrs" <-[slice.T uint32T] (SliceAppend uint32T (![slice.T uint32T] "blockPtrs") "ptr");;
+      Continue);;
     struct.new Inode [
       "typ_" ::= "typ";
       "length" ::= "length";
       "meta" ::= "meta";
-      "blockPtrs" ::= "blockPtrs"
+      "blockPtrs" ::= ![slice.T uint32T] "blockPtrs"
     ].
 
 Definition ReadInode: val :=
