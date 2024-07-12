@@ -8,6 +8,7 @@ From Perennial.algebra Require Import ghost_var.
 From Goose.github_com Require Import tchajed.simplefs.superblock.
 
 Local Open Scope Z.
+Local Ltac Zify.zify_post_hook ::= Z.div_mod_to_equations.
 
 Record superblockT := {
     log_blocks: u64;
@@ -31,20 +32,21 @@ Definition sb_data_bitmap_start sb: Z :=
   1 + uint.Z sb.(log_blocks) + uint.Z sb.(inode_blocks).
 Definition sb_data_start sb: Z :=
   1 + uint.Z sb.(log_blocks) + uint.Z sb.(inode_blocks) + uint.Z sb.(data_bitmap_blocks).
+Definition sb_used_blocks sb: Z :=
+  sb_data_start sb + uint.Z sb.(data_blocks).
 
 Hint Unfold num_inodes allocatable_data_blocks
-  sb_inode_start sb_data_bitmap_start sb_data_start : word.
+  sb_inode_start sb_data_bitmap_start sb_data_start sb_used_blocks : word.
 
 Record superblock_wf sb : Prop :=
   {
-    wf_data_bitmap_blocks_bound: uint.Z sb.(data_bitmap_blocks) <= 0x2000;
-    wf_data_blocks_allocatable: allocatable_data_blocks sb >= uint.Z sb.(data_blocks);
     (* no overflow anywhere *)
     wf_used_blocks_bound: 1 + uint.Z sb.(log_blocks) +
                             uint.Z sb.(inode_blocks) +
                             uint.Z sb.(data_bitmap_blocks) +
-                            uint.Z sb.(data_blocks) < 0x100000000;
-    wf_data_blocks_bound: uint.Z sb.(data_blocks) < 0x100000000
+                            uint.Z sb.(data_blocks) < 0x1_0000_0000;
+    wf_data_blocks_allocatable: allocatable_data_blocks sb >= uint.Z sb.(data_blocks);
+    wf_data_blocks_bound: uint.Z sb.(data_blocks) < 0x1_0000_0000
   }.
 
 Class superblockG Σ :=
@@ -83,15 +85,23 @@ Qed.
 (*@     DataBitmapBlocks uint64                                             @*)
 (*@     DataBlocks       uint64                                             @*)
 (*@ }                                                                       @*)
+Definition superblock_fields (l : loc) dq (sb: superblockT) : iProp Σ :=
+    "logBlocks" ∷ l ↦[Superblock :: "LogBlocks"]{dq} #(sb.(log_blocks)) ∗
+    "inodeBlocks" ∷ l ↦[Superblock :: "InodeBlocks"]{dq} #(sb.(inode_blocks)) ∗
+    "dataBitmapBlocks" ∷ l ↦[Superblock :: "DataBitmapBlocks"]{dq} #(sb.(data_bitmap_blocks)) ∗
+    "dataBlocks" ∷ l ↦[Superblock :: "DataBlocks"]{dq} #(sb.(data_blocks)).
+
 Definition is_superblock_mem (l : loc) (sb: superblockT) : iProp Σ :=
     "logBlocks" ∷ l ↦[Superblock :: "LogBlocks"]{DfracDiscarded} #(sb.(log_blocks)) ∗
     "inodeBlocks" ∷ l ↦[Superblock :: "InodeBlocks"]{DfracDiscarded} #(sb.(inode_blocks)) ∗
     "dataBitmapBlocks" ∷ l ↦[Superblock :: "DataBitmapBlocks"]{DfracDiscarded} #(sb.(data_bitmap_blocks)) ∗
     "dataBlocks" ∷ l ↦[Superblock :: "DataBlocks"]{DfracDiscarded} #(sb.(data_blocks)) ∗
     "%Hwf" ∷ ⌜superblock_wf sb⌝.
+Global Instance is_superblock_mem_persistent l sb : Persistent (is_superblock_mem l sb) := _.
 
 Definition is_superblock γ l sb: iProp Σ :=
   "Hsb_mem" ∷ is_superblock_mem l sb ∗ "Hsb" ∷ is_sb γ sb.
+Global Instance is_superblock_persistent γ l sb : Persistent (is_superblock γ l sb) := _.
 
 Lemma is_superblock_get_is_sb γ l sb :
   is_superblock γ l sb -∗ is_sb γ sb.
@@ -99,7 +109,117 @@ Proof.
   rewrite /is_superblock. iIntros "[? ?]". iFrame.
 Qed.
 
-Global Instance is_superblock_mem_persistent l sb : Persistent (is_superblock_mem l sb) := _.
+Lemma div_roundup_exact (i k: Z) :
+  0 < k →
+  (i + k - 1) / k = if decide (i `mod` k = 0) then i / k else i / k + 1.
+Proof.
+  intros H0.
+  assert (k ≠ 0) by lia.
+  destruct (decide _).
+  - rewrite {1}(Z.div_mod i k) //.
+    rewrite e.
+    replace (k * i `div` k + 0 + k - 1) with (k - 1 + (i `div` k * k)) by lia.
+    rewrite Z.div_add //.
+    rewrite Z.div_small; [ | lia ].
+    lia.
+  - rewrite {1}(Z.div_mod i k) //.
+    replace (k * i `div` k + i `mod` k + k - 1)
+              with ((i `mod` k - 1) + (i `div` k + 1) * k) by lia.
+    rewrite Z.div_add //.
+    rewrite Z.div_small; [ | lia ].
+    lia.
+Qed.
+
+Lemma div_roundup_characterize (i k: Z) :
+  0 < k →
+  i / k ≤ (i + k - 1) / k ≤ i / k + 1.
+Proof.
+  intros H.
+  rewrite div_roundup_exact //.
+  destruct (decide _); lia.
+Qed.
+
+#[local] Unset Printing Projections.
+
+Opaque w64_instance.w64.
+Opaque W64.
+Opaque word.divu.
+
+Lemma wp_mkSuperblockNoWf (sz: w64) :
+  {{{ True }}}
+    mkSuperblockNoWf #sz
+  {{{ (l: loc) sb, RET #l; superblock_fields l (DfracDiscarded) sb ∗ ⌜15 ≤ uint.Z sz < 0x1_0000_0000⌝ }}}.
+Proof.
+  iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "%Hsz".
+  wp_call.
+  case_bool_decide as Hsz1; wp_pures.
+  2: wp_apply wp_Assume_false.
+  case_bool_decide as Hsz2; wp_pures.
+  2: wp_apply wp_Assume_false.
+  wp_apply wp_Assume; iIntros (_).
+  wp_pures.
+  wp_apply wp_allocStruct; [ val_ty | ].
+  iIntros (l) "Hsb".
+  wp_pures.
+  iMod (struct_pointsto_persist with "Hsb") as "Hsb".
+  iModIntro.
+  iApply ("HΦ" $! l (Build_superblockT _ _ _ _)).
+  iSplit.
+  - iApply struct_fields_split in "Hsb". iDestruct "Hsb" as "#Hsb". iNamed "Hsb".
+    iFrame "#".
+  - iPureIntro. word.
+Qed.
+
+Lemma inv_litint (i1 i2: w64) :
+  #i1 = #i2 → i1 = i2.
+Proof.
+  inversion 1; subst; auto.
+Qed.
+
+Lemma wp_InitSuperblock (sz: w64) :
+  {{{ True }}}
+    InitSuperblock #sz
+  {{{ (l: loc) sb, RET #l; is_superblock_mem l sb ∗ ⌜sb_used_blocks sb = uint.Z sz⌝ }}}.
+Proof.
+  iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "_".
+  wp_call.
+  wp_apply (wp_mkSuperblockNoWf).
+  iIntros (l sb) "[Hfields %Hsz]".
+  wp_pures.
+  iNamed "Hfields".
+  do 2 wp_loadField.
+  wp_apply (std_proof.wp_SumAssumeNoOverflow); iIntros (Hadd1).
+  wp_loadField.
+  wp_apply (std_proof.wp_SumAssumeNoOverflow); iIntros (Hadd2).
+  wp_loadField.
+  wp_apply (std_proof.wp_SumAssumeNoOverflow); iIntros (Hadd3).
+  wp_apply (std_proof.wp_SumAssumeNoOverflow); iIntros (Hadd4).
+  rewrite -> Hadd1, Hadd2, Hadd3 in *.
+  wp_pures.
+  rewrite /Superblock__allocatableDataBlocks.
+  repeat wp_loadField. wp_pures.
+  change (word.mul (W64 4096) (W64 8)) with (W64 32768).
+  wp_apply wp_Assume. rewrite bool_decide_eq_true.
+  iIntros (Hdata_block_bound).
+  wp_apply wp_Assume. rewrite bool_decide_eq_true.
+  iIntros (Hused%inv_litint%(f_equal uint.Z)).
+  rewrite -> Hadd4 in *.
+  wp_pures.
+  iModIntro. iApply "HΦ".
+  iFrame.
+  iSplit.
+  - iPureIntro.
+    constructor.
+    + word.
+    + rewrite /allocatable_data_blocks.
+      change (BlkSize * 8) with 32768.
+      move: Hdata_block_bound.
+      rewrite word.unsigned_mul_nowrap; [ | word ].
+      word.
+    + word.
+  - iPureIntro.
+    word.
+Qed.
 
 Lemma wp_Superblock__allocatableDataBlocks (l : loc) sb :
   {{{ is_superblock_mem l sb }}}

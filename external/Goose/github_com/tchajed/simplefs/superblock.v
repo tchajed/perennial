@@ -7,10 +7,6 @@ From Perennial.goose_lang Require Import ffi.disk_prelude.
 
 (* init.go *)
 
-Definition divRoundup: val :=
-  rec: "divRoundup" "a" "b" :=
-    (("a" + "b") - #1) `quot` "b".
-
 (* Superblock from superblock.go *)
 
 Definition Superblock := struct.decl [
@@ -20,58 +16,33 @@ Definition Superblock := struct.decl [
   "DataBlocks" :: uint64T
 ].
 
-Definition Superblock__LogStart: val :=
-  rec: "Superblock__LogStart" "sb" :=
-    #1.
-
-Definition Superblock__InodeStart: val :=
-  rec: "Superblock__InodeStart" "sb" :=
-    (Superblock__LogStart "sb") + (struct.loadF Superblock "LogBlocks" "sb").
-
-Definition Superblock__DataBitmapStart: val :=
-  rec: "Superblock__DataBitmapStart" "sb" :=
-    (Superblock__InodeStart "sb") + (struct.loadF Superblock "InodeBlocks" "sb").
-
-Definition Superblock__DataStart: val :=
-  rec: "Superblock__DataStart" "sb" :=
-    (Superblock__DataBitmapStart "sb") + (struct.loadF Superblock "DataBitmapBlocks" "sb").
-
-(* The number of blocks of the disk used by this file system configuration *)
-Definition Superblock__UsedBlocks: val :=
-  rec: "Superblock__UsedBlocks" "sb" :=
-    (Superblock__DataStart "sb") + (struct.loadF Superblock "DataBlocks" "sb").
-
-Definition Superblock__allocatableDataBlocks: val :=
-  rec: "Superblock__allocatableDataBlocks" "sb" :=
-    (struct.loadF Superblock "DataBitmapBlocks" "sb") * (disk.BlockSize * #8).
-
-Definition Superblock__Wf: val :=
-  rec: "Superblock__Wf" "sb" :=
-    (((((((std.SumNoOverflow #1 (struct.loadF Superblock "LogBlocks" "sb")) && (std.SumNoOverflow (#1 + (struct.loadF Superblock "LogBlocks" "sb")) (struct.loadF Superblock "InodeBlocks" "sb"))) && (std.SumNoOverflow (#1 + (struct.loadF Superblock "LogBlocks" "sb")) (struct.loadF Superblock "InodeBlocks" "sb"))) && (std.SumNoOverflow ((#1 + (struct.loadF Superblock "LogBlocks" "sb")) + (struct.loadF Superblock "InodeBlocks" "sb")) (struct.loadF Superblock "DataBitmapBlocks" "sb"))) && (std.SumNoOverflow (((#1 + (struct.loadF Superblock "LogBlocks" "sb")) + (struct.loadF Superblock "InodeBlocks" "sb")) + (struct.loadF Superblock "DataBitmapBlocks" "sb")) (struct.loadF Superblock "DataBlocks" "sb"))) && ((Superblock__UsedBlocks "sb") < #4294967296)) && ((Superblock__allocatableDataBlocks "sb") ≥ (struct.loadF Superblock "DataBlocks" "sb"))) && ((struct.loadF Superblock "DataBlocks" "sb") < #4294967296).
-
-(* Create a default superblock configuration for a given disk size *)
-Definition InitSuperblock: val :=
-  rec: "InitSuperblock" "sizeBlocks" :=
-    (if: "sizeBlocks" < #15
-    then Panic "disk too small"
-    else #());;
-    control.impl.Assume ("sizeBlocks" < #4294967296);;
-    let: "inodeBlocks" := divRoundup ("sizeBlocks" - #1) #10 in
+(* Create a superblock without checking for Wf() *)
+Definition mkSuperblockNoWf: val :=
+  rec: "mkSuperblockNoWf" "sizeBlocks" :=
+    control.impl.Assume ((#15 ≤ "sizeBlocks") && ("sizeBlocks" < #4294967296));;
+    let: "inodeBlocks" := (("sizeBlocks" - #1) `quot` #10) + #1 in
     let: "nominalDataBlocks" := ("sizeBlocks" - #1) - "inodeBlocks" in
-    let: "dataBitmapBlocks" := divRoundup "nominalDataBlocks" (disk.BlockSize * #8) in
-    let: "dataBlocks" := (("sizeBlocks" - #1) - "inodeBlocks") - "dataBitmapBlocks" in
+    let: "dataBitmapBlocks" := ("nominalDataBlocks" `quot` (disk.BlockSize * #8)) + #1 in
+    let: "dataBlocks" := (("sizeBlocks" - #1) - "dataBitmapBlocks") - "inodeBlocks" in
     let: "sb" := struct.new Superblock [
       "LogBlocks" ::= #0;
       "InodeBlocks" ::= "inodeBlocks";
       "DataBitmapBlocks" ::= "dataBitmapBlocks";
       "DataBlocks" ::= "dataBlocks"
     ] in
-    (if: (~ (Superblock__Wf "sb"))
-    then Panic "superblock incorrectly constructed"
-    else #());;
-    (if: (Superblock__UsedBlocks "sb") > "sizeBlocks"
-    then Panic "superblock too big"
-    else #());;
+    "sb".
+
+Definition Superblock__allocatableDataBlocks: val :=
+  rec: "Superblock__allocatableDataBlocks" "sb" :=
+    (struct.loadF Superblock "DataBitmapBlocks" "sb") * (disk.BlockSize * #8).
+
+(* Create a default superblock configuration for a given disk size *)
+Definition InitSuperblock: val :=
+  rec: "InitSuperblock" "sizeBlocks" :=
+    let: "sb" := mkSuperblockNoWf "sizeBlocks" in
+    let: "usedBlocks" := std.SumAssumeNoOverflow #1 (std.SumAssumeNoOverflow (struct.loadF Superblock "LogBlocks" "sb") (std.SumAssumeNoOverflow (struct.loadF Superblock "InodeBlocks" "sb") (std.SumAssumeNoOverflow (struct.loadF Superblock "DataBitmapBlocks" "sb") (struct.loadF Superblock "DataBlocks" "sb")))) in
+    control.impl.Assume ((Superblock__allocatableDataBlocks "sb") ≥ (struct.loadF Superblock "DataBlocks" "sb"));;
+    control.impl.Assume ("usedBlocks" = "sizeBlocks");;
     "sb".
 
 Definition magicConst : expr := #10733987902914496678.
@@ -119,3 +90,28 @@ Definition Superblock__Encode: val :=
 Definition Superblock__NumInodes: val :=
   rec: "Superblock__NumInodes" "sb" :=
     ((struct.loadF Superblock "InodeBlocks" "sb") * disk.BlockSize) `quot` INODE_SIZE.
+
+Definition Superblock__LogStart: val :=
+  rec: "Superblock__LogStart" "sb" :=
+    #1.
+
+Definition Superblock__InodeStart: val :=
+  rec: "Superblock__InodeStart" "sb" :=
+    (Superblock__LogStart "sb") + (struct.loadF Superblock "LogBlocks" "sb").
+
+Definition Superblock__DataBitmapStart: val :=
+  rec: "Superblock__DataBitmapStart" "sb" :=
+    (Superblock__InodeStart "sb") + (struct.loadF Superblock "InodeBlocks" "sb").
+
+Definition Superblock__DataStart: val :=
+  rec: "Superblock__DataStart" "sb" :=
+    (Superblock__DataBitmapStart "sb") + (struct.loadF Superblock "DataBitmapBlocks" "sb").
+
+(* The number of blocks of the disk used by this file system configuration *)
+Definition Superblock__UsedBlocks: val :=
+  rec: "Superblock__UsedBlocks" "sb" :=
+    (Superblock__DataStart "sb") + (struct.loadF Superblock "DataBlocks" "sb").
+
+Definition Superblock__Wf: val :=
+  rec: "Superblock__Wf" "sb" :=
+    (((((((std.SumNoOverflow #1 (struct.loadF Superblock "LogBlocks" "sb")) && (std.SumNoOverflow (#1 + (struct.loadF Superblock "LogBlocks" "sb")) (struct.loadF Superblock "InodeBlocks" "sb"))) && (std.SumNoOverflow (#1 + (struct.loadF Superblock "LogBlocks" "sb")) (struct.loadF Superblock "InodeBlocks" "sb"))) && (std.SumNoOverflow ((#1 + (struct.loadF Superblock "LogBlocks" "sb")) + (struct.loadF Superblock "InodeBlocks" "sb")) (struct.loadF Superblock "DataBitmapBlocks" "sb"))) && (std.SumNoOverflow (((#1 + (struct.loadF Superblock "LogBlocks" "sb")) + (struct.loadF Superblock "InodeBlocks" "sb")) + (struct.loadF Superblock "DataBitmapBlocks" "sb")) (struct.loadF Superblock "DataBlocks" "sb"))) && ((Superblock__UsedBlocks "sb") < #4294967296)) && ((Superblock__allocatableDataBlocks "sb") ≥ (struct.loadF Superblock "DataBlocks" "sb"))) && ((struct.loadF Superblock "DataBlocks" "sb") < #4294967296).

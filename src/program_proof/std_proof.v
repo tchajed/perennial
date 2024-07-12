@@ -206,6 +206,22 @@ Proof.
   - word.
 Qed.
 
+Lemma wp_SumNoOverflow' (x y : u64) :
+  ∀ Φ : val → iProp Σ,
+    Φ #(bool_decide (uint.Z x + uint.Z y < 2^64)%Z) -∗
+    WP SumNoOverflow #x #y {{ Φ }}.
+Proof.
+  iIntros (Φ) "HΦ".
+  rewrite /SumNoOverflow. wp_pures.
+  iModIntro. iExactEq "HΦ".
+  repeat f_equal.
+  apply bool_decide_ext.
+  pose proof (sum_overflow_check x y).
+  destruct (decide (uint.Z x ≤ uint.Z (word.add x y))); intuition idtac.
+  - word.
+  - word.
+Qed.
+
 Lemma wp_SumAssumeNoOverflow (x y : u64) :
   ∀ Φ : val → iProp Σ,
     (⌜uint.Z (word.add x y) = (uint.Z x + uint.Z y)%Z⌝ -∗ Φ #(LitInt $ word.add x y)) -∗
