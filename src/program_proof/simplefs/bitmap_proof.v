@@ -78,6 +78,13 @@ Definition own_bitmap (bb: val) (bits: list bool): iProp Σ :=
     "%Hoverflow" ∷ ⌜Z.of_nat (length data) < 2^56⌝ ∗
     "%Hbits" ∷ ⌜bits = bytes_to_bits data⌝.
 
+Lemma own_bitmap_val_ty (bm_v: val) bits :
+  own_bitmap bm_v bits -∗ ⌜val_ty bm_v (struct.t bitmap.Bitmap)⌝.
+Proof.
+  iNamed 1. subst.
+  iPureIntro. val_ty.
+Qed.
+
 Lemma wp_newBitmap (s: Slice.t) (bits: list bool) :
   {{{ ∃ data, own_slice_small s byteT (DfracOwn 1) data ∗
               ⌜bytes_to_bits data = bits⌝ }}}
@@ -344,12 +351,24 @@ Proof.
     rewrite -IHbs //.
 Qed.
 
-Theorem wp_NewBitmapFromBlocks (b_s : Slice.t) (off numBlocks: w64)
-                               (bs: list Block) (bits: list bool) :
+Lemma length_blocks_to_bits bs :
+  length (blocks_to_bits bs) = (length bs * Z.to_nat 32768)%nat.
+Proof.
+  rewrite /blocks_to_bits.
+  rewrite (length_concat_uniform _ (Z.to_nat 32768)); len.
+  - reflexivity.
+  - rewrite /length_uniform.
+    intros i x Hget.
+    fmap_Some in Hget as b.
+    len.
+    reflexivity.
+Qed.
+
+Theorem wp_NewBitmapFromBlocks (d_v: val) (off numBlocks: w64) (bs: list Block) :
   {{{ "Hd" ∷ uint.Z off d↦∗ bs ∗
       "%Hbs_len" ∷ ⌜length bs = uint.nat numBlocks⌝ ∗
       "%Hno_overflow" ∷ ⌜uint.Z off + uint.Z numBlocks < 2^64⌝ }}}
-    NewBitmapFromBlocks #() #off #numBlocks
+    NewBitmapFromBlocks d_v #off #numBlocks
   {{{ v, RET v; uint.Z off d↦∗ bs ∗
                   own_bitmap v (blocks_to_bits bs) }}}.
 Proof.
@@ -430,11 +449,11 @@ Qed.
 
 Definition blkBits: Z := 4096*8.
 
-Theorem wp_Bitmap__Write v (off : u64) (bs0: list Block) bits :
+Theorem wp_Bitmap__Write v (d_v: val) (off : u64) (bs0: list Block) bits :
   {{{ own_bitmap v bits ∗
       uint.Z off d↦∗ bs0 ∗
       ⌜(blkBits * (Z.of_nat $ length bs0))%Z = Z.of_nat $ length bits⌝}}}
-    Bitmap__Write v #() #off
+    Bitmap__Write v d_v #off
   {{{ bs', RET #(); uint.Z off d↦∗ bs' ∗
                     ⌜bits = blocks_to_bits bs'⌝ }}}.
 Proof.
@@ -457,3 +476,6 @@ Proof.
 Admitted.
 
 End proof.
+
+#[global] Typeclasses Opaque own_bitmap.
+#[global] Opaque own_bitmap.

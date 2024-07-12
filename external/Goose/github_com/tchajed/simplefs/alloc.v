@@ -17,13 +17,14 @@ Definition BlockAllocator := struct.decl [
 Definition NewBlockAllocator: val :=
   rec: "NewBlockAllocator" "d" "sb" :=
     let: "offset" := superblock.Superblock__DataBitmapStart "sb" in
-    let: "bm" := bitmap.NewBitmapFromBlocks "d" (superblock.Superblock__DataBitmapStart "sb") (struct.loadF superblock.Superblock "DataBitmapBlocks" "sb") in
+    let: "bm" := bitmap.NewBitmapFromBlocks "d" "offset" (struct.loadF superblock.Superblock "DataBitmapBlocks" "sb") in
     let: "free" := ref_to (slice.T uint32T) (NewSlice uint32T #0) in
-    let: "i" := ref_to uint32T #(U32 1) in
-    (for: (λ: <>, (![uint32T] "i") < (to_u32 (struct.loadF superblock.Superblock "DataBlocks" "sb"))); (λ: <>, "i" <-[uint32T] ((![uint32T] "i") + #1)) := λ: <>,
-      (if: (~ (bitmap.Bitmap__Get "bm" (to_u64 (![uint32T] "i"))))
+    let: "blks" := struct.loadF superblock.Superblock "DataBlocks" "sb" in
+    let: "i" := ref_to uint64T #1 in
+    (for: (λ: <>, (![uint64T] "i") < "blks"); (λ: <>, "i" <-[uint64T] ((![uint64T] "i") + #1)) := λ: <>,
+      (if: (~ (bitmap.Bitmap__Get "bm" (![uint64T] "i")))
       then
-        "free" <-[slice.T uint32T] (SliceAppend uint32T (![slice.T uint32T] "free") (![uint32T] "i"));;
+        "free" <-[slice.T uint32T] (SliceAppend uint32T (![slice.T uint32T] "free") (to_u32 (![uint64T] "i")));;
         Continue
       else Continue));;
     struct.new BlockAllocator [

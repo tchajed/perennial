@@ -45,10 +45,10 @@ Definition own_block_alloc γsb_var (l: loc): iProp _ :=
   "offset" ∷ l ↦[BlockAllocator :: "offset"] #offset ∗
   "bitmap" ∷ l ↦[BlockAllocator :: "bitmap"] bm_v ∗
   "free" ∷ l ↦[BlockAllocator :: "free"] free_s ∗
-  "d" ∷ l ↦[BlockAllocator :: "d"] #() ∗
+  "d" ∷ l ↦[BlockAllocator :: "d"] (ExtV tt) ∗
   ∃ (bits: list bool) (bit_data: list Block) (sb: superblockT) (free: list w32),
   "Hbitmap" ∷ own_bitmap bm_v bits ∗
-  "%Hbit_len" ∷ ⌜length bits = uint.nat sb.(data_bitmap_blocks)⌝ ∗
+  "%Hbits_len" ∷ ⌜Z.of_nat (length bits) = (uint.Z sb.(data_bitmap_blocks) * 32768)%Z⌝ ∗
   "#Hoffset" ∷ is_sb γsb_var sb ∗
                ⌜uint.Z offset = sb_data_bitmap_start sb⌝ ∗
   (* this invariant will require that the on-disk bitmap reflects the
@@ -71,7 +71,7 @@ Theorem wp_NewBlockAllocator γsb_var (sb_l : loc) sb :
         (* arbitrary data blocks *)
       (∃ data, sb_data_start sb d↦∗ data ∗ ⌜length data = uint.nat sb.(data_blocks)⌝)
   }}}
-    NewBlockAllocator #() #sb_l
+    NewBlockAllocator (ExtV tt) #sb_l
   {{{ (l : loc), RET #l; own_block_alloc γsb_var l }}}.
 Proof.
   (*@ func NewBlockAllocator(d disk.Disk, sb *superblock.Superblock) *BlockAllocator { @*)
@@ -91,6 +91,87 @@ Proof.
   (*@         d:      d,                                                      @*)
   (*@     }                                                                   @*)
   (*@ }                                                                       @*)
+
+  iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "(#Hsb & Hbitmap & Hdata)".
+  iNamed "Hsb".
+  iDestruct (is_sb_to_wf with "Hsb") as %Hwf.
+  wp_call. wp_apply (wp_Superblock__DataBitmapStart with "[$Hsb_mem]").
+  iIntros (bm_start Hbm_start_val).
+  wp_apply (wp_Superblock__DataBitmapBlocks with "[$Hsb_mem]").
+  wp_apply (wp_NewBitmapFromBlocks with "[Hbitmap]").
+  { rewrite Hbm_start_val. iFrame "Hbitmap".
+    iPureIntro.
+    split.
+    - len.
+    - destruct Hwf; word.
+  }
+  iIntros (bm_v) "(Hdisk & Hbm)".
+  wp_apply wp_NewSlice_0; iIntros (free_s) "Hfree".
+  wp_apply (wp_ref_to); [ val_ty | iIntros (free_l) "free" ].
+  wp_pures.
+  wp_apply (wp_Superblock__DataBlocks with "[$Hsb_mem]").
+  wp_apply (wp_ref_to); [ val_ty | iIntros (i_l) "i" ].
+  wp_pures.
+  wp_apply (wp_forUpto' (λ i, ∃ (free_s: Slice.t) (free: list w32),
+                "free" ∷ free_l ↦[slice.T uint32T] free_s ∗
+                "Hfree" ∷ own_slice free_s uint32T (DfracOwn 1) free ∗
+                "%free_eq" ∷ ⌜free = W32 <$> seqZ 1 (uint.Z i - 1)⌝ ∗
+                "Hbm" ∷ own_bitmap bm_v
+                          (blocks_to_bits (replicate (uint.nat sb.(data_bitmap_blocks)) block0))
+              )%I with
+           "[$i free Hfree Hbm]").
+  - iSplit.
+    + admit. (* TODO: superblock should guarantee sb.(data_blocks) > 0 *)
+    + iExists _, _. iFrame "free Hfree Hbm". (* TODO: [iFrame] without names is much slower *)
+      iPureIntro.
+      change (uint.Z (W64 1) - 1) with 0.
+      reflexivity.
+  - clear Φ. iIntros "!>" (i Φ) "(HI & (i & %Hi_bound)) HΦ".
+    iNamed "HI". subst.
+    wp_pures.
+    wp_load.
+    wp_apply (wp_Bitmap__Get with "[$Hbm]").
+    { rewrite length_blocks_to_bits. len.
+      iPureIntro.
+      destruct Hwf.
+      rewrite /allocatable_data_blocks in wf_data_blocks_allocatable.
+      change (BlkSize * 8) with (32768) in wf_data_blocks_allocatable.
+      word. }
+    iIntros (bit) "(Hbm & %Hbit_get)".
+    (* TODO: prove bit is always false because we start with an all-zero bitmap *)
+    assert (bit = false) by admit; subst.
+    wp_pures.
+    wp_load.
+    wp_load.
+    wp_apply (wp_SliceAppend with "[$Hfree]").
+    iIntros (free_s') "Hs".
+    wp_store.
+    iModIntro.
+    iApply "HΦ".
+    iFrame.
+    iPureIntro.
+    word_cleanup.
+    replace (uint.Z i + 1 - 1) with (uint.Z i) by word.
+    change [W32 (uint.Z i)] with (W32 <$> [uint.Z i]).
+    rewrite -fmap_app.
+    admit. (* some seqZ stuff *)
+  - iIntros "(I & i)". iNamed "I". iDestruct "free" as "free_local".
+    wp_load.
+    iDestruct (own_bitmap_val_ty with "Hbm") as %Hbm_ty.
+    wp_apply (wp_allocStruct); [ val_ty | ].
+    iIntros (l) "Hba".
+    iApply struct_fields_split in "Hba". iNamed "Hba".
+    iApply "HΦ".
+    iExists _, _, _; iFrame "offset bitmap free d".
+    iExists _, _, _, _; iFrame "Hbm Hdisk Hfree Hsb".
+    repeat iSplit; auto; try iPureIntro.
+    + rewrite length_blocks_to_bits; len.
+    + rewrite /named. subst free.
+      rewrite /free_block.
+      (* TODO: need to align each element of free (which are just the numbers
+      1..data_blocks) with the disk points-to facts in Hdata, and prove that
+      these bits are false using the earlier lemma that says all the bits are
+      false *)
 Admitted.
 
 Theorem wp_BlockAllocator__Alloc γ (ba : loc) :

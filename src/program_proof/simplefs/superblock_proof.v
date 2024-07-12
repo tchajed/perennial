@@ -220,6 +220,36 @@ Proof.
     word.
 Qed.
 
+Lemma wp_Superblock__InodeBlocks (l : loc) sb :
+  {{{ is_superblock_mem l sb }}}
+    struct.loadF Superblock "InodeBlocks" #l
+  {{{ RET #sb.(inode_blocks); True }}}.
+Proof.
+  iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "Hsb". iNamed "Hsb".
+  wp_loadField.
+  iApply "HΦ"; done.
+Qed.
+
+Lemma wp_Superblock__DataBitmapBlocks (l : loc) sb :
+  {{{ is_superblock_mem l sb }}}
+    struct.loadF Superblock "DataBitmapBlocks" #l
+  {{{ RET #sb.(data_bitmap_blocks); True }}}.
+Proof.
+  iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "Hsb". iNamed "Hsb".
+  wp_loadField.
+  iApply "HΦ"; done.
+Qed.
+
+Lemma wp_Superblock__DataBlocks (l : loc) sb :
+  {{{ is_superblock_mem l sb }}}
+    struct.loadF Superblock "DataBlocks" #l
+  {{{ RET #sb.(data_blocks); True }}}.
+Proof.
+  iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "Hsb". iNamed "Hsb".
+  wp_loadField.
+  iApply "HΦ"; done.
+Qed.
+
 Lemma wp_Superblock__allocatableDataBlocks (l : loc) sb :
   {{{ is_superblock_mem l sb }}}
     Superblock__allocatableDataBlocks #l
