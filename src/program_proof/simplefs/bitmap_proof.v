@@ -5,7 +5,7 @@ From Perennial.program_proof Require Import disk_lib.
 From Perennial.Helpers Require Import bytes.
 Import Nat.
 
-From Goose.github_com Require Import tchajed.simplefs.
+From Goose.github_com Require Import tchajed.simplefs.bitmap.
 
 #[local] Unset Printing Projections.
 
@@ -113,6 +113,11 @@ Qed.
 Section proof.
 Context `{!heapGS Σ}.
 
+Lemma is_block_to_typed s dq (b: Block) :
+  slice.own_slice_small s byteT dq (Block_to_vals b) =
+  own_slice_small s byteT dq (vec_to_list b).
+Proof. reflexivity. Qed.
+
 Definition own_bitmap (bb: val) (bits: list bool): iProp Σ :=
   ∃ (s: Slice.t) data,
     "%Hval" ∷ ⌜bb = (slice_val s, #())%V⌝ ∗
@@ -144,11 +149,11 @@ Proof.
   word.
 Qed.
 
-Lemma symex_wp_bitmap__Set s (bytes: list u8) (i : u64) :
+Lemma symex_wp_Bitmap__Set s (bytes: list u8) (i : u64) :
   {{{ own_slice_small s byteT (DfracOwn 1) bytes ∗
         ⌜Z.of_nat (length bytes) < 2^56⌝ ∗
         ⌜uint.Z i < Z.of_nat (length bytes) * 8⌝ }}}
-    bitmap__Set (s, #())%V #i
+    Bitmap__Set (s, #())%V #i
   {{{ (b: w8), RET #();
       ⌜bytes !! (uint.nat i `div` 8)%nat = Some b⌝ ∗
       own_slice_small s byteT (DfracOwn 1)
@@ -326,14 +331,14 @@ Proof.
     congruence.
 Qed.
 
-Lemma wp_bitmap__Set v (bits: list bool) (i: u64) :
+Lemma wp_Bitmap__Set v (bits: list bool) (i: u64) :
   {{{ own_bitmap v bits ∗ ⌜uint.Z i < Z.of_nat (length bits)⌝ }}}
-    bitmap__Set v #i
+    Bitmap__Set v #i
   {{{ RET #(); own_bitmap v (<[uint.nat i := true]> bits) }}}.
 Proof.
   iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "[Hbm %Hbound]".
   iNamed "Hbm". subst.
-  wp_apply (symex_wp_bitmap__Set with "[$Hs]").
+  wp_apply (symex_wp_Bitmap__Set with "[$Hs]").
   { iPureIntro. split; auto.
     move: Hbound; len. }
   iIntros (b) "[%Hget_b Hs]".
@@ -345,9 +350,9 @@ Proof.
   apply bytes_to_bits_set; auto.
 Qed.
 
-Lemma wp_bitmap__Get v (bits: list bool) (i: u64) :
+Lemma wp_Bitmap__Get v (bits: list bool) (i: u64) :
   {{{ own_bitmap v bits ∗ ⌜uint.Z i < Z.of_nat (length bits)⌝ }}}
-    bitmap__Get v #i
+    Bitmap__Get v #i
   {{{ (bit: bool), RET #bit; own_bitmap v bits ∗ ⌜bits !! uint.nat i = Some bit⌝ }}}.
 Proof.
   iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "[Hbm %Hbound]".
@@ -364,9 +369,9 @@ Proof.
   wp_pures.
 Admitted.
 
-Lemma wp_bitmap__Clear v (bits: list bool) (i: u64) :
+Lemma wp_Bitmap__Clear v (bits: list bool) (i: u64) :
   {{{ own_bitmap v bits ∗ ⌜uint.Z i < Z.of_nat (length bits)⌝ }}}
-    bitmap__Clear v #i
+    Bitmap__Clear v #i
   {{{ RET #(); own_bitmap v (<[uint.nat i := false]> bits) }}}.
 Proof.
   iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "[Hbm %Hbound]".
@@ -382,5 +387,102 @@ Proof.
   }
   wp_pures.
 Admitted.
+
+Lemma concat_bytes_to_bits (bs : list Block) :
+  bytes_to_bits (concat ((λ (b:Block), vec_to_list b) <$> bs)) =
+  concat ((λ (b:Block), bytes_to_bits b) <$> bs).
+Proof.
+  induction bs as [|b bs].
+  - reflexivity.
+  - rewrite /bytes_to_bits.
+    rewrite !fmap_cons !concat_cons !fmap_app !concat_app.
+    f_equal.
+    rewrite -IHbs //.
+Qed.
+
+Theorem wp_NewBitmapFromBlocks (b_s : Slice.t) (off numBlocks: w64)
+                               (bs: list Block) (bits: list bool) :
+  {{{ "Hd" ∷ uint.Z off d↦∗ bs ∗
+      "%Hbs_len" ∷ ⌜length bs = uint.nat numBlocks⌝ ∗
+      "%Hno_overflow" ∷ ⌜uint.Z off + uint.Z numBlocks < 2^64⌝ }}}
+    NewBitmapFromBlocks #() #off #numBlocks
+  {{{ v, RET v; uint.Z off d↦∗ bs ∗
+                  let bits := concat ((λ b, bytes_to_bits (vec_to_list b)) <$> bs) in
+                  own_bitmap v bits }}}.
+Proof.
+  (*@ func NewBitmapFromBlocks(d disk.Disk, off uint64, numBlocks uint64) Bitmap { @*)
+  (*@     var bitmapData = make([]byte, 0, numBlocks*disk.BlockSize)          @*)
+  (*@     for i := uint64(0); i < numBlocks; i++ {                            @*)
+  (*@         bitmapData = append(bitmapData, d.Read(off+i)...)               @*)
+  (*@     }                                                                   @*)
+  (*@     return newBitmap(bitmapData)                                        @*)
+  (*@ }                                                                       @*)
+  iIntros (Φ) "Hpre HΦ". iNamed "Hpre".
+  wp_rec. wp_pures.
+  wp_apply wp_NewSliceWithCap.
+  { word. }
+  iIntros (ptr) "Hs".
+  wp_apply wp_ref_to; first by auto.
+  match goal with
+  | |- context[Slice.mk ?ptr ?len ?cap] => generalize dependent (Slice.mk ptr len cap); intros s
+  end.
+  iIntros (data_l) "data".
+  wp_pures.
+  wp_apply wp_ref_to; first by auto. iIntros (i_l) "i".
+  wp_pures.
+  rewrite replicate_0.
+  wp_apply (wp_forUpto
+    (λ i, ∃ (s: Slice.t),
+        "data" ∷ data_l ↦[slice.T byteT] s ∗
+        "Hd" ∷ uint.Z off d↦∗ bs ∗
+        "Hs" ∷ own_slice s byteT (DfracOwn 1)
+          (concat ((λ b, vec_to_list b) <$> take (uint.nat i) bs))
+    )%I with "[] [$i $Hd data Hs]").
+  { word. }
+  - iIntros (i).
+    clear Φ.
+    iIntros (Φ) "!> Hpre HΦ". iDestruct "Hpre" as "(I & i & %Hbound)".
+    iNamed "I".
+    wp_pures.
+    wp_load.
+    assert (∃ b, bs !! uint.nat i = Some b) as [bi Hget_bi].
+    { apply list_lookup_lt. len. }
+    iDestruct (disk_array_acc_read _ _ (uint.Z i) with "Hd") as "[Hi Hd']".
+    { word. }
+    { eauto. }
+    wp_apply (wp_Read with "[Hi]").
+    { iExactEq "Hi". f_equal. word. }
+    iIntros (s') "[Hi [Hblock _]]".
+    rewrite is_block_to_typed.
+    wp_load.
+    wp_apply (wp_SliceAppendSlice (V:=w8) with "[$Hs $Hblock]"); auto.
+    iIntros (s'') "[Hs _Hblock]".
+    wp_store.
+    iModIntro. iApply "HΦ".
+    iFrame.
+    iDestruct ("Hd'" with "[Hi]") as "$".
+    { iExactEq "Hi". f_equal. word. }
+    iExactEq "Hs". rewrite /named. f_equal.
+    word_cleanup.
+    replace (Z.to_nat (uint.Z i + 1)) with (S (uint.nat i)) by word.
+    erewrite take_S_r; eauto.
+    rewrite fmap_app concat_app /=.
+    rewrite app_nil_r //.
+  - iFrame.
+  - iIntros "[I _]". iNamed "I".
+    rewrite -> firstn_all2 by word.
+    wp_pures.
+    wp_load.
+    wp_apply (wp_newBitmap with "[Hs]").
+    { rewrite own_slice_to_small.
+      iFrame.
+      eauto. }
+    iIntros (v) "Hbm".
+    iApply "HΦ".
+    iFrame "Hd".
+    iExactEq "Hbm".
+    f_equal.
+    rewrite concat_bytes_to_bits //.
+Qed.
 
 End proof.

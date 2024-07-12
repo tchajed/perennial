@@ -50,10 +50,10 @@ Definition Superblock__UsedBlocks: val :=
 (* Create a default superblock configuration for a given disk size *)
 Definition InitSuperblock: val :=
   rec: "InitSuperblock" "sizeBlocks" :=
-    (if: "sizeBlocks" ≤ #3
+    (if: "sizeBlocks" < #15
     then Panic "disk too small"
     else #());;
-    let: "inodeBlocks" := divRoundup "sizeBlocks" #10 in
+    let: "inodeBlocks" := divRoundup ("sizeBlocks" - #1) #10 in
     let: "nominalDataBlocks" := ("sizeBlocks" - #1) - "inodeBlocks" in
     let: "dataBitmapBlocks" := divRoundup "nominalDataBlocks" (disk.BlockSize * #8) in
     let: "dataBlocks" := (("sizeBlocks" - #1) - "inodeBlocks") - "dataBitmapBlocks" in
