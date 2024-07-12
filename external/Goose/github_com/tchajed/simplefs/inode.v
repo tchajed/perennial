@@ -13,7 +13,7 @@ Definition Meta := struct.decl [
 Definition Meta__AsBytes: val :=
   rec: "Meta__AsBytes" "m" :=
     let: "buf" := ref_to (slice.T byteT) (NewSlice byteT #0) in
-    "buf" <-[slice.T byteT] (marshal.WriteInt32 (![slice.T byteT] "buf") (struct.loadF Meta "Mode" "m"));;
+    "buf" <-[slice.T byteT] (marshal.WriteInt32 (![slice.T byteT] "buf") (struct.get Meta "Mode" "m"));;
     ![slice.T byteT] "buf".
 
 Definition metaFromBytes: val :=

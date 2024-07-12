@@ -64,14 +64,57 @@ Module inode_rep.
 Record t := {
     typ: inodeType.t;
     len: w64;
-    meta: w32; (* a meta ia just a w32 mode for simplicity *)
+    meta: w32; (* a meta is just a w32 mode for simplicity *)
     block_ptrs: vec w32 28;
 }.
+End inode_rep.
 
 Section proof.
 Context `{!heapGS Σ}.
 
 Definition is_meta (v: val) (meta: w32) :=
   v = (#meta, #())%V.
+
+Theorem wp_Meta__AsBytes (meta: w32) :
+  {{{ True }}}
+    Meta__AsBytes (#meta, #())
+  {{{ (s : Slice.t), RET (to_val s); own_slice s byteT (DfracOwn 1) (u32_le meta) }}}.
+Proof.
+  (*@ func (m *Meta) AsBytes() []byte {                                       @*)
+  (*@     var buf = []byte{}                                                  @*)
+  (*@     buf = marshal.WriteInt32(buf, m.Mode)                               @*)
+  (*@     return buf                                                          @*)
+  (*@ }                                                                       @*)
+  iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "_".
+  rewrite /Meta__AsBytes. wp_pures.
+  wp_apply (wp_NewSlice_0). iIntros (s) "Hs".
+  wp_apply wp_ref_to; [ auto | ]. iIntros (l) "buf". wp_pures.
+  wp_load.
+  wp_apply (wp_WriteInt32 with "[$Hs]").
+  iIntros (s2) "Hs".
+  wp_pures. wp_store. wp_load.
+  iModIntro.
+  iApply "HΦ".
+  rewrite app_nil_l.
+  iExact "Hs".
+Qed.
+
+Theorem wp_metaFromBytes dq (s : Slice.t) meta bs :
+  {{{ own_slice_small s byteT dq (u32_le meta ++ bs) }}}
+    metaFromBytes (to_val s)
+  {{{ (s': Slice.t), RET ((#meta, #()), s'); own_slice_small s' byteT dq bs }}}.
+Proof.
+  (*@ func metaFromBytes(bytes []byte) (Meta, []byte) {                       @*)
+  (*@     mode, bytes2 := marshal.ReadInt32(bytes)                            @*)
+  (*@     return Meta{Mode: mode}, bytes2                                     @*)
+  (*@ }                                                                       @*)
+  iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "Hs".
+  wp_rec. wp_apply (wp_ReadInt32 with "[$Hs]").
+  iIntros (s') "Hs".
+  wp_pures.
+  iModIntro.
+  iApply "HΦ". iFrame.
+Qed.
+
 
 End proof.
