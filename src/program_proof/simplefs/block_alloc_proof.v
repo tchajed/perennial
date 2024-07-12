@@ -131,3 +131,6 @@ Proof.
 Admitted.
 
 End proof.
+
+#[global] Typeclasses Opaque own_block_alloc.
+#[global] Opaque own_block_alloc.

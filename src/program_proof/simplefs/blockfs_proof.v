@@ -209,4 +209,8 @@ Proof.
   iFrame "∗#%".
 Qed.
 
+
 End proof.
+
+#[global] Typeclasses Opaque own_blockFs.
+#[global] Opaque own_blockFs.

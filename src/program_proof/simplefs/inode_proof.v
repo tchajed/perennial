@@ -459,6 +459,9 @@ Definition inode_auth (γ: inode_names) : iProp Σ :=
                   ⌜block_has_inodes b off inodes⌝
 .
 
+#[global] Instance inode_auth_timeless : `(Timeless (inode_auth γ)).
+Proof. apply _. Qed.
+
 (* tracks (persistently) that an inode number is in bounds wrt the global
 superblock (accessed via its ghost variable) *)
 Definition is_valid_ino (γ: inode_names) (inum: w64): iProp Σ :=
@@ -1048,3 +1051,6 @@ Proof.
 Qed.
 
 End proof.
+
+#[global] Typeclasses Opaque inode_auth.
+#[global] Opaque inode_auth.

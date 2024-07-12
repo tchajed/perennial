@@ -37,6 +37,9 @@ Definition own_inode_alloc γ (l: loc) (free: gset w64) : iProp _ :=
     "Hfree_inodes" ∷ [∗ list] inum ∈ free_list, free_inode γ inum
 .
 
+#[global] Instance own_inode_alloc_timeless : `(Timeless (own_inode_alloc γ l free)).
+Proof. apply _. Qed.
+
 Theorem wp_NewInodeAllocator γ (sb_l: loc) sb (inodes: gmap w64 inode_rep.t) :
   {{{ is_superblock γ.(sb_var) sb_l sb ∗
       inode_auth γ ∗
@@ -122,3 +125,6 @@ Admitted.
 
 
 End proof.
+
+#[global] Typeclasses Opaque own_inode_alloc.
+#[global] Opaque own_inode_alloc.

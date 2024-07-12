@@ -106,7 +106,7 @@ Global Instance is_superblock_mem_persistent l sb : Persistent (is_superblock_me
 
 Definition is_superblock γ l sb: iProp Σ :=
   "Hsb_mem" ∷ is_superblock_mem l sb ∗ "Hsb" ∷ is_sb γ sb.
-Global Instance is_superblock_persistent γ l sb : Persistent (is_superblock γ l sb) := _.
+#[global] Instance is_superblock_persistent γ l sb : Persistent (is_superblock γ l sb) := _.
 
 Lemma is_superblock_get_is_sb γ l sb :
   is_superblock γ l sb -∗ is_sb γ sb.
