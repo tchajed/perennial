@@ -129,11 +129,16 @@ Definition ReadInode: val :=
     let: "ino" := FromBytes "inodeData" in
     "ino".
 
+Definition copyInodeToBlock: val :=
+  rec: "copyInodeToBlock" "blk" "inum" "i" :=
+    let: "blkOff" := "inum" `rem` simplefs.INODES_PER_BLOCK in
+    SliceCopy byteT (SliceSubslice byteT "blk" ("blkOff" * simplefs.INODE_SIZE) (("blkOff" + #1) * simplefs.INODE_SIZE)) (Inode__AsBytes "i");;
+    #().
+
 Definition Inode__Write: val :=
   rec: "Inode__Write" "i" "d" "sb" "inum" :=
     let: "blkNum" := (superblock.Superblock__InodeStart "sb") + ("inum" `quot` simplefs.INODES_PER_BLOCK) in
-    let: "blkOff" := "inum" `rem` simplefs.INODES_PER_BLOCK in
     let: "blk" := disk.Read "blkNum" in
-    SliceCopy byteT (SliceSubslice byteT "blk" ("blkOff" * simplefs.INODE_SIZE) (("blkOff" + #1) * simplefs.INODE_SIZE)) (Inode__AsBytes "i");;
+    copyInodeToBlock "blk" "inum" "i";;
     disk.Write "blkNum" "blk";;
     #().
