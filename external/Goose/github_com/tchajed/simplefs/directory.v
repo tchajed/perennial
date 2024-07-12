@@ -19,23 +19,21 @@ Definition MAX_NAME_LEN : expr := nameLen - #1.
 (* tillNullTerminator gives the non-null prefix of s *)
 Definition tillNullTerminator: val :=
   rec: "tillNullTerminator" "s" :=
-    let: "nullIndex" := ref (zero_val ptrT) in
     let: "i" := ref_to uint64T #0 in
-    (for: (λ: <>, (![uint64T] "i") < (slice.len "s")); (λ: <>, "i" <-[uint64T] ((![uint64T] "i") + #1)) := λ: <>,
-      (if: ((![ptrT] "nullIndex") = #null) && ((SliceGet byteT "s" (![uint64T] "i")) = #(U8 0))
-      then
-        "nullIndex" <-[ptrT] "i";;
-        Continue
-      else Continue));;
-    (if: (![ptrT] "nullIndex") = #null
-    then "s"
-    else SliceTake "s" (![uint64T] (![ptrT] "nullIndex"))).
+    Skip;;
+    (for: (λ: <>, (![uint64T] "i") < (slice.len "s")); (λ: <>, Skip) := λ: <>,
+      (if: (SliceGet byteT "s" (![uint64T] "i")) = #(U8 0)
+      then Break
+      else
+        "i" <-[uint64T] ((![uint64T] "i") + #1);;
+        Continue));;
+    SliceTake "s" (![uint64T] "i").
 
 Definition DirEnt__Encode: val :=
   rec: "DirEnt__Encode" "d" :=
-    let: "buf" := ref_to (slice.T byteT) (StringToBytes (struct.loadF DirEnt "Path" "d")) in
-    "buf" <-[slice.T byteT] (SliceAppendSlice byteT (![slice.T byteT] "buf") (NewSlice byteT (nameLen - (StringLength (struct.loadF DirEnt "Path" "d")))));;
-    "buf" <-[slice.T byteT] (marshal.WriteInt (![slice.T byteT] "buf") (struct.loadF DirEnt "Inum" "d"));;
+    let: "buf" := ref_to (slice.T byteT) (StringToBytes (struct.get DirEnt "Path" "d")) in
+    "buf" <-[slice.T byteT] (SliceAppendSlice byteT (![slice.T byteT] "buf") (NewSlice byteT (nameLen - (StringLength (struct.get DirEnt "Path" "d")))));;
+    "buf" <-[slice.T byteT] (marshal.WriteInt (![slice.T byteT] "buf") (struct.get DirEnt "Inum" "d"));;
     ![slice.T byteT] "buf".
 
 Definition decodeDirEnt: val :=
@@ -70,7 +68,7 @@ Definition DecodeDirectory: val :=
         "dents" <-[slice.T (struct.t DirEnt)] (SliceAppend (struct.t DirEnt) (![slice.T (struct.t DirEnt)] "dents") "ent");;
         Continue
       else Continue));;
-    struct.mk Directory [
+    struct.new Directory [
       "Dents" ::= ![slice.T (struct.t DirEnt)] "dents"
     ].
 

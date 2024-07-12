@@ -2,6 +2,7 @@ From Perennial.program_proof Require Import proof_prelude.
 From Goose.github_com Require Import tchajed.simplefs.directory.
 
 From Perennial.program_proof Require Import disk_prelude.
+From Perennial.program_proof Require Import marshal_stateless_proof.
 From Perennial.goose_lang.lib Require Import typed_slice.
 
 Coercion LitString : string >-> base_lit.
@@ -27,7 +28,7 @@ Record dir_ent_ok (e: dir_ent) :=
   }.
 
 Definition pad_path (p: list u8): list u8 :=
-  p ++ repeat (W8 0) (Z.to_nat dent_len - length p)%nat.
+  p ++ replicate (Z.to_nat dent_len - length p)%nat (W8 0).
 
 Definition encode_dir_ent (e: dir_ent): list u8 :=
   pad_path e.(path) ++ u64_le e.(inum).
@@ -101,6 +102,54 @@ Proof.
   (*@         return s[:*nullIndex]                                           @*)
   (*@     }                                                                   @*)
   (*@ }                                                                       @*)
+Admitted.
+
+Theorem wp_DirEnt__Encode (e: dir_ent) :
+  {{{ ⌜dir_ent_ok e⌝ }}}
+    DirEnt__Encode (dir_ent_val e)
+  {{{ (s : Slice.t), RET (to_val s); own_slice s byteT (DfracOwn 1) (encode_dir_ent e) }}}.
+Proof.
+  (*@ func (d DirEnt) Encode() []byte {                                       @*)
+  (*@     var buf = []byte(d.Path)                                            @*)
+  (*@     buf = append(buf, make([]byte, nameLen-uint64(len(d.Path)))...)     @*)
+  (*@     buf = marshal.WriteInt(buf, uint64(d.Inum))                         @*)
+  (*@     return buf                                                          @*)
+  (*@ }                                                                       @*)
+  iIntros (Φ) "Hpre HΦ". iDestruct "Hpre" as "%Hok".
+  wp_rec. wp_pures.
+  wp_apply wp_StringToBytes. iIntros (p_s) "Hpath".
+  rewrite bytes_to_string_inj.
+  iDestruct (own_slice_sz with "Hpath") as %Hlen.
+  wp_apply wp_ref_to; [ auto | ].
+  iIntros (l) "buf".
+  wp_pures.
+  wp_apply wp_NewSlice. iIntros (pad_s) "Hpad".
+  wp_load.
+  iApply own_slice_to_small in "Hpad".
+  wp_apply (wp_SliceAppendSlice with "[$Hpath $Hpad]").
+  { auto. }
+  iIntros (s2) "[Hs _]".
+  wp_store. wp_pures.
+  wp_load.
+  wp_apply (wp_WriteInt with "[$]").
+  iIntros (s3) "Hs".
+  wp_store. wp_load. iModIntro. iApply "HΦ".
+  iExactEq "Hs".
+  f_equal.
+  rewrite /encode_dir_ent.
+  f_equal.
+  rewrite /pad_path.
+  f_equal.
+  f_equal.
+  destruct Hok.
+  len.
+Qed.
+
+Theorem wp_decodeDirEnt s dq (e: dir_ent) (bs: list w8) :
+  {{{ own_slice s byteT dq bs ∗ ⌜bs = encode_dir_ent e⌝ }}}
+    decodeDirEnt (to_val s)
+  {{{ RET (to_val e); own_slice s byteT dq bs }}}.
+Proof.
 Admitted.
 
 End proof.
