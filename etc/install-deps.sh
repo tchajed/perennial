@@ -2,9 +2,6 @@
 
 set -e
 
-sudo apt-get update -y
-sudo apt-get upgrade -y
-
 # opam dependencies
 sudo apt-get install -y wget patch unzip bzip2 gcc make
 
