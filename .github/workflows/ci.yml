@@ -23,4 +23,4 @@ jobs:
           sudo apt-get install -y python3 python3-pandas sqlite3
       - name: Build
         run: |
-          make -j4 -k src/Helpers/List.vo
+          make -j4 -k ci
