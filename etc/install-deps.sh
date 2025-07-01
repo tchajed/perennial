@@ -9,4 +9,4 @@ sudo apt-get install -y wget patch unzip bzip2 gcc make
 sudo apt-get install -y libgmp-dev pkg-config
 
 # other dependencies
-sudo apt-get install -y sudo git python3 zsh
+sudo apt-get install -y sudo git python3
