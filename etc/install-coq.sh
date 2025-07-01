@@ -2,5 +2,5 @@
 
 set -e
 
-opam install -y coq vscoq-language-server
+opam install -y coq
 opam clean --logs --all-switches --download-cache --repo-cache --untracked
