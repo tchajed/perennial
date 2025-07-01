@@ -14,7 +14,7 @@ fi
 
 # disable sandboxing since the container is enough isolation, and further
 # sandboxing doesn't work in a container anyway
-opam init -y --bare --disable-sandboxing
+opam init -y --bare --disable-sandboxing --shell-setup
 opam switch create -y default ocaml-base-compiler.${OCAML_VERSION}
 
 # shellcheck disable=SC2016
