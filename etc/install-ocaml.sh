@@ -2,7 +2,7 @@
 
 set -e
 
-OCAML_VERSION=5.2.0
+OCAML_VERSION=4.14.2
 
 wget 'https://raw.githubusercontent.com/ocaml/opam/master/shell/install.sh'
 yes '' | bash install.sh --fresh
