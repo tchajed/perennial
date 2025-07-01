@@ -2,12 +2,6 @@ name: CI
 
 on:
   push:
-    branches: [ 'master' ]
-  pull_request:
-    branches: [ 'master' ]
-  schedule:
-    # every day at 9am UTC (4am EST).
-    - cron: "0 9 * * *"
   # allow running action manually.
   workflow_dispatch:
 
