@@ -16,6 +16,8 @@ jobs:
         run: |
           ./etc/install-deps.sh
           ./etc/install-ocaml.sh
+          eval $(opam env)
+          ocamlc --version
           ./etc/install-dune.sh
           ./etc/install-coq.sh
       - name: Install Python dependencies
@@ -23,4 +25,5 @@ jobs:
           sudo apt-get install -y python3 python3-pandas sqlite3
       - name: Build
         run: |
+          eval $(opam env)
           make -j4 -k ci
