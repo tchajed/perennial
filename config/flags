@@ -1,0 +1,26 @@
+-w
++deprecated-instance-without-locality
+# don't allow ambiguous coercions
+-w
++ambiguous-paths
+-w
++deprecated-hint-rewrite-without-locality
+-w
++deprecated-field-instance-without-locality
+-w
++deprecated-tactic-notation
+# for coqutil compatibility
+-w
+-deprecated-since-8.19,-deprecated-since-8.20
+-w
+-deprecated-since-9.0,-deprecated-since-9.1,-deprecated-since-9.2
+# false positives with our byte_string
+-w
+-via-type-remapping,-via-type-mismatch
+-w
++deprecated-typeclasses-transparency-without-locality
+# Iris-disabled warnings
+-w
+-notation-overridden,-redundant-canonical-projection,-notation-incompatible-prefix
+-w
+-unknown-warning

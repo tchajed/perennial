@@ -4,6 +4,8 @@
 *.lia.cache
 *.nia.cache
 *.nra.cache
+# built by gen_CoqProject.sh
+_CoqProject
 
 # emacs
 *.aux
@@ -25,6 +27,8 @@
 *.v.d
 *.glob
 .rocqdeps.d
+## dune
+_build/
 
 /.timing.sqlite3
 

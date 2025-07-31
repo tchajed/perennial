@@ -1,0 +1,14 @@
+(include_subdirs qualified)
+
+(coq.theory
+ (name New)
+ (theories
+  Stdlib
+  Ltac2
+  stdpp
+  iris
+  iris.heap_lang
+  coqutil
+  RecordUpdate
+  iris_named_props
+  Perennial))
