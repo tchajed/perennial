@@ -18,7 +18,7 @@ Proof.
   refine e2.
 Defined.
 
-Definition D : Prop := ∀ {A:Prop}, A → A.
+Definition D : Prop := ∀ (A:Prop), A → A.
 Definition callD (e:D) : (D → D) := e D.
 Definition makeD (e:D → D) : D :=
    λ a, cast2 (D → D) (a → a) e (λ (x:a), x).
@@ -37,6 +37,7 @@ Proof.
   unfold eq_ind.
   cbv.
   simpl.
+Abort.
 
 Lemma x : Ω = Ω Ω.
 Proof.
@@ -44,6 +45,7 @@ Proof.
   unfold Ω in *.
   Eval simpl in d.
   Eval simpl in Ω.
+Abort.
 
 (* μ t, t → t *)
 
