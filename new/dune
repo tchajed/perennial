@@ -2,6 +2,14 @@
 
 (coq.theory
  (name New)
+ (modules
+  :standard
+  \
+  experiments.checker
+  experiments.congruence_test
+  experiments.store
+  experiments.type
+  experiments.unsound)
  (theories
   Stdlib
   Ltac2
