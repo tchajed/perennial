@@ -3,8 +3,8 @@ ALL_VFILES := $(shell find $(SRC_DIRS) -not -path "external/coqutil/etc/coq-scri
 VFILES := $(shell find 'src' -name "*.v")
 QUICK_CHECK_FILES := $(shell find 'src/program_proof/examples' -name "*.v")
 
-# extract any global arguments for Rocq from _RocqProject
-ROCQPROJECT_ARGS := $(shell sed -E -e '/^\#/d' -e 's/-arg ([^ ]*)/\1/g' _RocqProject)
+# extract any global arguments for Rocq from _CoqProject
+ROCQPROJECT_ARGS := $(shell sed -E -e '/^\#/d' -e 's/-arg ([^ ]*)/\1/g' _CoqProject)
 ROCQ_ARGS :=
 # rocqdep: don't allow missing files
 ROCQ_DEP_ARGS := -w +module-not-found
@@ -39,11 +39,11 @@ check-assumptions: \
 	src/program_proof/memkv/print_assumptions.vo \
 	src/program_proof/vrsm/apps/print_assumptions.vo
 
-.rocqdeps.d: $(ALL_VFILES) _RocqProject
+.rocqdeps.d: $(ALL_VFILES) _CoqProject
 	@echo "ROCQ DEP $@"
-	$(Q)rocq dep -vos -f _RocqProject $(ROCQ_DEP_ARGS) $(ALL_VFILES) > $@
+	$(Q)rocq dep -vos -f _CoqProject $(ROCQ_DEP_ARGS) $(ALL_VFILES) > $@
 
-# do not try to build dependencies if cleaning or just building _RocqProject
+# do not try to build dependencies if cleaning or just building _CoqProject
 ifeq ($(filter clean,$(MAKECMDGOALS)),)
 -include .rocqdeps.d
 endif
@@ -56,15 +56,15 @@ TIMING_EXTRA = > $<.$(TIMING_EXT)
 endif
 
 
-%.vo: %.v _RocqProject | .rocqdeps.d
+%.vo: %.v _CoqProject | .rocqdeps.d
 	@echo "ROCQ COMPILE $<"
 	$(Q)$(ROCQ_C) $(ROCQPROJECT_ARGS) $(ROCQ_ARGS) $(TIMING_ARGS) -o $@ $< $(TIMING_EXTRA)
 
-%.vos: %.v _RocqProject | .rocqdeps.d
+%.vos: %.v _CoqProject | .rocqdeps.d
 	@echo "ROCQ COMPILE -vos $<"
 	$(Q)$(ROCQ_C) $(ROCQPROJECT_ARGS) -vos $(ROCQ_ARGS) $< -o $@
 
-%.vok: %.v _RocqProject | .rocqdeps.d
+%.vok: %.v _CoqProject | .rocqdeps.d
 	@echo "ROCQ COMPILE -vok $<"
 	$(Q)$(ROCQ_C) $(ROCQPROJECT_ARGS) $(TIMING_ARGS) -vok $(ROCQ_ARGS) $< -o $@
 
