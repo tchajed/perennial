@@ -9,6 +9,7 @@
   iris
   iris.heap_lang
   RecordUpdate
-  Goose
+  ;; TODO: causes cyclic dependency
+  ;Goose
   coqutil
   iris_named_props))
