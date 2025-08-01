@@ -2,6 +2,18 @@
 
 (coq.theory
  (name Perennial)
+ (modules
+  :standard
+  \
+  goose_lang.ffi.append_log_ffi
+  goose_lang.ffi.kvs_ffi
+  program_proof.append_log_refinement
+  program_proof.append_log_refinement_triples
+  program_proof.append_log_hocap
+  goose_lang.lib.channel.channel
+  program_proof.single.replica_proof
+  program_proof.single.single_proof
+  program_proof.single.try_decide_proof)
  (theories
   Stdlib
   Ltac2
