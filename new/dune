@@ -1,15 +1,12 @@
 (include_subdirs qualified)
 
+(dirs ;; TODO
+ )
+
 (coq.theory
  (name New)
- (modules
-  :standard
-  \
-  experiments.checker
-  experiments.congruence_test
-  experiments.store
-  experiments.type
-  experiments.unsound)
+ (modules ;; TODO
+  )
  (theories
   Stdlib
   Ltac2
