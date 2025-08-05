@@ -2,12 +2,8 @@
 
 (coq.theory
  (name Goose)
- (theories
-  Stdlib
-  Ltac2
-  stdpp
-  iris
-  RecordUpdate
-  coqutil
-  iris_named_props
-  Perennial))
+ (modules
+  :standard
+  \
+  github_com.mit_pdos.perennial_examples.async_durable_alloc_inode)
+ (theories Stdlib Ltac2 stdpp iris RecordUpdate coqutil Perennial))

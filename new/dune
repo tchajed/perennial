@@ -12,7 +12,6 @@
   Ltac2
   stdpp
   iris
-  iris.heap_lang
   coqutil
   RecordUpdate
   iris_named_props

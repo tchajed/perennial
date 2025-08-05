@@ -155,6 +155,12 @@ def main():
         do_run(["go", "install", "./cmd/goose"])
         os.chdir(old_dir)
 
+    def get_goose_bin():
+        gopath = os.getenv("GOPATH", default=None)
+        if gopath is None or gopath == "":
+            gopath = path.join(path.expanduser("~"), "go")
+        return path.join(gopath, "bin", "goose")
+
     def run_goose(src_path, *pkgs, extra_args=None):
         if src_path is None:
             return
@@ -163,11 +169,7 @@ def main():
         if not extra_args:
             extra_args = []
 
-        gopath = os.getenv("GOPATH", default=None)
-        if gopath is None or gopath == "":
-            gopath = path.join(path.expanduser("~"), "go")
-        goose_bin = path.join(gopath, "bin", "goose")
-        args = [goose_bin]
+        args = [get_goose_bin()]
 
         output = path.join(perennial_dir, "external/Goose")
         args.extend(["-out", output])
@@ -176,11 +178,21 @@ def main():
         args.extend(pkgs)
         do_run(args)
 
+    def run_goose_bootstrap(src_path, *pkgs):
+        if src_path is None:
+            return
+        args = [get_goose_bin()]
+        output = path.join(perennial_dir, "src/Goose")
+        args.extend(["-out", output])
+        args.extend(["-dir", src_path])
+        args.extend(pkgs)
+        do_run(args)
+
     if args.compile:
         compile_goose()
 
     if args.channel:
-        run_goose(goose_dir, "./channel")
+        run_goose_bootstrap(goose_dir, "./channel")
 
     if args.goose_examples:
         # generate semantics tests
@@ -196,11 +208,14 @@ def main():
             "./comments",
             "./logging2",
             "./rfc1813",
-            "./semantics",
             "./simpledb",
             "./trust_import/...",
             "./unittest/...",
             "./wal",
+        )
+        run_goose_bootstrap(
+            path.join(goose_dir, "internal/examples"),
+            "./semantics",
         )
 
     run_goose(

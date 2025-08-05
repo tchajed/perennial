@@ -1,8 +1,22 @@
 (include_subdirs qualified)
 
-(dirs algebra base_logic iris_lib Helpers tutorial program_logic goose_lang)
+(dirs
+ algebra
+ base_logic
+ iris_lib
+ Helpers
+ tutorial
+ program_logic
+ goose_lang
+ Goose)
 
 (coq.theory
  (name Perennial)
- (modules :standard \ LiteBuild ShouldBuild)
+ (modules
+  :standard
+  \
+  LiteBuild
+  ShouldBuild
+  goose_lang.ffi.kvs_ffi
+  goose_lang.ffi.append_log_ffi)
  (theories Stdlib Ltac2 stdpp iris RecordUpdate coqutil iris_named_props))
