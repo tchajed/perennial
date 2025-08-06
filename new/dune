@@ -1,12 +1,10 @@
 (include_subdirs qualified)
 
-(dirs ;; TODO
- )
+(dirs golang)
 
 (coq.theory
  (name New)
- (modules ;; TODO
-  )
+ (modules :standard \ should_build golang.theory.proofmode_tests)
  (theories
   Stdlib
   Ltac2
