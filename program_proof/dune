@@ -1,0 +1,20 @@
+(include_subdirs qualified)
+
+(coq.theory
+ (name Perennial.program_proof)
+ (modules
+  :standard
+  \
+  append_log_hocap
+  append_log_refinement
+  append_log_refinement_triples)
+ (theories
+  Stdlib
+  Ltac2
+  stdpp
+  iris
+  RecordUpdate
+  coqutil
+  iris_named_props
+  Goose
+  Perennial))

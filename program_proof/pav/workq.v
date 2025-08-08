@@ -1,4 +1,3 @@
-From New.experiments Require Import glob.
 From Perennial.program_proof Require Import grove_prelude.
 From Goose.github_com.mit_pdos.pav Require Import kt.
 From iris.unstable.base_logic Require Import mono_list.
