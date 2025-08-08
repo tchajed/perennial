@@ -1,3 +1,4 @@
 src Perennial
 new New
 external/Goose Goose
+program_proof Perennial.program_proof

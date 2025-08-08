@@ -1,15 +1,5 @@
 (include_subdirs qualified)
 
-(dirs
- algebra
- base_logic
- iris_lib
- Helpers
- tutorial
- program_logic
- goose_lang
- Goose)
-
 (coq.theory
  (name Perennial)
  (modules

@@ -1,7 +1,7 @@
-SRC_DIRS := 'src' 'external' 'new' 
+SRC_DIRS := 'src' 'program_proof' 'external' 'new' 
 ALL_VFILES := $(shell find $(SRC_DIRS) -not -path "external/coqutil/etc/coq-scripts/*" -name "*.v")
 VFILES := $(shell find 'src' -name "*.v")
-QUICK_CHECK_FILES := $(shell find 'src/program_proof/examples' -name "*.v")
+QUICK_CHECK_FILES := $(shell find 'program_proof/examples' -name "*.v")
 
 # extract any global arguments for Rocq from _CoqProject
 ROCQPROJECT_ARGS := $(shell sed -E -e '/^\#/d' -e 's/-arg ([^ ]*)/\1/g' _CoqProject)
@@ -33,11 +33,11 @@ vos: src/ShouldBuild.vos
 vok: $(QUICK_CHECK_FILES:.v=.vok)
 interpreter: src/goose_lang/interpreter/generated_test.vos
 check-assumptions: \
-	src/program_proof/examples/print_assumptions.vo \
-	src/program_proof/simple/print_assumptions.vo \
-	src/program_proof/mvcc/print_assumptions.vo \
-	src/program_proof/memkv/print_assumptions.vo \
-	src/program_proof/vrsm/apps/print_assumptions.vo
+	program_proof/examples/print_assumptions.vo \
+	program_proof/simple/print_assumptions.vo \
+	program_proof/mvcc/print_assumptions.vo \
+	program_proof/memkv/print_assumptions.vo \
+	program_proof/vrsm/apps/print_assumptions.vo
 
 .rocqdeps.d: $(ALL_VFILES) _CoqProject
 	@echo "ROCQ DEP $@"
@@ -73,7 +73,7 @@ endif
 SLOW_QED_FILES := src/goose_lang/interpreter/disk_interpreter.v\
 	src/goose_lang/interpreter/interpreter.v\
 	src/goose_lang/logical_reln_fund.v\
-	$(shell find src/program_proof/ -name "*.v" )
+	$(shell find program_proof/ -name "*.v" )
 
 skip-qed:
 	$(Q)./etc/disable-qed.sh $(SLOW_QED_FILES)
