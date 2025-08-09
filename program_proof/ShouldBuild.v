@@ -94,7 +94,7 @@ From Perennial.goose_lang.interpreter Require
 
 (* ensures this file itself works for Coq's CI and catches any oversight where
 something in the lite build isn't listed here *)
-From Perennial Require LiteBuild.
+From Perennial.program_proof Require LiteBuild.
 
 (* lease examples *)
 From Perennial.program_proof.minlease Require proof.
@@ -112,4 +112,4 @@ From Perennial.program_proof.verus Require
 
 From Perennial.program_proof.cachekv Require proof.
 
-From New Require should_build.
+(* From New Require should_build. *)

@@ -1,10 +1,13 @@
 (include_subdirs qualified)
 
-(dirs golang)
-
 (coq.theory
  (name New)
- (modules :standard \ should_build golang.theory.proofmode_tests)
+ (modules
+  :standard
+  \
+  golang.theory.proofmode_tests
+  experiments.lang
+  experiments.congruence_test)
  (theories
   Stdlib
   Ltac2
@@ -13,4 +16,6 @@
   coqutil
   RecordUpdate
   iris_named_props
-  Perennial))
+  Perennial
+  Perennial.program_proof ;; TODO: only due to preludes
+  ))
