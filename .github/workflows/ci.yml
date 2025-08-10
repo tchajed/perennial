@@ -17,7 +17,6 @@ jobs:
     strategy:
       matrix:
         coq_version:
-          - dev
           - "9.0"
       max-parallel: 4
       fail-fast: false
