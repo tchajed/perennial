@@ -40,14 +40,9 @@ jobs:
             sudo chown -R 1000:1000 .
           script: |
             startGroup Build
-              make -j4 -k ci
+              dune build @ShouldBuild
             endGroup
-          after_script: |
-            startGroup Create timing report
-              ./etc/timing-report.py --max-files 50
-            endGroup
-          uninstall: |
-            make clean
+          uninstall: "true"
       - name: Revert permissions
         if: ${{ always() }}
         run: sudo chown -R 1001:116 .

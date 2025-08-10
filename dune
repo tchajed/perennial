@@ -21,3 +21,9 @@
   (with-stdout-to
    _CoqProject
    (run ./gen_CoqProject.sh))))
+
+(alias
+ (name ShouldBuild)
+ (deps
+  _build/default/new/should_build.vo
+  _build/default/program_proof/ShouldBuild.vo))
