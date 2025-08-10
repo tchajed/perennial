@@ -46,7 +46,7 @@ jobs:
             sudo chown -R 1000:1000 .
           script: |
             startGroup Build
-              dune build @ShouldBuild
+              dune build _build/default/new/should_build.vo
             endGroup
           uninstall: "true"
       - name: Revert permissions
