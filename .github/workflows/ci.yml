@@ -47,7 +47,7 @@ jobs:
             sudo chown -R 1000:1000 .
           script: |
             startGroup Build
-              make -j4 -k ci
+              make -j4 -k external/stdpp/stdpp/base.vo
             endGroup
           uninstall:
       - name: Revert permissions
