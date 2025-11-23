@@ -39,7 +39,6 @@ jobs:
           ocaml_version: "default"
           install: |
             startGroup Install dependencies
-              sudo apt-get update
               sudo apt-get install -y sqlite3
             endGroup
           # for permissions issue, see:
@@ -50,15 +49,15 @@ jobs:
             startGroup Build
               make -j4 -k ci
             endGroup
-          after_script: |
-            startGroup Create timing report
-              ./etc/timing-report.py --max-files 50
-            endGroup
-          uninstall: |
-            make clean
+          uninstall:
       - name: Revert permissions
         if: ${{ always() }}
         run: sudo chown -R 1001:116 .
+      - name: Report timing statistics
+        run: |
+          startGroup Timing report
+            ./etc/timing-report.py --max-files 50
+          endGroup
 
   check-goose:
     runs-on: ubuntu-latest
