@@ -56,9 +56,7 @@ jobs:
         run: sudo chown -R 1001:116 .
       - name: Report timing statistics
         run: |
-          startGroup Timing report
-            ./etc/timing-report.py --max-files 50
-          endGroup
+          ./etc/timing-report.py --max-files 50
 
   check-goose:
     runs-on: ubuntu-latest
